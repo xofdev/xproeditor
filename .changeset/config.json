@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["vue-demo", "react-demo"]
+  "ignore": ["vue-demo", "react-demo", "site"]
 }

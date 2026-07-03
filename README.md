@@ -1,5 +1,7 @@
 # XProEditor
 
+**[Live demo →](https://xofdev.github.io/xproeditor/)**
+
 A Notion-like block editor, built as a framework-agnostic core with adapters
 for **Vue 3** and **React**. Two editing styles come built in — a classic
 **sticky format toolbar**, or a **Notion-like** floating bubble toolbar with a
@@ -72,6 +74,7 @@ xproeditor/
 ├── examples/
 │   ├── vue-demo/    runnable Vite + Vue demo
 │   └── react-demo/  runnable Vite + React demo
+├── site/        marketing/docs page with a live embedded demo, deployed to GitHub Pages
 └── docs/        architecture, theming, block model, releasing
 ```
 
@@ -94,8 +97,14 @@ npm install
 npm run build        # builds core → vue → react in order
 npm run dev:vue       # run the Vue demo
 npm run dev:react     # run the React demo
+npm run dev:site      # run the landing page / live demo site
 npm test
 ```
+
+Publishing to npm is automated (Changesets bot opens a "Version Packages" PR;
+merging it publishes) — see [docs/releasing.md](docs/releasing.md). The
+[`site/`](site) page redeploys to GitHub Pages automatically on every push to
+`main`.
 
 ## License
 
