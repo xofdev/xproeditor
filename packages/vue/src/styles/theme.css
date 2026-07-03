@@ -1,0 +1,14 @@
+/**
+ * Default theme tokens for @xproeditor/vue. Override these custom
+ * properties on `:root` (or any ancestor of the editor) to re-theme it —
+ * see docs/theming.md.
+ */
+:root {
+  --xpe-background: #ffffff;
+  --xpe-foreground: #1f2937;
+  --xpe-muted-foreground: #6b7280;
+  --xpe-muted: #f3f4f6;
+  --xpe-border: #e5e7eb;
+  --xpe-primary: #4f46e5;
+  --xpe-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
