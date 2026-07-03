@@ -16,11 +16,12 @@ This builds `@xproeditor/core` first, then `@xproeditor/vue` and
 ```bash
 npm run dev:vue     # Vite dev server for examples/vue-demo
 npm run dev:react   # Vite dev server for examples/react-demo
+npm run dev:site    # Vite dev server for site/ (landing page + live demo)
 ```
 
-Both demo apps import from the workspace packages directly, so changes to
-`packages/vue/src` or `packages/react/src` show up on save. If you change
-`packages/core/src`, rebuild it once (`npm run build -w @xproeditor/core`)
+Both demo apps (and `site/`) import from the workspace packages directly, so
+changes to `packages/vue/src` or `packages/react/src` show up on save. If you
+change `packages/core/src`, rebuild it once (`npm run build -w @xproeditor/core`)
 before the adapters pick up the change (core is precompiled, not source
 mapped into the demos).
 
