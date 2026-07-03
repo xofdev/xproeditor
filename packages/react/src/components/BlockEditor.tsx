@@ -103,13 +103,15 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           placeholder={ed.placeholderFor(block)}
           selected={ed.selectedBlockId === block.id}
           textHighlight={ed.textHighlightForBlock(block.id)}
-          dropPosition={ed.dropTarget?.id === block.id ? ed.dropTarget.position : null}
+          dropPosition={ed.dropTarget && ed.dropTarget.id === block.id ? ed.dropTarget.position : null}
           upload={ed.upload}
           pickMedia={ed.pickMedia}
           editorDir={ed.editorDir}
           readonly={ed.readonly}
           iconPickerRequest={
-            ed.iconPickerRequest?.blockId === block.id ? { tab: ed.iconPickerRequest.tab } : null
+            ed.iconPickerRequest && ed.iconPickerRequest.blockId === block.id
+              ? { tab: ed.iconPickerRequest.tab }
+              : null
           }
           onInput={(s, c) => ed.handleInput(block, s, c)}
           onEnter={(o) => ed.handleEnter(block, o)}
