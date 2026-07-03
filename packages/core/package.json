@@ -1,0 +1,42 @@
+{
+  "name": "@xproeditor/core",
+  "version": "0.1.0",
+  "description": "Framework-agnostic engine for the XProEditor Notion-like block editor: block model, selection, clipboard, HTML conversion, and table operations.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xofdev/xproeditor.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/xofdev/xproeditor#readme",
+  "keywords": ["editor", "block-editor", "notion", "wysiwyg", "rich-text", "contenteditable"],
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "LICENSE", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

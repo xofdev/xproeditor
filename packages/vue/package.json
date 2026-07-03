@@ -1,0 +1,55 @@
+{
+  "name": "@xproeditor/vue",
+  "version": "0.1.0",
+  "description": "Notion-like block editor for Vue 3 — supports a sticky format toolbar and/or a floating Notion-like bubble toolbar + slash menu.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xofdev/xproeditor.git",
+    "directory": "packages/vue"
+  },
+  "homepage": "https://github.com/xofdev/xproeditor#readme",
+  "keywords": ["vue", "editor", "block-editor", "notion", "wysiwyg", "rich-text", "contenteditable"],
+  "sideEffects": ["**/*.css"],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./style.css": "./dist/style.css",
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "LICENSE", "README.md"],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "typecheck": "vue-tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  },
+  "dependencies": {
+    "@xproeditor/core": "0.1.0",
+    "highlight.js": "^11.10.0",
+    "lucide-vue-next": "^0.469.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vite-plugin-dts": "^4.4.0",
+    "vue": "^3.5.13",
+    "vue-tsc": "^2.2.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

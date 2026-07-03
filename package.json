@@ -1,0 +1,41 @@
+{
+  "name": "xproeditor",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Notion-like block editor — framework-agnostic core with Vue and React adapters",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xofdev/xproeditor.git"
+  },
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @xproeditor/core && npm run build -w @xproeditor/vue && npm run build -w @xproeditor/react",
+    "dev:vue": "npm run dev -w vue-demo",
+    "dev:react": "npm run dev -w react-demo",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "npm run build && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.11",
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}
