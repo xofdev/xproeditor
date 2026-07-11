@@ -234,8 +234,8 @@ defineExpose({ focusAt, getSelection, setSelection, el })
     :is="isHeader ? 'th' : 'td'"
     class="etc-cell border border-gray-150 p-0 relative min-w-[100px] align-top"
     :class="[
-      isHeader ? 'bg-gray-50/80' : '',
-      selected ? 'ring-2 ring-indigo-400 ring-inset' : '',
+      isHeader ? 'bg-[var(--xpe-muted)]/80' : '',
+      selected ? 'ring-2 ring-[var(--xpe-ring)] ring-inset' : '',
     ]"
     :style="cellStyle"
     :colspan="cell.colspan && cell.colspan > 1 ? cell.colspan : undefined"
@@ -245,8 +245,8 @@ defineExpose({ focusAt, getSelection, setSelection, el })
     <div
       ref="el"
       :contenteditable="!readonly"
-      class="etc-editor outline-none w-full px-3 py-2 text-sm text-gray-700 min-h-[2.25rem]"
-      :class="isHeader ? 'font-semibold text-gray-800' : ''"
+      class="etc-editor outline-none w-full px-3 py-2 text-sm text-[var(--xpe-foreground)] min-h-[2.25rem]"
+      :class="isHeader ? 'font-semibold text-[var(--xpe-foreground)]' : ''"
       :style="cell.align ? { textAlign: cell.align as TableCellAlign } : undefined"
       dir="auto"
       spellcheck="false"
@@ -262,15 +262,15 @@ defineExpose({ focusAt, getSelection, setSelection, el })
 .etc-editor {
   white-space: pre-wrap;
   word-break: break-word;
-  caret-color: #4f46e5;
+  caret-color: var(--xpe-primary, #4f46e5);
 }
 .etc-editor:empty::before {
   content: ' ';
   pointer-events: none;
 }
 .etc-editor :deep(code) {
-  background: #f1f3f5;
-  border: 1px solid #e9ecef;
+  background: var(--xpe-muted, #f1f3f5);
+  border: 1px solid var(--xpe-border, #e9ecef);
   border-radius: 4px;
   padding: 1px 5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -278,7 +278,7 @@ defineExpose({ focusAt, getSelection, setSelection, el })
   color: #e0316e;
 }
 .etc-editor :deep(a) {
-  color: #4f46e5;
+  color: var(--xpe-primary, #4f46e5);
   text-decoration: underline;
   text-underline-offset: 2px;
 }

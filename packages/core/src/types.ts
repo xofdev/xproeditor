@@ -19,7 +19,10 @@ export type BlockType =
   | 'divider'
   | 'image'
   | 'video'
+  | 'audio'
+  | 'file'
   | 'table'
+  | 'button'
 
 export interface InlineMarks {
   bold?: boolean
@@ -94,9 +97,15 @@ export interface BlockProps {
   /** code */
   language?: string
   code?: string
-  /** image */
+  /** image / video / audio / file / button */
   url?: string
   caption?: string
+  /** audio / file: original file name */
+  name?: string
+  /** audio / file: size in bytes */
+  size?: number
+  /** audio / file: MIME type */
+  mime?: string
   /** image width percent (10-100) */
   width?: number
   /** video */
@@ -106,6 +115,10 @@ export interface BlockProps {
   color?: string
   /** table */
   table?: TableData
+  /** button: visual style */
+  buttonStyle?: 'primary' | 'outline' | 'ghost'
+  /** button: open url in a new tab */
+  openInNewTab?: boolean
   /** text direction */
   dir?: 'auto' | 'ltr' | 'rtl'
   align?: 'left' | 'center' | 'right'
@@ -138,6 +151,7 @@ export const TEXT_BLOCK_TYPES: BlockType[] = [
   'toggle',
   'quote',
   'callout',
+  'button',
 ]
 
 /** Block types that participate in flat indent nesting. */

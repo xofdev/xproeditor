@@ -190,7 +190,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
           <button className="etable-btn" disabled={!unmergeEnabled} onClick={handleUnmerge}>
             <SplitSquareHorizontal className="inline h-3 w-3" /> Unmerge
           </button>
-          <div className="flex items-center gap-1 rounded-md border border-gray-100 bg-gray-50 px-1 py-0.5">
+          <div className="flex items-center gap-1 rounded-md border border-[var(--xpe-border)] bg-[var(--xpe-muted)] px-1 py-0.5">
             <button
               className={`etable-btn${getResolvedTableWidth(table.width).mode === 'percent' ? ' etable-btn-active' : ''}`}
               onClick={() => setWidthMode('percent')}
@@ -218,7 +218,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
                 type="number"
                 min={200}
                 max={2000}
-                className="w-16 rounded border border-gray-200 px-1 py-0.5 text-[11px]"
+                className="w-16 rounded border border-[var(--xpe-border)] px-1 py-0.5 text-[11px]"
                 value={getResolvedTableWidth(table.width).value}
                 onChange={(e) => setWidthValue(Number(e.target.value))}
               />
@@ -229,7 +229,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
 
       <div className="flex items-start">
         <div
-          className="flex-1 overflow-x-auto rounded-lg border border-gray-200"
+          className="xpe-scroll flex-1 overflow-x-auto rounded-lg border border-[var(--xpe-border)]"
           style={wrapperStyle}
         >
           <table className="w-full border-collapse">
@@ -273,7 +273,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
                   <td className="w-6 border-0 align-middle">
                     {!readonly && (
                       <button
-                        className="hidden h-5 w-5 items-center justify-center rounded text-gray-300 hover:text-red-500 group-hover/row:flex"
+                        className="hidden h-5 w-5 items-center justify-center rounded text-gray-300 hover:text-[var(--xpe-danger)] group-hover/row:flex"
                         title="Remove row"
                         onClick={() => updateTable(removeTableRow(table, rowIdx))}
                       >
@@ -287,7 +287,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
           </table>
           {!readonly && (
             <button
-              className="flex w-full items-center justify-center py-1 text-gray-300 transition-colors hover:bg-indigo-50/40 hover:text-indigo-500"
+              className="flex w-full items-center justify-center py-1 text-gray-300 transition-colors hover:bg-[var(--xpe-primary-muted)]/40 hover:text-[var(--xpe-primary)]"
               title="Add row"
               onClick={() => updateTable(addTableRow(table))}
             >
@@ -298,7 +298,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
         {!readonly && (
           <div className="ms-1 flex flex-col gap-1 self-stretch">
             <button
-              className="flex items-center rounded px-1 text-gray-300 transition-colors hover:bg-indigo-50/40 hover:text-indigo-500"
+              className="flex items-center rounded px-1 text-gray-300 transition-colors hover:bg-[var(--xpe-primary-muted)]/40 hover:text-[var(--xpe-primary)]"
               title="Add column"
               onClick={() => updateTable(addTableColumn(table))}
             >
@@ -306,7 +306,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
             </button>
             {table.rows[0]?.length ? (
               <button
-                className="flex items-center rounded px-1 text-gray-300 transition-colors hover:bg-red-50/40 hover:text-red-500"
+                className="flex items-center rounded px-1 text-gray-300 transition-colors hover:bg-red-50/40 hover:text-[var(--xpe-danger)]"
                 title="Remove last column"
                 onClick={() =>
                   updateTable(removeTableColumn(table, (table.rows[0]?.length ?? 1) - 1))

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { syncThemeVars } from '@xproeditor/core'
 import {
   Bold,
   Check,
@@ -31,6 +32,9 @@ export interface BubbleToolbarProps {
   currentColor?: string | null
   currentHighlight?: string | null
   blockType: BlockType
+  /** Element still inside the editor's themed DOM scope — used to resync
+   * `--xpe-*` variables onto this toolbar once it's portaled to `<body>`. */
+  themeSource?: HTMLElement | null
   onMark: (mark: MarkName, value: boolean | string | null) => void
   onTurnInto: (type: BlockType) => void
 }
@@ -56,15 +60,32 @@ export function BubbleToolbar({
   currentColor,
   currentHighlight,
   blockType,
+  themeSource,
   onMark,
   onTurnInto,
 }: BubbleToolbarProps) {
   const [panel, setPanel] = useState<Panel>('none')
   const [linkInput, setLinkInput] = useState('')
+  const toolbarRef = useRef<HTMLDivElement | null>(null)
+  const lastPositionKey = useRef<string | null>(null)
 
   useEffect(() => {
-    setPanel('none')
-  }, [position])
+    if (themeSource && toolbarRef.current) {
+      syncThemeVars(themeSource, toolbarRef.current)
+    }
+
+    // `position` is a fresh object on every parent render (e.g. a
+    // same-range `selectionchange`), so only close an open panel when the
+    // selection actually moved — comparing by reference would close the
+    // color/link panel the instant a swatch inside it is clicked.
+    const key = `${position.x},${position.y}`
+
+    if (lastPositionKey.current !== null && lastPositionKey.current !== key) {
+      setPanel('none')
+    }
+
+    lastPositionKey.current = key
+  }, [position, themeSource])
 
   function openLinkPanel() {
     setLinkInput(currentLink ?? '')
@@ -81,19 +102,20 @@ export function BubbleToolbar({
 
   return createPortal(
     <div
+      ref={toolbarRef}
       className="fixed z-[70] flex flex-col items-stretch"
       style={{ left: position.x, top: position.y, transform: 'translate(-50%, calc(-100% - 8px))' }}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="flex items-center gap-0.5 rounded-xl border border-gray-100 bg-white px-1 py-1 shadow-xl">
+      <div className="flex items-center gap-0.5 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-1 py-1 shadow-xl">
         <button
-          className="ebt-btn !w-auto gap-1 px-2 text-[12px] font-medium text-gray-600"
+          className="ebt-btn !w-auto gap-1 px-2 text-[12px] font-medium text-[var(--xpe-muted-foreground)]"
           onClick={() => setPanel((p) => (p === 'turninto' ? 'none' : 'turninto'))}
         >
           {turnIntoLabel}
           <ChevronDown className="size-3" />
         </button>
-        <div className="mx-0.5 h-5 w-px bg-gray-100" />
+        <div className="mx-0.5 h-5 w-px bg-[var(--xpe-muted)]" />
 
         <button
           className={`ebt-btn${activeMarks.bold ? ' ebt-active' : ''}`}
@@ -131,7 +153,7 @@ export function BubbleToolbar({
           <Code className="size-3.5" />
         </button>
 
-        <div className="mx-0.5 h-5 w-px bg-gray-100" />
+        <div className="mx-0.5 h-5 w-px bg-[var(--xpe-muted)]" />
 
         <button
           className={`ebt-btn${panel === 'link' || currentLink ? ' ebt-active' : ''}`}
@@ -150,7 +172,7 @@ export function BubbleToolbar({
       </div>
 
       {panel === 'link' && (
-        <div className="mt-1.5 flex items-center gap-1.5 rounded-xl border border-gray-100 bg-white p-2 shadow-xl">
+        <div className="mt-1.5 flex items-center gap-1.5 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl">
           <Input
             className="h-8 w-52 text-xs"
             placeholder="https://..."
@@ -172,7 +194,7 @@ export function BubbleToolbar({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 px-2 text-xs text-red-500 hover:bg-red-50 hover:text-red-600"
+              className="h-8 px-2 text-xs text-[var(--xpe-danger)] hover:bg-red-50 hover:text-red-600"
               onClick={() => {
                 onMark('link', null)
                 setPanel('none')
@@ -186,7 +208,7 @@ export function BubbleToolbar({
 
       {panel === 'color' && (
         <div
-          className="mt-1.5 rounded-xl border border-gray-100 bg-white p-2 shadow-xl"
+          className="mt-1.5 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl"
           onMouseDown={(e) => e.stopPropagation()}
         >
           <ToolbarColorPanel
@@ -198,22 +220,22 @@ export function BubbleToolbar({
       )}
 
       {panel === 'turninto' && (
-        <div className="mt-1.5 w-48 rounded-xl border border-gray-100 bg-white py-1 shadow-xl">
+        <div className="mt-1.5 w-48 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] py-1 shadow-xl">
           {TURN_INTO.map((t) => {
             const Icon = t.icon
             return (
               <button
                 key={t.type}
                 type="button"
-                className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] transition-colors ${t.type === blockType ? 'bg-indigo-50/60 text-indigo-600' : 'text-gray-700 hover:bg-gray-50'}`}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] transition-colors ${t.type === blockType ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]'}`}
                 onClick={() => {
                   onTurnInto(t.type)
                   setPanel('none')
                 }}
               >
-                <Icon className="size-3.5 shrink-0 text-gray-400" />
+                <Icon className="size-3.5 shrink-0 text-[var(--xpe-muted-foreground)]" />
                 <span className="flex-1">{t.label}</span>
-                {t.type === blockType && <Check className="size-3.5 shrink-0 text-indigo-500" />}
+                {t.type === blockType && <Check className="size-3.5 shrink-0 text-[var(--xpe-primary)]" />}
               </button>
             )
           })}

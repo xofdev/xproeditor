@@ -8,8 +8,12 @@ export function blockToPlainText(block: Block): string {
 return block.props.code ?? ''
 }
 
-  if (block.type === 'image') {
+  if (block.type === 'image' || block.type === 'video' || block.type === 'audio') {
 return block.props.caption ?? ''
+}
+
+  if (block.type === 'file') {
+return block.props.name ?? block.props.caption ?? ''
 }
 
   if (block.type === 'table') {

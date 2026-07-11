@@ -20,13 +20,13 @@ const ctx = inject(popoverContextKey)
   padding: 6px 10px;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: calc(var(--xpe-radius, 12px) * 0.5);
   font-size: 13px;
-  color: #374151;
+  color: var(--xpe-foreground, #374151);
   cursor: pointer;
   text-align: start;
 }
 .xpe-dropdown-item:hover {
-  background: #f9fafb;
+  background: var(--xpe-surface-hover, #f9fafb);
 }
 </style>

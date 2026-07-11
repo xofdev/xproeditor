@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ALL_EMOJIS } from '../ui/emojiData'
 import {
   applyMarkToRange,
   applyMarkToTextRange,
+  blockTypeForFile,
   caretPointFromClient,
   cloneBlock,
   computeListNumbering,
   createBlock,
   deleteRangeInSpans,
   deleteTextRange,
-  detectDir,
   extractTextRangeAsBlocks,
+  fileToObjectUrl,
   fullBlockTextRange,
   getCaretClientRect,
   getSelectionClientRect,
@@ -19,6 +21,7 @@ import {
   isCrossBlockTextRange,
   isTextBlock,
   isTextRangeCollapsed,
+  mediaPropsFromFile,
   normalizeSpans,
   normalizeTableData,
   nextVisibleCellCoord,
@@ -73,7 +76,14 @@ interface SlashState {
   blockId: string
   index: number
   query: string
-  position: { x: number; y: number }
+  position: { x: number; y: number; top?: number }
+}
+
+interface EmojiTriggerState {
+  blockId: string
+  index: number
+  query: string
+  position: { x: number; y: number; top?: number }
 }
 
 interface BubbleState {
@@ -147,6 +157,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   const [textRangeSelection, setTextRangeSelection] = useState<TextRangeSelection | null>(null)
   const [managedTextSelection, setManagedTextSelectionFlag] = useState(false)
   const [slashState, setSlashState] = useState<SlashState | null>(null)
+  const [emojiTriggerState, setEmojiTriggerState] = useState<EmojiTriggerState | null>(null)
   const [iconPickerRequest, setIconPickerRequest] = useState<{
     blockId: string
     tab: 'emoji' | 'icon'
@@ -526,12 +537,10 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     setSlashState(null)
   }
 
-  function slashPosition(): { x: number; y: number } {
+  function slashPosition(): { x: number; y: number; top?: number } {
+    // Raw caret anchor; the menu measures itself and flips/clamps to the viewport.
     const rect = getCaretClientRect()
-    const x = Math.min(rect?.left ?? 100, window.innerWidth - 300)
-    let y = (rect?.bottom ?? 100) + 6
-    if (y + 330 > window.innerHeight) y = Math.max(8, (rect?.top ?? 100) - 336)
-    return { x, y }
+    return { x: rect?.left ?? 100, y: rect?.bottom ?? 100, top: rect?.top ?? 100 }
   }
 
   function updateSlash(block: Block, spans: InlineSpan[], caret: number | null) {
@@ -569,7 +578,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     const removeEnd = state.index + 1 + state.query.length
     const spans = deleteRangeInSpans(block.content, state.index, removeEnd)
-    const isInsertType = ['divider', 'image', 'video', 'table', 'code'].includes(item.type)
+    const isInsertType = ['divider', 'image', 'video', 'audio', 'file', 'table', 'code'].includes(item.type)
 
     if (!isInsertType) {
       const defaults = makeBlockLocal(item.type)
@@ -599,6 +608,52 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     if (item.type === 'code') focusBlock(newBlock.id, 'start')
     else selectBlock(newBlock.id)
+  }
+
+  // ─── Inline emoji trigger (":" — Slack/Discord-style) ─────────────────────
+
+  function closeEmojiTrigger() {
+    setEmojiTriggerState(null)
+  }
+
+  function updateEmojiTrigger(block: Block, spans: InlineSpan[], caret: number | null) {
+    const text = spansToText(spans)
+
+    setEmojiTriggerState((state) => {
+      if (state && state.blockId === block.id) {
+        if (caret === null || caret <= state.index || text[state.index] !== ':') return null
+
+        const query = text.slice(state.index + 1, caret)
+        if (/\s/.test(query) || query.length > 20) return null
+
+        return { ...state, query }
+      }
+
+      if (caret !== null && caret > 0 && text[caret - 1] === ':') {
+        const before = caret >= 2 ? text[caret - 2] : ''
+
+        if (before === '' || /\s/.test(before)) {
+          return { blockId: block.id, index: caret - 1, query: '', position: slashPosition() }
+        }
+      }
+
+      return state
+    })
+  }
+
+  function onEmojiTriggerSelect(emoji: string) {
+    const state = emojiTriggerState
+    if (!state) return
+
+    const block = byId(state.blockId)
+    closeEmojiTrigger()
+    if (!block) return
+
+    const removeEnd = state.index + 1 + state.query.length
+    const withoutTrigger = deleteRangeInSpans(block.content, state.index, removeEnd)
+    block.content = insertSpansAt(withoutTrigger, state.index, [{ text: emoji }])
+    pushHistory(true)
+    focusBlock(block.id, state.index + emoji.length)
   }
 
   // ─── Markdown shortcuts ────────────────────────────────────────────────────
@@ -651,19 +706,24 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     block.content = spans
 
-    if (isTextBlock(block.type)) {
-      const text = spansToText(spans)
-      if (!block.props.dir || block.props.dir === 'auto') {
-        if (text.trim()) block.props.dir = detectDir(text)
-      }
-    }
+    // Direction stays 'auto' unless the user sets it explicitly — rendering
+    // resolves it live from content (resolveBlockDirection), so a block flips
+    // between RTL and LTR as its text changes instead of locking on first input.
 
     if (tryMarkdownShortcut(block, spans, caret)) {
       closeSlash()
+      closeEmojiTrigger()
       return
     }
 
     updateSlash(block, spans, caret)
+
+    if (slashState) {
+      closeEmojiTrigger()
+    } else {
+      updateEmojiTrigger(block, spans, caret)
+    }
+
     pushHistory()
   }
 
@@ -825,6 +885,21 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     return normalizeSpans([...before, ...inserted, ...after])
   }
 
+  /** Insert dropped/pasted files as media blocks (image/video/audio/file by MIME). */
+  async function insertFileBlocks(files: File[], at: number) {
+    const doUpload = upload ?? fileToObjectUrl
+
+    for (const [i, file] of files.entries()) {
+      const type = blockTypeForFile(file)
+      const url = await doUpload(file)
+      const media = mediaPropsFromFile(file, url)
+      const extra = type === 'video' ? { provider: 'file' as const } : {}
+      blocksRef.current.splice(at + i, 0, makeBlockLocal(type, { props: { ...media, ...extra } }))
+    }
+
+    pushHistory(true)
+  }
+
   async function handlePasted(
     block: Block,
     payload: { html: string; text: string; files: File[]; offsets: { start: number; end: number } },
@@ -832,28 +907,9 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     const idx = blocksRef.current.indexOf(block)
     if (idx === -1) return
 
-    const imageFiles = payload.files.filter((f) => f.type.startsWith('image/'))
-    const videoFiles = payload.files.filter((f) => f.type.startsWith('video/'))
-
-    if (videoFiles.length > 0 && upload) {
-      for (const [i, file] of videoFiles.entries()) {
-        const url = await upload(file)
-        blocksRef.current.splice(
-          idx + 1 + i,
-          0,
-          makeBlockLocal('video', { props: { url, provider: 'file' } }),
-        )
-      }
-      pushHistory(true)
-      return
-    }
-
-    if (imageFiles.length > 0 && upload) {
-      for (const [i, file] of imageFiles.entries()) {
-        const url = await upload(file)
-        blocksRef.current.splice(idx + 1 + i, 0, makeBlockLocal('image', { props: { url } }))
-      }
-      pushHistory(true)
+    // Files (image / video / audio / anything else) become media blocks
+    if (payload.files.length > 0) {
+      await insertFileBlocks(payload.files, idx + 1)
       return
     }
 
@@ -1773,8 +1829,31 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     }
   }
 
+  function isExternalFileDrag(e: React.DragEvent): boolean {
+    return !draggingId && Array.from(e.dataTransfer?.types ?? []).includes('Files')
+  }
+
   function onDragOver(e: React.DragEvent) {
-    if (readonly || !draggingId) return
+    if (readonly) return
+
+    if (isExternalFileDrag(e)) {
+      e.preventDefault()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+
+      const target = (e.target as HTMLElement).closest('[data-block-id]')
+      const id = target?.getAttribute('data-block-id')
+
+      if (id) {
+        const rect = target!.getBoundingClientRect()
+        setDropTarget({ id, position: e.clientY < rect.top + rect.height / 2 ? 'before' : 'after' })
+      } else {
+        setDropTarget(null)
+      }
+
+      return
+    }
+
+    if (!draggingId) return
 
     e.preventDefault()
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
@@ -1800,6 +1879,25 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     if (readonly) return
 
     e.preventDefault()
+
+    // External OS files dropped onto the editor become media blocks
+    const externalFiles = !draggingId ? Array.from(e.dataTransfer?.files ?? []) : []
+
+    if (externalFiles.length > 0) {
+      const target = dropTarget
+      setDropTarget(null)
+      let at = blocksRef.current.length
+
+      if (target) {
+        const idx = blocksRef.current.findIndex((b) => b.id === target.id)
+        if (idx !== -1) at = target.position === 'before' ? idx : idx + 1
+      }
+
+      void insertFileBlocks(externalFiles, at)
+
+      return
+    }
+
     const from = draggingId
     const target = dropTarget
     setDraggingId(null)
@@ -1925,7 +2023,65 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   }
 
   function onKeydownCapture(e: React.KeyboardEvent) {
-    if (readonly || isNativeInputTarget(e.target)) return
+    if (readonly) return
+
+    // Slash menu lives inside the contenteditable block being typed into, so
+    // this must run before the isNativeInputTarget bail-out below (which
+    // exists to let text blocks handle their own keys normally).
+    if (slashState) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        e.stopPropagation()
+        slashMenuApiRef.current?.move(1)
+        return
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        e.stopPropagation()
+        slashMenuApiRef.current?.move(-1)
+        return
+      }
+
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        e.stopPropagation()
+        slashMenuApiRef.current?.confirm()
+        return
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        closeSlash()
+        return
+      }
+    }
+
+    if (emojiTriggerState) {
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        e.stopPropagation()
+        const q = emojiTriggerState.query.toLowerCase()
+        const match = q
+          ? ALL_EMOJIS.find((en) => en.name.includes(q) || en.keywords.some((k) => k.includes(q)))
+          : null
+
+        if (match) onEmojiTriggerSelect(match.char)
+        else closeEmojiTrigger()
+
+        return
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        closeEmojiTrigger()
+        return
+      }
+    }
+
+    if (isNativeInputTarget(e.target)) return
 
     const mod = e.ctrlKey || e.metaKey
 
@@ -1995,35 +2151,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       return
     }
 
-    if (slashState) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        e.stopPropagation()
-        slashMenuApiRef.current?.move(1)
-        return
-      }
-
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        e.stopPropagation()
-        slashMenuApiRef.current?.move(-1)
-        return
-      }
-
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault()
-        e.stopPropagation()
-        slashMenuApiRef.current?.confirm()
-        return
-      }
-
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        e.stopPropagation()
-        closeSlash()
-        return
-      }
-    } else if (e.key === 'Escape' && bubble) {
+    if (e.key === 'Escape' && bubble) {
       setBubble(null)
     }
   }
@@ -2118,6 +2246,8 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     if (slashState && !target.closest('.fixed')) closeSlash()
 
+    if (emojiTriggerState && !target.closest('.fixed')) closeEmojiTrigger()
+
     if (selectedBlockId && !target.closest(`[data-block-id="${selectedBlockId}"]`)) {
       setSelectedBlockId(null)
     }
@@ -2192,6 +2322,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     dropTarget,
     slashState,
     slashMenuApiRef,
+    emojiTriggerState,
     bubble,
     iconPickerRequest,
     setIconPickerRequest,
@@ -2242,6 +2373,8 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     onDragHandleStart,
     onSlashSelect,
     closeSlash,
+    onEmojiTriggerSelect,
+    closeEmojiTrigger,
     onBubbleMark,
     onBubbleTurnInto,
     handleInput,

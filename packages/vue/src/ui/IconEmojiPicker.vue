@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { EMOJI_PRESETS } from './emojiPresets'
+import EmojiPicker from './EmojiPicker.vue'
 import Popover from './Popover.vue'
 import PopoverContent from './PopoverContent.vue'
 import PopoverTrigger from './PopoverTrigger.vue'
@@ -58,18 +58,7 @@ defineExpose({
       </slot>
     </PopoverTrigger>
     <PopoverContent :align="align" :side="side" class="xpe-icon-popover">
-      <div class="xpe-icon-grid">
-        <button
-          v-for="emoji in EMOJI_PRESETS"
-          :key="emoji"
-          type="button"
-          class="xpe-icon-cell"
-          :class="{ 'xpe-icon-cell--active': emoji === model }"
-          @click="pick(emoji)"
-        >
-          {{ emoji }}
-        </button>
-      </div>
+      <EmojiPicker @select="pick" />
       <div class="xpe-icon-custom">
         <input
           v-model="customValue"
@@ -98,42 +87,21 @@ defineExpose({
   padding: 0;
 }
 .xpe-icon-popover {
-  padding: 10px;
-  width: 232px;
-}
-.xpe-icon-grid {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 2px;
-}
-.xpe-icon-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 26px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  font-size: 15px;
-  cursor: pointer;
-}
-.xpe-icon-cell:hover {
-  background: #f3f4f6;
-}
-.xpe-icon-cell--active {
-  background: #eef2ff;
+  padding: 0;
+  width: 300px;
+  overflow: hidden;
 }
 .xpe-icon-custom {
   display: flex;
   gap: 6px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid #f3f4f6;
+  margin: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--xpe-border, #f3f4f6);
 }
 .xpe-icon-custom-input {
   flex: 1;
   height: 28px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--xpe-border, #e5e7eb);
   border-radius: 6px;
   padding: 0 8px;
   font-size: 12px;
@@ -144,8 +112,8 @@ defineExpose({
   padding: 0 10px;
   border-radius: 6px;
   border: none;
-  background: #4f46e5;
-  color: #fff;
+  background: var(--xpe-primary, #4f46e5);
+  color: var(--xpe-primary-foreground, #fff);
   font-size: 12px;
   cursor: pointer;
 }

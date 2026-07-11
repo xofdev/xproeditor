@@ -10,6 +10,10 @@ import {
   IconEmojiPicker,
 } from '../ui'
 import { CodeBlock, type CodeBlockHandle } from './CodeBlock'
+import { AudioBlock } from './AudioBlock'
+import { BlockContextMenu } from './BlockContextMenu'
+import { ButtonBlock } from './ButtonBlock'
+import { FileBlock } from './FileBlock'
 import { ImageBlock } from './ImageBlock'
 import { SelectionHighlight } from './SelectionHighlight'
 import { TableBlock, type TableBlockHandle } from './TableBlock'
@@ -31,6 +35,7 @@ export interface BlockItemProps {
   pickMedia?: PickMediaFn
   editorDir?: 'ltr' | 'rtl'
   readonly?: boolean
+  themeSource?: HTMLElement | null
   iconPickerRequest?: { tab: 'emoji' | 'icon' } | null
   onInput: (spans: InlineSpan[], caret: number | null) => void
   onEnter: (offsets: { start: number; end: number }) => void
@@ -86,6 +91,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
       pickMedia,
       editorDir,
       readonly,
+      themeSource,
       iconPickerRequest,
       onInput,
       onEnter,
@@ -117,6 +123,15 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
     const innerRef = useRef<TextBlockHandle | CodeBlockHandle | TableBlockHandle | null>(null)
     const calloutIconPickerRef = useRef<{ open: (tab?: 'emoji' | 'icon') => void } | null>(null)
     const [showCalloutColors, setShowCalloutColors] = useState(false)
+    const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
+
+    function onContextMenu(e: React.MouseEvent) {
+      if (readonly) return
+
+      e.preventDefault()
+      onSelect()
+      setContextMenuPos({ x: e.clientX, y: e.clientY })
+    }
 
     useEffect(() => {
       if (!iconPickerRequest || readonly || block.type !== 'callout') return
@@ -198,6 +213,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
         dir={blockDir}
         style={{ paddingInlineStart: `${indent * 28}px` }}
         onPointerDown={onPointerDown}
+        onContextMenu={onContextMenu}
       >
         {dropPosition === 'before' && <div className="ebi-drop -top-[2px]" />}
         {dropPosition === 'after' && <div className="ebi-drop -bottom-[2px]" />}
@@ -232,10 +248,10 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align={isRtl ? 'end' : 'start'} className="w-36">
                     <DropdownMenuItem onClick={onDuplicate}>
-                      <Copy className="w-3.5 h-3.5 text-gray-400" />
+                      <Copy className="w-3.5 h-3.5 text-[var(--xpe-muted-foreground)]" />
                       Duplicate
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-500" onClick={onRemove}>
+                    <DropdownMenuItem className="text-[var(--xpe-danger)]" onClick={onRemove}>
                       <Trash2 className="w-3.5 h-3.5" />
                       Delete
                     </DropdownMenuItem>
@@ -247,13 +263,13 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
 
           <div className="relative flex-1 min-w-0 py-[3px]">
             {block.type === 'quote' ? (
-              <div className="flex gap-3 border-s-[3px] border-gray-800 ps-3.5">
+              <div className="flex gap-3 border-s-[3px] border-[var(--xpe-foreground)] ps-3.5">
                 {renderTextBlock('flex-1', 'Quote')}
               </div>
             ) : block.type === 'callout' ? (
               <div
-                className="flex items-start gap-2.5 rounded-xl border border-gray-100 px-3.5 py-3"
-                style={{ background: block.props.color ?? '#f8fafc' }}
+                className="flex items-start gap-2.5 rounded-[var(--xpe-radius)] border border-[var(--xpe-border)] px-3.5 py-3"
+                style={{ background: block.props.color ?? 'var(--xpe-muted)' }}
               >
                 <div
                   className="relative shrink-0"
@@ -287,14 +303,14 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                   {!readonly && (
                     <button
                       type="button"
-                      className="mt-1 block w-full text-[10px] text-gray-400 hover:text-gray-600"
+                      className="mt-1 block w-full text-[10px] text-[var(--xpe-muted-foreground)] hover:text-[var(--xpe-foreground)]"
                       onClick={() => setShowCalloutColors((v) => !v)}
                     >
                       Color
                     </button>
                   )}
                   {showCalloutColors && !readonly && (
-                    <div className="absolute start-0 top-full z-[60] mt-1 rounded-xl border border-gray-100 bg-white p-2 shadow-xl">
+                    <div className="absolute start-0 top-full z-[60] mt-1 rounded-[var(--xpe-radius)] border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl">
                       <div className="flex gap-1">
                         {CALLOUT_COLORS.map((c) => (
                           <button
@@ -321,22 +337,24 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                   suppressContentEditableWarning
                 >
                   {block.type === 'bulleted_list_item' && (
-                    <span className="text-gray-800 text-base leading-none mt-1">•</span>
+                    <span className="text-[var(--xpe-foreground)] text-base leading-none mt-1">•</span>
                   )}
                   {block.type === 'numbered_list_item' && (
-                    <span className="text-gray-700 text-[14px] leading-snug tabular-nums">
+                    <span className="text-[var(--xpe-foreground)] text-[14px] leading-snug tabular-nums">
                       {number ?? 1}.
                     </span>
                   )}
                   {block.type === 'to_do' && (
                     <button
-                      className={`w-[15px] h-[15px] mt-1 rounded-[4px] border flex items-center justify-center transition-colors ${block.props.checked ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 hover:border-indigo-400 bg-white'}`}
+                      className={`appearance-none w-[15px] h-[15px] mt-1 rounded-[4px] border flex items-center justify-center transition-colors ${block.props.checked ? 'bg-[var(--xpe-primary)] border-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] hover:border-[var(--xpe-ring)] bg-[var(--xpe-surface)]'}`}
                       disabled={readonly}
                       onClick={() => onPatch({ checked: !block.props.checked })}
                     >
                       {block.props.checked && (
                         <svg
-                          className="w-2.5 h-2.5 text-white"
+                          width={10}
+                          height={10}
+                          className="shrink-0 text-[var(--xpe-primary-foreground)]"
                           fill="none"
                           stroke="currentColor"
                           strokeWidth={3}
@@ -349,19 +367,20 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                   )}
                   {block.type === 'toggle' && (
                     <button
-                      className="w-5 h-5 mt-0.5 rounded flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-transform"
+                      className="w-5 h-5 mt-0.5 rounded flex items-center justify-center text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)] transition-transform"
                       disabled={readonly}
                       onClick={() => onPatch({ collapsed: !block.props.collapsed })}
                     >
                       <ChevronRight
-                        className={`h-3.5 w-3.5 transition-transform${!block.props.collapsed ? ' rotate-90' : ''}${isRtl ? ' ebi-chevron-rtl' : ''}`}
+                        size={14}
+                        className={`shrink-0 transition-transform${!block.props.collapsed ? ' rotate-90' : ''}${isRtl ? ' ebi-chevron-rtl' : ''}`}
                       />
                     </button>
                   )}
                 </div>
                 {renderTextBlock(
                   block.type === 'to_do' && block.props.checked
-                    ? 'line-through !text-gray-400'
+                    ? 'line-through !text-[var(--xpe-muted-foreground)]'
                     : undefined,
                   block.type === 'to_do'
                     ? 'To-do'
@@ -401,6 +420,26 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                 onPatch={onPatch}
                 onSelect={onSelect}
               />
+            ) : block.type === 'audio' ? (
+              <AudioBlock
+                block={block}
+                selected={selected}
+                readonly={readonly}
+                upload={upload}
+                pickMedia={pickMedia}
+                onPatch={onPatch}
+                onSelect={onSelect}
+              />
+            ) : block.type === 'file' ? (
+              <FileBlock
+                block={block}
+                selected={selected}
+                readonly={readonly}
+                upload={upload}
+                pickMedia={pickMedia}
+                onPatch={onPatch}
+                onSelect={onSelect}
+              />
             ) : block.type === 'table' ? (
               <TableBlock
                 ref={innerRef as React.Ref<TableBlockHandle>}
@@ -416,8 +455,27 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
               />
             ) : block.type === 'divider' ? (
               <div className="py-2.5 cursor-pointer" onClick={onSelect}>
-                <hr className={`border-gray-200 rounded${selected ? ' !border-indigo-400' : ''}`} />
+                <hr className={`border-[var(--xpe-border)] rounded${selected ? ' !border-[var(--xpe-ring)]' : ''}`} />
               </div>
+            ) : block.type === 'button' ? (
+              <ButtonBlock
+                ref={innerRef as React.Ref<TextBlockHandle>}
+                block={block}
+                readonly={readonly}
+                onInput={onInput}
+                onEnter={onEnter}
+                onBackspaceStart={onBackspaceStart}
+                onDeleteEnd={onDeleteEnd}
+                onArrowUp={onArrowUp}
+                onArrowDown={onArrowDown}
+                onTab={onTab}
+                onFormat={onFormat}
+                onPasted={onPasted}
+                onFocus={onFocus}
+                onSelectionPointerDown={onSelectionPointerDown}
+                onPatch={onPatch}
+                onSelect={onSelect}
+              />
             ) : (
               renderTextBlock()
             )}
@@ -431,6 +489,19 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
             )}
           </div>
         </div>
+
+        {contextMenuPos && (
+          <BlockContextMenu
+            position={contextMenuPos}
+            themeSource={themeSource}
+            colorPresets={block.type === 'callout' ? CALLOUT_COLORS : undefined}
+            currentColor={block.props.color}
+            onColor={(color) => onPatch({ color })}
+            onDuplicate={onDuplicate}
+            onDelete={onRemove}
+            onClose={() => setContextMenuPos(null)}
+          />
+        )}
       </div>
     )
   },

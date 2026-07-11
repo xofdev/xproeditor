@@ -274,10 +274,10 @@ defineExpose({ focusAt, getSelection, setSelection, el })
   min-height: 1.6em;
   line-height: 1.65;
   font-size: 16px;
-  color: #1f2937;
+  color: var(--xpe-foreground, #1f2937);
   white-space: pre-wrap;
   word-break: break-word;
-  caret-color: #4f46e5;
+  caret-color: var(--xpe-primary, #4f46e5);
   --pro-editor-selection: rgb(35 131 226 / 0.18);
 }
 .etb::selection {
@@ -289,20 +289,20 @@ defineExpose({ focusAt, getSelection, setSelection, el })
 }
 .etb:empty::before {
   content: attr(data-placeholder);
-  color: #c4c8d0;
+  color: var(--xpe-muted-foreground, #c4c8d0);
   pointer-events: none;
   float: inline-start;
 }
 
-.etb-heading_1 { font-size: 28px; font-weight: 700; line-height: 1.3; color: #111827; }
-.etb-heading_2 { font-size: 22px; font-weight: 650; line-height: 1.35; color: #111827; }
-.etb-heading_3 { font-size: 18px; font-weight: 600; line-height: 1.4; color: #111827; }
-.etb-quote { font-style: italic; color: #4b5563; }
+.etb-heading_1 { font-size: 28px; font-weight: 700; line-height: 1.3; color: var(--xpe-foreground, #111827); }
+.etb-heading_2 { font-size: 22px; font-weight: 650; line-height: 1.35; color: var(--xpe-foreground, #111827); }
+.etb-heading_3 { font-size: 18px; font-weight: 600; line-height: 1.4; color: var(--xpe-foreground, #111827); }
+.etb-quote { font-style: italic; color: var(--xpe-muted-foreground, #4b5563); }
 .etb-callout { font-size: 15px; }
 
 .etb :deep(code) {
-  background: #f1f3f5;
-  border: 1px solid #e9ecef;
+  background: var(--xpe-muted, #f1f3f5);
+  border: 1px solid var(--xpe-border, #e9ecef);
   border-radius: 4px;
   padding: 1px 5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -310,7 +310,7 @@ defineExpose({ focusAt, getSelection, setSelection, el })
   color: #e0316e;
 }
 .etb :deep(a) {
-  color: #4f46e5;
+  color: var(--xpe-primary, #4f46e5);
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;

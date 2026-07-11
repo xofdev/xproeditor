@@ -139,7 +139,7 @@ export function FormatToolbar({
   const tableActionsDisabled = disabled || !isTable
 
   return (
-    <div className="border-b border-gray-100 bg-white px-4 py-2" data-pro-editor-toolbar>
+    <div className="border-b border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-4 py-2" data-pro-editor-toolbar>
       <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-0.5">
         <ToolbarPopover
           open={turnIntoOpen}
@@ -158,16 +158,16 @@ export function FormatToolbar({
               <button
                 key={t.type}
                 type="button"
-                className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] transition-colors ${t.type === state?.blockType ? 'bg-indigo-50/60 text-indigo-600' : 'text-gray-700 hover:bg-gray-50'}`}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] transition-colors ${t.type === state?.blockType ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]'}`}
                 onClick={() => {
                   onTurnInto(t.type)
                   setTurnIntoOpen(false)
                 }}
               >
-                <Icon className="size-3.5 shrink-0 text-gray-400" />
+                <Icon className="size-3.5 shrink-0 text-[var(--xpe-muted-foreground)]" />
                 <span className="flex-1">{t.label}</span>
                 {t.type === state?.blockType && (
-                  <Check className="size-3.5 shrink-0 text-indigo-500" />
+                  <Check className="size-3.5 shrink-0 text-[var(--xpe-primary)]" />
                 )}
               </button>
             )
@@ -255,7 +255,7 @@ export function FormatToolbar({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2 text-xs text-red-500 hover:bg-red-50 hover:text-red-600"
+                className="h-8 px-2 text-xs text-[var(--xpe-danger)] hover:bg-red-50 hover:text-red-600"
                 onClick={() => {
                   onMark('link', null)
                   setLinkOpen(false)
@@ -317,7 +317,7 @@ export function FormatToolbar({
                   onPointerDown={(e) => e.stopPropagation()}
                 >
                   <IconValueDisplay icon={selected ?? '💡'} className="size-4" />
-                  <ChevronDown className="size-3 text-gray-400" />
+                  <ChevronDown className="size-3 text-[var(--xpe-muted-foreground)]" />
                 </ToolbarButton>
               )}
             />

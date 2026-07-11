@@ -2,7 +2,7 @@
 import { FolderOpen, Link2, Loader2, Upload, Video } from 'lucide-vue-next';
 import { nextTick, ref, watch } from 'vue';
 import type { Block } from '@xproeditor/core';
-import { isAllowedEmbedUrl, parseVideoEmbed } from '@xproeditor/core';
+import { fileToObjectUrl, isAllowedEmbedUrl, mediaPropsFromFile, parseVideoEmbed } from '@xproeditor/core';
 
 const props = defineProps<{
     block: Block;
@@ -32,15 +32,15 @@ const embedInputRef = ref<HTMLInputElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 
 async function uploadFile(file: File) {
-    if (!props.upload || !file.type.startsWith('video/')) {
+    if (!file.type.startsWith('video/')) {
         return;
     }
 
     uploading.value = true;
 
     try {
-        const url = await props.upload(file);
-        emit('patch', { url, provider: 'file' });
+        const url = await (props.upload ?? fileToObjectUrl)(file);
+        emit('patch', { ...mediaPropsFromFile(file, url), provider: 'file' });
     } finally {
         uploading.value = false;
     }
@@ -122,15 +122,15 @@ watch(mode, (next) => {
     <div class="my-1">
         <div
             v-if="!block.props.url && !readonly"
-            class="flex flex-col gap-3 rounded-xl border-2 border-dashed py-6 transition-colors"
-            :class="dragOver ? 'border-indigo-400 bg-indigo-50/50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'"
+            class="flex flex-col gap-3 rounded-[var(--xpe-radius)] border-2 border-dashed py-6 transition-colors"
+            :class="dragOver ? 'border-[var(--xpe-ring)] bg-[var(--xpe-primary-muted)]' : 'border-[var(--xpe-border)] bg-[var(--xpe-muted)]'"
             @click="emit('select')"
             @dragover.prevent="dragOver = true"
             @dragleave="dragOver = false"
             @drop.prevent.stop="onDrop"
         >
-            <div class="flex items-center justify-center gap-2 text-gray-500">
-                <Loader2 v-if="busy()" class="h-5 w-5 animate-spin text-indigo-500" />
+            <div class="flex items-center justify-center gap-2 text-[var(--xpe-muted-foreground)]">
+                <Loader2 v-if="busy()" class="h-5 w-5 animate-spin text-[var(--xpe-primary)]" />
                 <Video v-else class="h-5 w-5" />
                 <span class="text-sm">{{ busy() ? 'Working...' : 'Add a video' }}</span>
             </div>
@@ -139,7 +139,7 @@ watch(mode, (next) => {
                 <button
                     type="button"
                     class="rounded-lg px-2.5 py-1 text-xs font-medium"
-                    :class="mode === 'upload' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100'"
+                    :class="mode === 'upload' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
                     @click.stop="mode = 'upload'"
                 >
                     Upload
@@ -148,7 +148,7 @@ watch(mode, (next) => {
                     v-if="pickMedia"
                     type="button"
                     class="rounded-lg px-2.5 py-1 text-xs font-medium"
-                    :class="mode === 'library' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100'"
+                    :class="mode === 'library' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
                     @click.stop="mode = 'library'"
                 >
                     Library
@@ -156,7 +156,7 @@ watch(mode, (next) => {
                 <button
                     type="button"
                     class="rounded-lg px-2.5 py-1 text-xs font-medium"
-                    :class="mode === 'embed' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100'"
+                    :class="mode === 'embed' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
                     @click.stop="mode = 'embed'"
                 >
                     Embed
@@ -167,7 +167,7 @@ watch(mode, (next) => {
                 <div v-if="mode === 'upload'" class="flex justify-center">
                     <button
                         type="button"
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-3 py-1.5 text-xs font-medium text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]"
                         @click.stop="fileInput?.click()"
                     >
                         <Upload class="h-3.5 w-3.5" />
@@ -179,7 +179,7 @@ watch(mode, (next) => {
                 <div v-else-if="mode === 'library'" class="flex justify-center">
                     <button
                         type="button"
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-3 py-1.5 text-xs font-medium text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]"
                         @click.stop="pickFromLibrary"
                     >
                         <FolderOpen class="h-3.5 w-3.5" />
@@ -189,24 +189,24 @@ watch(mode, (next) => {
 
             <div v-else class="space-y-2" @click.stop @mousedown.stop @pointerdown.stop>
                     <div class="flex items-center gap-2">
-                        <Link2 class="h-4 w-4 shrink-0 text-gray-400" />
+                        <Link2 class="h-4 w-4 shrink-0 text-[var(--xpe-muted-foreground)]" />
                         <input
                             ref="embedInputRef"
                             v-model="embedInput"
                             type="url"
-                            class="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-indigo-300"
+                            class="min-w-0 flex-1 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-2.5 py-1.5 text-xs text-[var(--xpe-foreground)] outline-none focus:border-[var(--xpe-ring)]"
                             placeholder="YouTube or Vimeo URL"
                             @keydown.enter.prevent="applyEmbed"
                         />
                         <button
                             type="button"
-                            class="rounded-lg bg-gray-800 px-2.5 py-1.5 text-xs text-white"
+                            class="rounded-lg bg-[var(--xpe-primary)] px-2.5 py-1.5 text-xs text-[var(--xpe-primary-foreground)]"
                             @click.stop="applyEmbed"
                         >
                             Add
                         </button>
                     </div>
-                    <p v-if="embedError" class="text-center text-xs text-red-500">{{ embedError }}</p>
+                    <p v-if="embedError" class="text-center text-xs text-[var(--xpe-danger)]">{{ embedError }}</p>
                 </div>
             </div>
         </div>
@@ -214,8 +214,8 @@ watch(mode, (next) => {
         <figure v-else class="group/video relative" :style="{ width: `${block.props.width ?? 100}%` }">
             <div @click="emit('select')">
                 <div
-                    class="overflow-hidden rounded-xl bg-black"
-                    :class="selected ? 'ring-2 ring-indigo-400' : ''"
+                    class="overflow-hidden rounded-[var(--xpe-radius)] bg-black"
+                    :class="selected ? 'ring-2 ring-[var(--xpe-ring)]' : ''"
                 >
                     <iframe
                         v-if="isEmbed() && safeEmbedUrl()"
@@ -245,7 +245,7 @@ watch(mode, (next) => {
                     class="rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-colors"
                     :class="
                         (block.props.width ?? 100) === w
-                            ? 'bg-white text-gray-900'
+                            ? 'bg-[var(--xpe-surface)] text-[var(--xpe-foreground)]'
                             : 'text-white/80 hover:bg-white/20'
                     "
                     @click.stop="emit('patch', { width: w })"
@@ -263,7 +263,7 @@ watch(mode, (next) => {
 
             <figcaption @mousedown.stop @click.stop @pointerdown.stop>
                 <input
-                    class="mt-1.5 w-full bg-transparent text-center text-xs text-gray-400 outline-none placeholder:text-gray-300"
+                    class="mt-1.5 w-full bg-transparent text-center text-xs text-[var(--xpe-muted-foreground)] outline-none placeholder:opacity-60"
                     :value="block.props.caption ?? ''"
                     placeholder="Add caption..."
                     :readonly="readonly"

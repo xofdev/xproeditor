@@ -3,6 +3,7 @@ import type { Block } from '@xproeditor/core'
 import { useBlockEditor, type UseBlockEditorOptions } from '../hooks/useBlockEditor'
 import { BlockItem } from './BlockItem'
 import { BubbleToolbar } from './BubbleToolbar'
+import { EmojiTriggerMenu } from './EmojiTriggerMenu'
 import { SlashMenu } from './SlashMenu'
 import type { FormatToolbarState } from '../types'
 
@@ -108,6 +109,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           pickMedia={ed.pickMedia}
           editorDir={ed.editorDir}
           readonly={ed.readonly}
+          themeSource={ed.rootRef.current}
           iconPickerRequest={
             ed.iconPickerRequest && ed.iconPickerRequest.blockId === block.id
               ? { tab: ed.iconPickerRequest.tab }
@@ -148,8 +150,20 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           ref={ed.slashMenuApiRef}
           query={ed.slashState.query}
           position={ed.slashState.position}
+          dir={ed.editorDir ?? 'ltr'}
+          themeSource={ed.rootRef.current}
           onSelect={ed.onSlashSelect}
           onClose={ed.closeSlash}
+        />
+      )}
+
+      {ed.emojiTriggerState && !ed.readonly && (
+        <EmojiTriggerMenu
+          query={ed.emojiTriggerState.query}
+          position={ed.emojiTriggerState.position}
+          dir={ed.editorDir ?? 'ltr'}
+          themeSource={ed.rootRef.current}
+          onSelect={ed.onEmojiTriggerSelect}
         />
       )}
 
@@ -161,6 +175,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           currentColor={ed.bubble.currentColor}
           currentHighlight={ed.bubble.currentHighlight}
           blockType={ed.bubble.blockType}
+          themeSource={ed.rootRef.current}
           onMark={ed.onBubbleMark}
           onTurnInto={ed.onBubbleTurnInto}
         />

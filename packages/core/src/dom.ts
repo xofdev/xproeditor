@@ -1,5 +1,84 @@
 /** Caret/selection helpers for per-block contenteditable elements. */
 
+// ─── Theme variable sync across portal boundaries ─────────────────────────────
+
+/** Every `--xpe-*` custom property the editor packages read for theming. */
+export const XPE_THEME_VARS = [
+  '--xpe-background',
+  '--xpe-foreground',
+  '--xpe-muted-foreground',
+  '--xpe-muted',
+  '--xpe-border',
+  '--xpe-primary',
+  '--xpe-primary-foreground',
+  '--xpe-primary-muted',
+  '--xpe-surface',
+  '--xpe-surface-hover',
+  '--xpe-ring',
+  '--xpe-danger',
+  '--xpe-radius',
+  '--xpe-shadow',
+  '--xpe-font-mono',
+] as const
+
+/**
+ * Copy resolved `--xpe-*` values from `source` onto `target` as inline
+ * custom properties. Needed because floating UI (slash menu, popovers,
+ * bubble toolbar) is portaled to `document.body` to escape clipping/overflow
+ * — which also escapes any scoped theme class applied to an ancestor of the
+ * editor, breaking CSS variable inheritance. Call this once the portaled
+ * element exists, using any element still inside the themed scope (e.g. the
+ * popover trigger, or the editor root) as `source`.
+ */
+export function syncThemeVars(source: Element, target: HTMLElement): void {
+  const computed = getComputedStyle(source)
+
+  for (const name of XPE_THEME_VARS) {
+    const value = computed.getPropertyValue(name).trim()
+
+    if (value) {
+      target.style.setProperty(name, value)
+    }
+  }
+}
+
+// ─── Page scroll lock (for floating menus like the slash command popover) ────
+
+let scrollLockCount = 0
+let savedBodyOverflow = ''
+
+/**
+ * Reference-counted page-scroll lock: while any caller holds a lock, the
+ * document can't scroll behind an open popover (Notion-style). Call the
+ * returned function to release — safe to call multiple times.
+ */
+export function lockPageScroll(): () => void {
+  if (typeof document === 'undefined') {
+return () => {}
+}
+
+  if (scrollLockCount === 0) {
+    savedBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  }
+
+  scrollLockCount++
+  let released = false
+
+  return () => {
+    if (released) {
+return
+}
+
+    released = true
+    scrollLockCount = Math.max(0, scrollLockCount - 1)
+
+    if (scrollLockCount === 0) {
+      document.body.style.overflow = savedBodyOverflow
+    }
+  }
+}
+
 /** Text offset of a (node, nodeOffset) position inside `el`. BR elements count as 1 char. */
 function positionToOffset(el: HTMLElement, node: Node, nodeOffset: number): number {
   const range = document.createRange()

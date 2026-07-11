@@ -124,21 +124,21 @@ export function ToolbarColorPanel({
             <button
               key={color}
               type="button"
-              className={`relative flex size-7 items-center justify-center rounded-md border border-black/5 text-xs font-bold transition-transform hover:scale-105 ${isPresetActive(color, activeTextColor) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
+              className={`relative flex size-7 items-center justify-center rounded-md border border-black/5 text-xs font-bold transition-transform hover:scale-105 ${isPresetActive(color, activeTextColor) ? 'ring-2 ring-[var(--xpe-ring)] ring-offset-1' : ''}`}
               style={{ color }}
               title={color}
               onClick={() => selectTextColor(color)}
             >
               A
               {isPresetActive(color, activeTextColor) && (
-                <Check className="absolute -top-1 -right-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white" />
+                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary)] p-0.5 text-[var(--xpe-primary-foreground)]" />
               )}
             </button>
           ))}
         </div>
 
-        <div className="border-t border-gray-100 pt-3">
-          <p className="mb-2 text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+        <div className="border-t border-[var(--xpe-border)] pt-3">
+          <p className="mb-2 text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
             Custom
           </p>
           <div onFocus={() => (isEditingPicker.current = true)}>
@@ -156,7 +156,7 @@ export function ToolbarColorPanel({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-full text-xs text-gray-500"
+            className="h-7 w-full text-xs text-[var(--xpe-muted-foreground)]"
             onClick={resetCurrent}
           >
             Reset text color
@@ -170,20 +170,20 @@ export function ToolbarColorPanel({
             <button
               key={color}
               type="button"
-              className={`relative size-7 rounded-md border border-black/10 transition-transform hover:scale-105 ${isPresetActive(color, activeHighlight) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
+              className={`relative size-7 rounded-md border border-black/10 transition-transform hover:scale-105 ${isPresetActive(color, activeHighlight) ? 'ring-2 ring-[var(--xpe-ring)] ring-offset-1' : ''}`}
               style={{ backgroundColor: color }}
               title={color}
               onClick={() => selectHighlight(color)}
             >
               {isPresetActive(color, activeHighlight) && (
-                <Check className="absolute -top-1 -right-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white" />
+                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary)] p-0.5 text-[var(--xpe-primary-foreground)]" />
               )}
             </button>
           ))}
         </div>
 
-        <div className="border-t border-gray-100 pt-3">
-          <p className="mb-2 text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+        <div className="border-t border-[var(--xpe-border)] pt-3">
+          <p className="mb-2 text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
             Custom
           </p>
           <div onFocus={() => (isEditingPicker.current = true)}>
@@ -201,10 +201,10 @@ export function ToolbarColorPanel({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-full text-xs text-gray-500"
+            className="h-7 w-full text-xs text-[var(--xpe-muted-foreground)]"
             onClick={resetCurrent}
           >
-            <Highlighter className="mr-1.5 size-3" />
+            <Highlighter className="me-1.5 size-3" />
             Remove highlight
           </Button>
         )}

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { inject, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { syncThemeVars } from '@xproeditor/core'
 import { popoverContextKey } from './popoverContext'
 
 const props = withDefaults(
@@ -29,6 +30,11 @@ function reposition(): void {
   const trigger = ctx!.triggerEl.value
   const content = contentEl.value
   if (!trigger || !content) return
+
+  // The popover is teleported to <body>, which escapes any scoped theme
+  // class applied to an ancestor of the editor — resync inline so it still
+  // picks up a custom --xpe-* theme.
+  syncThemeVars(trigger, content)
 
   const anchor = (trigger.firstElementChild as HTMLElement | null) ?? trigger
   const rect = anchor.getBoundingClientRect()
@@ -115,9 +121,9 @@ onBeforeUnmount(() => {
 <style scoped>
 .xpe-popover-content {
   z-index: 80;
-  border-radius: 12px;
-  border: 1px solid #f3f4f6;
-  background: #fff;
+  border-radius: var(--xpe-radius, 12px);
+  border: 1px solid var(--xpe-muted, #f3f4f6);
+  background: var(--xpe-surface, #fff);
   box-shadow:
     0 10px 15px -3px rgb(0 0 0 / 0.1),
     0 4px 6px -4px rgb(0 0 0 / 0.1);

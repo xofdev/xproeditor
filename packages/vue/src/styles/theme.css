@@ -10,5 +10,99 @@
   --xpe-muted: #f3f4f6;
   --xpe-border: #e5e7eb;
   --xpe-primary: #4f46e5;
+  --xpe-primary-foreground: #ffffff;
+  /* subtle tint behind active/selected menu rows and drop zones */
+  --xpe-primary-muted: #eef2ff;
+  /* elevated surfaces: popovers, menus, dialogs */
+  --xpe-surface: #ffffff;
+  --xpe-surface-hover: #f9fafb;
+  /* focus/selection ring around media blocks */
+  --xpe-ring: #818cf8;
+  --xpe-danger: #ef4444;
+  --xpe-radius: 12px;
+  --xpe-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.1),
+    0 4px 6px -4px rgb(0 0 0 / 0.05);
   --xpe-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/**
+ * Built-in dark theme. Add the `xpe-dark` class (or `data-xpe-theme="dark"`)
+ * to any ancestor of the editor — typically alongside your app's own dark
+ * mode toggle. Apps with custom palettes can override the same variables
+ * under their own selector instead.
+ */
+.xpe-dark,
+[data-xpe-theme='dark'] {
+  --xpe-background: #111827;
+  --xpe-foreground: #e5e7eb;
+  --xpe-muted-foreground: #9ca3af;
+  --xpe-muted: #1f2937;
+  --xpe-border: #374151;
+  --xpe-primary: #818cf8;
+  --xpe-primary-foreground: #111827;
+  --xpe-primary-muted: rgb(129 140 248 / 0.15);
+  --xpe-surface: #1f2937;
+  --xpe-surface-hover: #273449;
+  --xpe-ring: #6366f1;
+  --xpe-danger: #f87171;
+  --xpe-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.5),
+    0 4px 6px -4px rgb(0 0 0 / 0.4);
+}
+
+/**
+ * Custom scrollbars for the editor's own scrollable surfaces — slim and
+ * token-driven instead of the browser default. Add `.xpe-scroll` to any
+ * other scrollable container you build against these tokens.
+ */
+.xpe-scroll,
+.block-editor,
+.doc-blocks,
+.xpe-popover-content,
+.xpe-emoji-scroll,
+.db-table-wrap,
+.db-code pre {
+  scrollbar-width: thin;
+  scrollbar-color: var(--xpe-border) transparent;
+}
+.xpe-scroll::-webkit-scrollbar,
+.block-editor::-webkit-scrollbar,
+.doc-blocks::-webkit-scrollbar,
+.xpe-popover-content::-webkit-scrollbar,
+.xpe-emoji-scroll::-webkit-scrollbar,
+.db-table-wrap::-webkit-scrollbar,
+.db-code pre::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.xpe-scroll::-webkit-scrollbar-track,
+.block-editor::-webkit-scrollbar-track,
+.doc-blocks::-webkit-scrollbar-track,
+.xpe-popover-content::-webkit-scrollbar-track,
+.xpe-emoji-scroll::-webkit-scrollbar-track,
+.db-table-wrap::-webkit-scrollbar-track,
+.db-code pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+.xpe-scroll::-webkit-scrollbar-thumb,
+.block-editor::-webkit-scrollbar-thumb,
+.doc-blocks::-webkit-scrollbar-thumb,
+.xpe-popover-content::-webkit-scrollbar-thumb,
+.xpe-emoji-scroll::-webkit-scrollbar-thumb,
+.db-table-wrap::-webkit-scrollbar-thumb,
+.db-code pre::-webkit-scrollbar-thumb {
+  background-color: var(--xpe-border);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.xpe-scroll::-webkit-scrollbar-thumb:hover,
+.block-editor::-webkit-scrollbar-thumb:hover,
+.doc-blocks::-webkit-scrollbar-thumb:hover,
+.xpe-popover-content::-webkit-scrollbar-thumb:hover,
+.xpe-emoji-scroll::-webkit-scrollbar-thumb:hover,
+.db-table-wrap::-webkit-scrollbar-thumb:hover,
+.db-code pre::-webkit-scrollbar-thumb:hover {
+  background-color: var(--xpe-muted-foreground);
 }

@@ -372,6 +372,15 @@ out.push(createBlock('image', { props: { url: src, caption: el.getAttribute('alt
 
       break
     }
+    case 'audio': {
+      const src = el.getAttribute('src') ?? el.querySelector('source')?.getAttribute('src')
+
+      if (src) {
+out.push(createBlock('audio', { props: { url: src } }))
+}
+
+      break
+    }
     case 'table': {
       const rows: TableCell[][] = []
       let hasHeader = false

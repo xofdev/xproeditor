@@ -1,18 +1,72 @@
+/*
+ * Bento theme — monochrome, soft-neumorphic, no accent color.
+ * Light and dark palettes flip via [data-theme='dark'] on <html>;
+ * the same toggle adds `xpe-dark` so the live editor follows along.
+ */
 :root {
-  --ink: #0f172a;
-  --muted: #64748b;
-  --line: #e5e7eb;
-  --surface: #ffffff;
-  --canvas: #fafafa;
-  --accent: #4f46e5;
-  --accent-2: #7c3aed;
-  --accent-soft: #eef2ff;
-  --radius: 16px;
+  --ink: #262626;
+  --muted: #8b8b8b;
+  --line: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.14);
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-solid: #f7f7f7;
+  --chip: #ffffff;
+  --canvas: #ededed;
+  --canvas-gradient: linear-gradient(165deg, #f3f3f3 0%, #ebebeb 55%, #e4e4e4 100%);
+  --shadow-soft:
+    0 24px 48px -24px rgba(0, 0, 0, 0.28),
+    0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-chip:
+    0 2px 6px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
+  --radius: 18px;
+  --radius-chip: 12px;
   color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --ink: #ececec;
+  --muted: #9a9a9a;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --surface: rgba(58, 58, 58, 0.82);
+  --surface-solid: #3a3a3a;
+  --chip: #4a4a4a;
+  --canvas: #2d2d2d;
+  --canvas-gradient: linear-gradient(165deg, #323232 0%, #2c2c2c 55%, #272727 100%);
+  --shadow-soft:
+    0 24px 48px -24px rgba(0, 0, 0, 0.6),
+    0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-chip:
+    0 2px 6px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Slim, theme-matched scrollbars across the whole site */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--line-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted);
 }
 
 html,
@@ -23,6 +77,8 @@ body {
 
 body {
   background: var(--canvas);
+  background-image: var(--canvas-gradient);
+  background-attachment: fixed;
   color: var(--ink);
   font-family:
     'Inter',
@@ -31,6 +87,27 @@ body {
     'Segoe UI',
     sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: color 0.4s ease;
+}
+
+/* Diagonal sweep between themes (View Transitions API) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  animation: xpe-sweep 0.55s ease-in-out both;
+}
+
+@keyframes xpe-sweep {
+  from {
+    clip-path: polygon(120% -20%, 140% -20%, 20% 120%, 0% 120%);
+  }
+  to {
+    clip-path: polygon(-40% -20%, 140% -20%, 140% 120%, -60% 120%);
+  }
 }
 
 .site {
@@ -64,10 +141,10 @@ pre,
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  backdrop-filter: blur(10px);
-  background: rgba(250, 250, 250, 0.75);
+  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--canvas) 72%, transparent);
   border-bottom: 1px solid transparent;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.4s ease;
 }
 
 .nav.scrolled {
@@ -91,11 +168,12 @@ pre,
   justify-content: center;
   width: 26px;
   height: 26px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #fff;
+  border-radius: 9px;
+  background: var(--ink);
+  color: var(--canvas);
   font-size: 13px;
   font-weight: 800;
+  transition: background-color 0.4s ease, color 0.4s ease;
 }
 
 .nav-links {
@@ -106,26 +184,50 @@ pre,
 
 .nav-link {
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
   text-decoration: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .nav-link:hover {
-  background: rgba(15, 23, 42, 0.05);
+  background: var(--line);
   color: var(--ink);
 }
 
 .nav-link.cta {
   background: var(--ink);
-  color: #fff;
+  color: var(--canvas);
 }
 
 .nav-link.cta:hover {
-  background: #1e293b;
+  opacity: 0.88;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-inline-start: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--muted);
+  cursor: pointer;
+  box-shadow: var(--shadow-chip);
+  transition: color 0.15s, transform 0.15s, background-color 0.4s ease;
+}
+
+.theme-toggle:hover {
+  color: var(--ink);
+  transform: translateY(-1px);
 }
 
 /* ─── Hero ─────────────────────────────────────────────────────────────── */
@@ -142,11 +244,17 @@ pre,
   inset: -20% -10% auto -10%;
   height: 480px;
   background:
-    radial-gradient(circle at 30% 30%, rgba(79, 70, 229, 0.16), transparent 55%),
-    radial-gradient(circle at 70% 20%, rgba(124, 58, 237, 0.14), transparent 55%);
-  filter: blur(10px);
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.55), transparent 55%),
+    radial-gradient(circle at 70% 20%, rgba(0, 0, 0, 0.05), transparent 55%);
+  filter: blur(12px);
   pointer-events: none;
   z-index: 0;
+}
+
+:root[data-theme='dark'] .hero-glow {
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.06), transparent 55%),
+    radial-gradient(circle at 70% 20%, rgba(0, 0, 0, 0.35), transparent 55%);
 }
 
 .hero-inner {
@@ -172,10 +280,12 @@ pre,
   padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: var(--surface);
+  background: var(--chip);
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
+  box-shadow: var(--shadow-chip);
+  transition: background-color 0.4s ease;
 }
 
 .pill img {
@@ -192,7 +302,7 @@ pre,
 }
 
 .hero h1 .grad {
-  background: linear-gradient(100deg, var(--accent), var(--accent-2));
+  background: linear-gradient(105deg, var(--ink) 30%, var(--muted) 90%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -219,13 +329,13 @@ pre,
   align-items: center;
   gap: 8px;
   padding: 11px 20px;
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
   text-decoration: none;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, opacity 0.12s;
 }
 
 .btn:active {
@@ -234,23 +344,23 @@ pre,
 
 .btn-primary {
   background: var(--ink);
-  color: #fff;
-  box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.5);
+  color: var(--canvas);
+  box-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.5);
 }
 
 .btn-primary:hover {
-  background: #1e293b;
+  opacity: 0.9;
 }
 
 .btn-outline {
-  background: var(--surface);
+  background: var(--chip);
   border-color: var(--line);
   color: var(--ink);
+  box-shadow: var(--shadow-chip);
 }
 
 .btn-outline:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
+  border-color: var(--line-strong);
 }
 
 /* ─── Section shell ────────────────────────────────────────────────────── */
@@ -271,7 +381,7 @@ section {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--muted);
   margin-bottom: 10px;
 }
 
@@ -291,10 +401,12 @@ section {
 
 .demo-frame {
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: 0 30px 60px -30px rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-soft);
   overflow: hidden;
+  transition: background-color 0.4s ease, border-color 0.4s ease;
 }
 
 .demo-toolbar {
@@ -304,7 +416,8 @@ section {
   gap: 12px;
   padding: 12px 18px;
   border-bottom: 1px solid var(--line);
-  background: #fcfcfd;
+  background: color-mix(in srgb, var(--surface-solid) 65%, transparent);
+  transition: background-color 0.4s ease, border-color 0.4s ease;
 }
 
 .demo-toolbar-dots {
@@ -316,14 +429,14 @@ section {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #e2e8f0;
+  background: var(--line-strong);
 }
 
 .mode-switch {
   display: inline-flex;
   padding: 3px;
-  border-radius: 9px;
-  background: #f1f5f9;
+  border-radius: 11px;
+  background: var(--line);
   gap: 2px;
 }
 
@@ -334,15 +447,15 @@ section {
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
-  border-radius: 7px;
+  border-radius: 9px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .mode-switch button.active {
-  background: #fff;
+  background: var(--chip);
   color: var(--ink);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-chip);
 }
 
 .demo-body {
@@ -353,6 +466,7 @@ section {
 
 .demo-body :where(.block-editor) {
   padding: 8px 28px 60px;
+  background: transparent;
 }
 
 .demo-hint {
@@ -363,11 +477,32 @@ section {
 }
 
 .demo-hint code {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--line);
+  color: var(--ink);
   padding: 2px 6px;
-  border-radius: 5px;
+  border-radius: 6px;
   font-size: 12px;
+}
+
+/*
+ * Bento editor theme — the live proof that the editor is themable with a
+ * handful of CSS variables (see docs/theming.md). Toggled from the demo
+ * toolbar; "Default" removes this class to show the stock look.
+ */
+.demo-body.editor-theme-bento {
+  --xpe-background: transparent;
+  --xpe-foreground: var(--ink);
+  --xpe-muted-foreground: var(--muted);
+  --xpe-muted: color-mix(in srgb, var(--ink) 5%, transparent);
+  --xpe-border: var(--line-strong);
+  --xpe-primary: var(--ink);
+  --xpe-primary-foreground: var(--canvas);
+  --xpe-primary-muted: color-mix(in srgb, var(--ink) 8%, transparent);
+  --xpe-surface: var(--surface-solid);
+  --xpe-surface-hover: color-mix(in srgb, var(--ink) 6%, transparent);
+  --xpe-ring: var(--muted);
+  --xpe-radius: 14px;
+  --xpe-shadow: var(--shadow-soft);
 }
 
 /* ─── Install tabs ─────────────────────────────────────────────────────── */
@@ -376,9 +511,12 @@ section {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-soft);
   overflow: hidden;
   max-width: 620px;
   margin: 0 auto;
+  transition: background-color 0.4s ease;
 }
 
 .install-tabs {
@@ -401,13 +539,13 @@ section {
 
 .install-tabs button.active {
   color: var(--ink);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--ink);
 }
 
 .code-block {
   position: relative;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: #1f1f1f;
+  color: #dcdcdc;
 }
 
 .code-block pre {
@@ -424,11 +562,11 @@ section {
   right: 10px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(255, 255, 255, 0.06);
-  color: #cbd5e1;
+  color: #c5c5c5;
   font-size: 11px;
   font-weight: 600;
   padding: 5px 9px;
-  border-radius: 6px;
+  border-radius: 7px;
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -438,19 +576,20 @@ section {
 }
 
 .code-comment {
-  color: #64748b;
+  color: #7d7d7d;
 }
 .code-kw {
-  color: #c4b5fd;
+  color: #d0d0d0;
+  font-weight: 700;
 }
 .code-str {
-  color: #86efac;
+  color: #b5c9b7;
 }
 .code-tag {
-  color: #93c5fd;
+  color: #c9c9c9;
 }
 .code-fn {
-  color: #7dd3fc;
+  color: #bdbdbd;
 }
 
 /* ─── Features ─────────────────────────────────────────────────────────── */
@@ -463,16 +602,18 @@ section {
 
 .feature-card {
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius-chip);
   background: var(--surface);
+  backdrop-filter: blur(10px);
   padding: 20px;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease,
+    background-color 0.4s ease;
 }
 
 .feature-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 30px -20px rgba(15, 23, 42, 0.3);
-  border-color: #dbe1ea;
+  box-shadow: var(--shadow-soft);
+  border-color: var(--line-strong);
 }
 
 .feature-icon {
@@ -481,9 +622,9 @@ section {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 10px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  border-radius: 11px;
+  background: var(--line);
+  color: var(--ink);
   margin-bottom: 12px;
 }
 
@@ -511,16 +652,17 @@ section {
 .package-card {
   display: block;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius-chip);
   background: var(--surface);
+  backdrop-filter: blur(10px);
   padding: 18px 20px;
   text-decoration: none;
   color: var(--ink);
-  transition: border-color 0.15s, transform 0.15s;
+  transition: border-color 0.15s, transform 0.15s, background-color 0.4s ease;
 }
 
 .package-card:hover {
-  border-color: var(--accent);
+  border-color: var(--line-strong);
   transform: translateY(-2px);
 }
 
@@ -528,7 +670,7 @@ section {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--ink);
   display: block;
   margin-bottom: 6px;
 }

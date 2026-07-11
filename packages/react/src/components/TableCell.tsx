@@ -221,7 +221,7 @@ export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function Ta
 
   return (
     <Tag
-      className={`etc-cell border border-gray-150 p-0 relative min-w-[100px] align-top ${isHeader ? 'bg-gray-50/80' : ''} ${selected ? 'ring-2 ring-indigo-400 ring-inset' : ''}`}
+      className={`etc-cell border border-gray-150 p-0 relative min-w-[100px] align-top ${isHeader ? 'bg-[var(--xpe-muted)]/80' : ''} ${selected ? 'ring-2 ring-[var(--xpe-ring)] ring-inset' : ''}`}
       style={cellStyle}
       colSpan={cell.colspan && cell.colspan > 1 ? cell.colspan : undefined}
       rowSpan={cell.rowspan && cell.rowspan > 1 ? cell.rowspan : undefined}
@@ -231,7 +231,7 @@ export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function Ta
         ref={el}
         contentEditable={!readonly}
         suppressContentEditableWarning
-        className={`etc-editor outline-none w-full px-3 py-2 text-sm text-gray-700 min-h-[2.25rem] ${isHeader ? 'font-semibold text-gray-800' : ''}`}
+        className={`etc-editor outline-none w-full px-3 py-2 text-sm text-[var(--xpe-foreground)] min-h-[2.25rem] ${isHeader ? 'font-semibold text-[var(--xpe-foreground)]' : ''}`}
         style={cell.align ? { textAlign: cell.align as TableCellAlign } : undefined}
         dir="auto"
         spellCheck={false}

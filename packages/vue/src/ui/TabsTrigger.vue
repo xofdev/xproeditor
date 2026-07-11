@@ -27,20 +27,20 @@ const isActive = computed(() => ctx.active.value === props.value)
 .xpe-tabs-trigger {
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: calc(var(--xpe-radius, 12px) * 0.5);
   padding: 5px 8px;
   font-size: 12px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--xpe-muted-foreground, #6b7280);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 .xpe-tabs-trigger:hover {
-  color: #111827;
+  color: var(--xpe-foreground, #111827);
 }
 .xpe-tabs-trigger--active {
-  background: #fff;
-  color: #111827;
+  background: var(--xpe-surface, #fff);
+  color: var(--xpe-foreground, #111827);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
 }
 </style>

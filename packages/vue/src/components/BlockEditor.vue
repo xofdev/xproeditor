@@ -8,7 +8,7 @@ import {
   getSelectionClientRect,
   htmlToBlocks,
   createBlock, cloneBlock, spansToText, splitSpansAt, normalizeSpans,
-  deleteRangeInSpans, applyMarkToRange, rangeHasMark, rangeMarkValue, sliceSpans, detectDir,
+  deleteRangeInSpans, applyMarkToRange, rangeHasMark, rangeMarkValue, sliceSpans,
   applyMarkToTextRange,
   deleteTextRange,
   extractTextRangeAsBlocks,
@@ -26,13 +26,19 @@ import {
   patchTableCellsBackground,
   patchTableStyle,
   isTextBlock,
+  blockTypeForFile,
+  fileToObjectUrl,
+  mediaPropsFromFile,
 } from '@xproeditor/core'
 import type { TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, TableCellCoord, TableCellAlign, TableStyle } from '@xproeditor/core'
 import EditorBlockItem from './EditorBlockItem.vue'
 import EditorBubbleToolbar from './EditorBubbleToolbar.vue'
+import EditorEmojiTriggerMenu from './EditorEmojiTriggerMenu.vue'
 import type { FormatToolbarAlign, FormatToolbarState } from './EditorFormatToolbar.vue'
 import EditorSlashMenu from './EditorSlashMenu.vue'
 import type {SlashItem} from './EditorSlashMenu.vue';
+import { EmojiPicker } from '../ui'
+import { ALL_EMOJIS } from '../ui/emojiData'
 
 const props = defineProps<{
   /** Live block array — the editor mutates it in place. */
@@ -525,7 +531,7 @@ interface SlashState {
   blockId: string
   index: number
   query: string
-  position: { x: number; y: number }
+  position: { x: number; y: number; top?: number }
 }
 
 const slashState = ref<SlashState | null>(null)
@@ -536,16 +542,11 @@ function closeSlash() {
   slashState.value = null
 }
 
-function slashPosition(): { x: number; y: number } {
+function slashPosition(): { x: number; y: number; top?: number } {
+  // Raw caret anchor; the menu measures itself and flips/clamps to the viewport.
   const rect = getCaretClientRect()
-  const x = Math.min(rect?.left ?? 100, window.innerWidth - 300)
-  let y = (rect?.bottom ?? 100) + 6
 
-  if (y + 330 > window.innerHeight) {
-y = Math.max(8, (rect?.top ?? 100) - 336)
-}
-
-  return { x, y }
+  return { x: rect?.left ?? 100, y: rect?.bottom ?? 100, top: rect?.top ?? 100 }
 }
 
 function updateSlash(block: Block, spans: InlineSpan[], caret: number | null) {
@@ -597,7 +598,7 @@ return
 
   const removeEnd = state.index + 1 + state.query.length
   const spans = deleteRangeInSpans(block.content, state.index, removeEnd)
-  const isInsertType = ['divider', 'image', 'video', 'table', 'code'].includes(item.type)
+  const isInsertType = ['divider', 'image', 'video', 'audio', 'file', 'table', 'code'].includes(item.type)
 
   if (!isInsertType) {
     const defaults = makeBlock(item.type)
@@ -632,6 +633,75 @@ focusBlock(newBlock.id, 'start')
 } else {
 selectBlock(newBlock.id)
 }
+}
+
+// ─── Inline emoji trigger (":" — Slack/Discord-style) ──────────────────────────
+
+interface EmojiTriggerState {
+  blockId: string
+  index: number
+  query: string
+  position: { x: number; y: number; top?: number }
+}
+
+const emojiTriggerState = ref<EmojiTriggerState | null>(null)
+
+function closeEmojiTrigger() {
+  emojiTriggerState.value = null
+}
+
+function updateEmojiTrigger(block: Block, spans: InlineSpan[], caret: number | null) {
+  const text = spansToText(spans)
+  const state = emojiTriggerState.value
+
+  if (state && state.blockId === block.id) {
+    if (caret === null || caret <= state.index || text[state.index] !== ':') {
+      closeEmojiTrigger()
+
+      return
+    }
+
+    const query = text.slice(state.index + 1, caret)
+
+    if (/\s/.test(query) || query.length > 20) {
+      closeEmojiTrigger()
+
+      return
+    }
+
+    state.query = query
+
+    return
+  }
+
+  if (caret !== null && caret > 0 && text[caret - 1] === ':') {
+    const before = caret >= 2 ? text[caret - 2] : ''
+
+    if (before === '' || /\s/.test(before)) {
+      emojiTriggerState.value = { blockId: block.id, index: caret - 1, query: '', position: slashPosition() }
+    }
+  }
+}
+
+function onEmojiTriggerSelect(emoji: string) {
+  const state = emojiTriggerState.value
+
+  if (!state) {
+return
+}
+
+  const block = byId(state.blockId)
+  closeEmojiTrigger()
+
+  if (!block) {
+return
+}
+
+  const removeEnd = state.index + 1 + state.query.length
+  const withoutTrigger = deleteRangeInSpans(block.content, state.index, removeEnd)
+  block.content = insertSpansAt(withoutTrigger, state.index, [{ text: emoji }])
+  pushHistory(true)
+  focusBlock(block.id, state.index + emoji.length)
 }
 
 // ─── Markdown shortcuts ───────────────────────────────────────────────────────
@@ -703,23 +773,25 @@ return
 
   block.content = spans
 
-  if (isTextBlock(block.type)) {
-    const text = spansToText(spans)
-
-    if (!block.props.dir || block.props.dir === 'auto') {
-      if (text.trim()) {
-        block.props.dir = detectDir(text)
-      }
-    }
-  }
+  // Direction stays 'auto' unless the user sets it explicitly — rendering
+  // resolves it live from content (resolveBlockDirection), so a block flips
+  // between RTL and LTR as its text changes instead of locking on first input.
 
   if (tryMarkdownShortcut(block, spans, caret)) {
     closeSlash()
+    closeEmojiTrigger()
 
     return
   }
 
   updateSlash(block, spans, caret)
+
+  if (slashState.value) {
+    closeEmojiTrigger()
+  } else {
+    updateEmojiTrigger(block, spans, caret)
+  }
+
   pushHistory()
 }
 
@@ -933,6 +1005,21 @@ function insertSpansAt(content: InlineSpan[], offset: number, inserted: InlineSp
   return normalizeSpans([...before, ...inserted, ...after])
 }
 
+/** Insert dropped/pasted files as media blocks (image/video/audio/file by MIME). */
+async function insertFileBlocks(files: File[], at: number) {
+  const doUpload = props.upload ?? fileToObjectUrl
+
+  for (const [i, file] of files.entries()) {
+    const type = blockTypeForFile(file)
+    const url = await doUpload(file)
+    const media = mediaPropsFromFile(file, url)
+    const extra = type === 'video' ? { provider: 'file' as const } : {}
+    blocks.value.splice(at + i, 0, makeBlock(type, { props: { ...media, ...extra } }))
+  }
+
+  pushHistory(true)
+}
+
 async function handlePasted(
   block: Block,
   payload: { html: string; text: string; files: File[]; offsets: { start: number; end: number } },
@@ -943,28 +1030,9 @@ async function handlePasted(
 return
 }
 
-  // Image files
-  const imageFiles = payload.files.filter(f => f.type.startsWith('image/'))
-  const videoFiles = payload.files.filter(f => f.type.startsWith('video/'))
-
-  if (videoFiles.length > 0 && props.upload) {
-    for (const [i, file] of videoFiles.entries()) {
-      const url = await props.upload(file)
-      blocks.value.splice(idx + 1 + i, 0, makeBlock('video', { props: { url, provider: 'file' } }))
-    }
-
-    pushHistory(true)
-
-    return
-  }
-
-  if (imageFiles.length > 0 && props.upload) {
-    for (const [i, file] of imageFiles.entries()) {
-      const url = await props.upload(file)
-      blocks.value.splice(idx + 1 + i, 0, makeBlock('image', { props: { url } }))
-    }
-
-    pushHistory(true)
+  // Files (image / video / audio / anything else) become media blocks
+  if (payload.files.length > 0) {
+    await insertFileBlocks(payload.files, idx + 1)
 
     return
   }
@@ -2064,8 +2132,36 @@ e.dataTransfer.setDragImage(blockEl as HTMLElement, 0, 12)
   }
 }
 
+function isExternalFileDrag(e: DragEvent): boolean {
+  return !draggingId.value && Array.from(e.dataTransfer?.types ?? []).includes('Files')
+}
+
 function onDragOver(e: DragEvent) {
-  if (props.readonly || !draggingId.value) {
+  if (props.readonly) {
+return
+}
+
+  if (isExternalFileDrag(e)) {
+    e.preventDefault()
+
+    if (e.dataTransfer) {
+e.dataTransfer.dropEffect = 'copy'
+}
+
+    const target = (e.target as HTMLElement).closest('[data-block-id]')
+    const id = target?.getAttribute('data-block-id')
+
+    if (id) {
+      const rect = target!.getBoundingClientRect()
+      dropTarget.value = { id, position: e.clientY < rect.top + rect.height / 2 ? 'before' : 'after' }
+    } else {
+      dropTarget.value = null
+    }
+
+    return
+  }
+
+  if (!draggingId.value) {
 return
 }
 
@@ -2102,6 +2198,28 @@ return
 }
 
   e.preventDefault()
+
+  // External OS files dropped onto the editor become media blocks
+  const externalFiles = !draggingId.value ? Array.from(e.dataTransfer?.files ?? []) : []
+
+  if (externalFiles.length > 0) {
+    const target = dropTarget.value
+    dropTarget.value = null
+    let at = blocks.value.length
+
+    if (target) {
+      const idx = blocks.value.findIndex(b => b.id === target.id)
+
+      if (idx !== -1) {
+at = target.position === 'before' ? idx : idx + 1
+}
+    }
+
+    void insertFileBlocks(externalFiles, at)
+
+    return
+  }
+
   const from = draggingId.value
   const target = dropTarget.value
   draggingId.value = null
@@ -2263,7 +2381,62 @@ function handleSelectAllShortcut(target: HTMLElement) {
 }
 
 function onKeydownCapture(e: KeyboardEvent) {
-  if (props.readonly || isNativeInputTarget(e.target)) {
+  if (props.readonly) {
+return
+}
+
+  // Slash menu lives inside the contenteditable block being typed into, so
+  // this must run before the isNativeInputTarget bail-out below (which
+  // exists to let text blocks handle their own keys normally).
+  if (slashState.value) {
+    if (e.key === 'ArrowDown') {
+ e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.move(1);
+
+ return
+}
+
+    if (e.key === 'ArrowUp') {
+ e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.move(-1);
+
+ return
+}
+
+    if (e.key === 'Enter' || e.key === 'Tab') {
+ e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.confirm();
+
+ return
+}
+
+    if (e.key === 'Escape') {
+ e.preventDefault(); e.stopPropagation(); closeSlash();
+
+ return
+}
+  }
+
+  if (emojiTriggerState.value) {
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault(); e.stopPropagation()
+      const q = emojiTriggerState.value.query.toLowerCase()
+      const match = q ? ALL_EMOJIS.find(en => en.name.includes(q) || en.keywords.some(k => k.includes(q))) : null
+
+      if (match) {
+onEmojiTriggerSelect(match.char)
+} else {
+closeEmojiTrigger()
+}
+
+      return
+    }
+
+    if (e.key === 'Escape') {
+ e.preventDefault(); e.stopPropagation(); closeEmojiTrigger();
+
+ return
+}
+  }
+
+  if (isNativeInputTarget(e.target)) {
 return
 }
 
@@ -2348,31 +2521,7 @@ undo()
     return
   }
 
-  if (slashState.value) {
-    if (e.key === 'ArrowDown') {
- e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.move(1);
-
- return 
-}
-
-    if (e.key === 'ArrowUp') {
- e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.move(-1);
-
- return 
-}
-
-    if (e.key === 'Enter' || e.key === 'Tab') {
- e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.confirm();
-
- return 
-}
-
-    if (e.key === 'Escape') {
- e.preventDefault(); e.stopPropagation(); closeSlash();
-
- return 
-}
-  } else if (e.key === 'Escape' && bubble.value) {
+  if (e.key === 'Escape' && bubble.value) {
     bubble.value = null
   }
 }
@@ -2492,6 +2641,10 @@ function onDocMouseDown(e: MouseEvent) {
 
   if (slashState.value && !target.closest('.fixed')) {
 closeSlash()
+}
+
+  if (emojiTriggerState.value && !target.closest('.fixed')) {
+closeEmojiTrigger()
 }
 
   if (selectedBlockId.value && !target.closest(`[data-block-id="${selectedBlockId.value}"]`)) {
@@ -2617,6 +2770,7 @@ focusBlock(last.id, 'end')
       :pick-media="pickMedia"
       :editor-dir="editorDir"
       :readonly="readonly"
+      :theme-source="rootEl"
       :class="{ 'opacity-40': draggingId === block.id }"
       :icon-picker-request="iconPickerRequest && iconPickerRequest.blockId === block.id ? { tab: iconPickerRequest.tab } : null"
       @input="(s, c) => handleInput(block, s, c)"
@@ -2654,8 +2808,19 @@ focusBlock(last.id, 'end')
       ref="slashMenuRef"
       :query="slashState.query"
       :position="slashState.position"
+      :dir="editorDir ?? 'ltr'"
+      :theme-source="rootEl"
       @select="onSlashSelect"
       @close="closeSlash"
+    />
+
+    <EditorEmojiTriggerMenu
+      v-if="emojiTriggerState && !readonly"
+      :query="emojiTriggerState.query"
+      :position="emojiTriggerState.position"
+      :dir="editorDir ?? 'ltr'"
+      :theme-source="rootEl"
+      @select="onEmojiTriggerSelect"
     />
 
     <EditorBubbleToolbar
@@ -2666,6 +2831,7 @@ focusBlock(last.id, 'end')
       :current-color="bubble.currentColor"
       :current-highlight="bubble.currentHighlight"
       :block-type="bubble.blockType"
+      :theme-source="rootEl"
       @mark="onBubbleMark"
       @turn-into="onBubbleTurnInto"
     />

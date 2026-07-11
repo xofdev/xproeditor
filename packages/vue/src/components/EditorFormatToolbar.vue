@@ -155,7 +155,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
 </script>
 
 <template>
-    <div class="border-b border-gray-100 bg-white px-4 py-2" data-pro-editor-toolbar>
+    <div class="border-b border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-4 py-2" data-pro-editor-toolbar>
         <div class="mx-auto flex max-w-4xl flex-wrap items-center gap-0.5">
             <EditorToolbarPopover
                 v-model:open="turnIntoOpen"
@@ -175,16 +175,16 @@ const tableActionsDisabled = () => disabled() || !isTable();
                     class="flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] transition-colors"
                     :class="
                         t.type === state?.blockType
-                            ? 'bg-indigo-50/60 text-indigo-600'
-                            : 'text-gray-700 hover:bg-gray-50'
+                            ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]'
+                            : 'text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]'
                     "
                     @click="emit('turnInto', t.type); turnIntoOpen = false"
                 >
-                    <component :is="t.icon" class="size-3.5 shrink-0 text-gray-400" />
+                    <component :is="t.icon" class="size-3.5 shrink-0 text-[var(--xpe-muted-foreground)]" />
                     <span class="flex-1">{{ t.label }}</span>
                     <Check
                         v-if="t.type === state?.blockType"
-                        class="size-3.5 shrink-0 text-indigo-500"
+                        class="size-3.5 shrink-0 text-[var(--xpe-primary)]"
                     />
                 </button>
             </EditorToolbarPopover>
@@ -265,7 +265,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
                         type="button"
                         variant="ghost"
                         size="sm"
-                        class="h-8 px-2 text-xs text-red-500 hover:bg-red-50 hover:text-red-600"
+                        class="h-8 px-2 text-xs text-[var(--xpe-danger)] hover:bg-red-50 hover:text-red-600"
                         @click="emit('mark', 'link', null); linkOpen = false"
                     >
                         Remove
@@ -316,7 +316,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
                             @pointerdown.stop
                         >
                             <IconValueDisplay :icon="selected ?? '💡'" class="size-4" />
-                            <ChevronDown class="size-3 text-gray-400" />
+                            <ChevronDown class="size-3 text-[var(--xpe-muted-foreground)]" />
                         </EditorToolbarButton>
                     </template>
                 </IconEmojiPicker>

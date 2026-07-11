@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { FolderOpen, ImagePlus, Loader2, Upload } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { FolderOpen, ImagePlus, Link2, Loader2, Upload } from 'lucide-vue-next';
+import { nextTick, ref, watch } from 'vue';
 import type { Block } from '@xproeditor/core';
+import { fileToObjectUrl, mediaPropsFromFile } from '@xproeditor/core';
 
 const props = defineProps<{
     block: Block;
@@ -19,21 +20,27 @@ const emit = defineEmits<{
     select: [];
 }>();
 
+type InsertMode = 'upload' | 'library' | 'embed';
+
+const mode = ref<InsertMode>('upload');
 const uploading = ref(false);
 const picking = ref(false);
 const dragOver = ref(false);
+const embedInput = ref('');
+const embedError = ref('');
+const embedInputRef = ref<HTMLInputElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 
 async function uploadFile(file: File) {
-    if (!props.upload || !file.type.startsWith('image/')) {
+    if (!file.type.startsWith('image/')) {
         return;
     }
 
     uploading.value = true;
 
     try {
-        const url = await props.upload(file);
-        emit('patch', { url });
+        const url = await (props.upload ?? fileToObjectUrl)(file);
+        emit('patch', mediaPropsFromFile(file, url));
     } finally {
         uploading.value = false;
     }
@@ -60,6 +67,20 @@ async function pickFromLibrary() {
     }
 }
 
+function applyEmbed() {
+    embedError.value = '';
+    const url = embedInput.value.trim();
+
+    if (!/^https?:\/\//i.test(url)) {
+        embedError.value = 'Enter a valid image URL';
+
+        return;
+    }
+
+    emit('patch', { url });
+    embedInput.value = '';
+}
+
 function onFilePicked(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
 
@@ -79,44 +100,105 @@ function onDrop(e: DragEvent) {
 
 const widths = [40, 60, 80, 100];
 const busy = () => uploading.value || picking.value;
+
+watch(mode, (next) => {
+    if (next === 'embed') {
+        nextTick(() => embedInputRef.value?.focus());
+    }
+});
 </script>
 
 <template>
     <div class="my-1">
         <div
             v-if="!block.props.url && !readonly"
-            class="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-8 transition-colors"
-            :class="dragOver ? 'border-indigo-400 bg-indigo-50/50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'"
+            class="flex flex-col gap-3 rounded-[var(--xpe-radius)] border-2 border-dashed py-6 transition-colors"
+            :class="dragOver ? 'border-[var(--xpe-ring)] bg-[var(--xpe-primary-muted)]' : 'border-[var(--xpe-border)] bg-[var(--xpe-muted)]'"
             @click="emit('select')"
             @dragover.prevent="dragOver = true"
             @dragleave="dragOver = false"
             @drop.prevent.stop="onDrop"
         >
-            <Loader2 v-if="busy()" class="h-6 w-6 animate-spin text-indigo-500" />
-            <ImagePlus v-else class="h-6 w-6 text-gray-400" />
-            <span class="text-sm text-gray-500">
-                {{ busy() ? 'Working...' : 'Add an image' }}
-            </span>
-            <div v-if="!busy()" class="flex flex-wrap items-center justify-center gap-2">
+            <div class="flex items-center justify-center gap-2 text-[var(--xpe-muted-foreground)]">
+                <Loader2 v-if="busy()" class="h-5 w-5 animate-spin text-[var(--xpe-primary)]" />
+                <ImagePlus v-else class="h-5 w-5" />
+                <span class="text-sm">{{ busy() ? 'Working...' : 'Add an image' }}</span>
+            </div>
+
+            <div v-if="!busy()" class="flex justify-center gap-1 px-4" @click.stop @mousedown.stop @pointerdown.stop>
                 <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                    @click.stop="fileInput?.click()"
+                    class="rounded-lg px-2.5 py-1 text-xs font-medium"
+                    :class="mode === 'upload' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
+                    @click.stop="mode = 'upload'"
                 >
-                    <Upload class="h-3.5 w-3.5" />
                     Upload
                 </button>
                 <button
                     v-if="pickMedia"
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                    @click.stop="pickFromLibrary"
+                    class="rounded-lg px-2.5 py-1 text-xs font-medium"
+                    :class="mode === 'library' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
+                    @click.stop="mode = 'library'"
                 >
-                    <FolderOpen class="h-3.5 w-3.5" />
                     Library
                 </button>
+                <button
+                    type="button"
+                    class="rounded-lg px-2.5 py-1 text-xs font-medium"
+                    :class="mode === 'embed' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
+                    @click.stop="mode = 'embed'"
+                >
+                    Link
+                </button>
             </div>
-            <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFilePicked" />
+
+            <div v-if="!busy()" class="px-4" @click.stop @mousedown.stop @pointerdown.stop>
+                <div v-if="mode === 'upload'" class="flex justify-center">
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-3 py-1.5 text-xs font-medium text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]"
+                        @click.stop="fileInput?.click()"
+                    >
+                        <Upload class="h-3.5 w-3.5" />
+                        Choose image
+                    </button>
+                    <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFilePicked" />
+                </div>
+
+                <div v-else-if="mode === 'library'" class="flex justify-center">
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-3 py-1.5 text-xs font-medium text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]"
+                        @click.stop="pickFromLibrary"
+                    >
+                        <FolderOpen class="h-3.5 w-3.5" />
+                        Open media library
+                    </button>
+                </div>
+
+                <div v-else class="space-y-2" @click.stop @mousedown.stop @pointerdown.stop>
+                    <div class="flex items-center gap-2">
+                        <Link2 class="h-4 w-4 shrink-0 text-[var(--xpe-muted-foreground)]" />
+                        <input
+                            ref="embedInputRef"
+                            v-model="embedInput"
+                            type="url"
+                            class="min-w-0 flex-1 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-2.5 py-1.5 text-xs text-[var(--xpe-foreground)] outline-none focus:border-[var(--xpe-ring)]"
+                            placeholder="Paste an image URL"
+                            @keydown.enter.prevent="applyEmbed"
+                        />
+                        <button
+                            type="button"
+                            class="rounded-lg bg-[var(--xpe-primary)] px-2.5 py-1.5 text-xs text-[var(--xpe-primary-foreground)]"
+                            @click.stop="applyEmbed"
+                        >
+                            Add
+                        </button>
+                    </div>
+                    <p v-if="embedError" class="text-center text-xs text-[var(--xpe-danger)]">{{ embedError }}</p>
+                </div>
+            </div>
         </div>
 
         <figure v-else class="group/img relative" :style="{ width: `${block.props.width ?? 100}%` }">
@@ -124,8 +206,8 @@ const busy = () => uploading.value || picking.value;
                 <img
                     :src="block.props.url"
                     :alt="block.props.caption || ''"
-                    class="w-full rounded-xl transition-shadow"
-                    :class="selected ? 'ring-2 ring-indigo-400' : ''"
+                    class="w-full rounded-[var(--xpe-radius)] transition-shadow"
+                    :class="selected ? 'ring-2 ring-[var(--xpe-ring)]' : ''"
                     draggable="false"
                 />
             </div>
@@ -139,7 +221,7 @@ const busy = () => uploading.value || picking.value;
                     class="rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-colors"
                     :class="
                         (block.props.width ?? 100) === w
-                            ? 'bg-white text-gray-900'
+                            ? 'bg-[var(--xpe-surface)] text-[var(--xpe-foreground)]'
                             : 'text-white/80 hover:bg-white/20'
                     "
                     @click.stop="emit('patch', { width: w })"
@@ -165,7 +247,7 @@ const busy = () => uploading.value || picking.value;
             </div>
             <figcaption @mousedown.stop @click.stop @pointerdown.stop>
                 <input
-                    class="mt-1.5 w-full bg-transparent text-center text-xs text-gray-400 outline-none placeholder:text-gray-300"
+                    class="mt-1.5 w-full bg-transparent text-center text-xs text-[var(--xpe-muted-foreground)] outline-none placeholder:opacity-60"
                     :value="block.props.caption ?? ''"
                     placeholder="Add caption..."
                     :readonly="readonly"

@@ -5,6 +5,7 @@ import { ChevronRight, Link as LinkIcon, X } from 'lucide-react'
 import {
   computeListNumbering,
   escapeHtml,
+  formatFileSize,
   headingAnchorIds,
   isAllowedEmbedUrl,
   normalizeTableData,
@@ -305,6 +306,59 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           )
         }
 
+        if (block.type === 'audio' && block.props.url) {
+          return (
+            <figure key={idx} className="db-figure">
+              <div className="db-audio-wrap">
+                {block.props.name && <div className="db-audio-name">{block.props.name}</div>}
+                <audio src={block.props.url} controls preload="metadata" className="w-full" />
+              </div>
+              {block.props.caption && (
+                <figcaption className="db-caption">{block.props.caption}</figcaption>
+              )}
+            </figure>
+          )
+        }
+
+        if (block.type === 'file' && block.props.url) {
+          return (
+            <a
+              key={idx}
+              href={block.props.url}
+              download={block.props.name ?? true}
+              className="db-file"
+            >
+              <span className="db-file-name">{block.props.name || 'Download file'}</span>
+              {block.props.size ? (
+                <span className="db-file-size">{formatFileSize(block.props.size)}</span>
+              ) : null}
+            </a>
+          )
+        }
+
+        if (block.type === 'button') {
+          const variant = block.props.buttonStyle ?? 'primary'
+          const justify =
+            block.props.align === 'center' ? 'center' : block.props.align === 'right' ? 'flex-end' : 'flex-start'
+          const label = spansToHtml(block.content) || 'Button'
+
+          return (
+            <div key={idx} className="db-button-row" style={{ justifyContent: justify }}>
+              {block.props.url ? (
+                <a
+                  href={block.props.url}
+                  target={block.props.openInNewTab ? '_blank' : undefined}
+                  rel={block.props.openInNewTab ? 'noopener noreferrer' : undefined}
+                  className={`db-button db-button--${variant}`}
+                  dangerouslySetInnerHTML={{ __html: label }}
+                />
+              ) : (
+                <span className={`db-button db-button--${variant}`} dangerouslySetInnerHTML={{ __html: label }} />
+              )}
+            </div>
+          )
+        }
+
         if (block.type === 'table' && block.props.table) {
           const table = normalizeTableData(block.props.table)
 
@@ -352,7 +406,7 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
             onClick={() => setLightboxUrl(null)}
           >
             <img src={lightboxUrl} className="max-w-full max-h-full rounded-lg shadow-2xl" alt="" />
-            <button className="absolute top-4 right-4 text-white/80 hover:text-white">
+            <button className="absolute top-4 end-4 text-white/80 hover:text-white">
               <X className="w-6 h-6" />
             </button>
           </div>,
