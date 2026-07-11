@@ -7,6 +7,8 @@ export default defineConfig({
   base: process.env.BASE_PATH ?? '/xproeditor/',
   plugins: [react()],
   server: {
+    host: true,
     port: 5175,
+    strictPort: true,
   },
 })
