@@ -17,9 +17,9 @@
   "scripts": {
     "build": "npm run build -w @xproeditor/core && npm run build -w @xproeditor/vue && npm run build -w @xproeditor/react",
     "build:site": "npm run build -w @xproeditor/core && npm run build -w @xproeditor/react && npm run build -w site",
-    "dev:vue": "npm run dev -w vue-demo",
-    "dev:react": "npm run dev -w react-demo",
-    "dev:site": "npm run dev -w site",
+    "dev:vue": "npm run build -w @xproeditor/core && npm run build -w @xproeditor/vue && npm run dev -w @xproeditor/vue -w vue-demo",
+    "dev:react": "npm run build -w @xproeditor/core && npm run build -w @xproeditor/react && npm run dev -w @xproeditor/react -w react-demo",
+    "dev:site": "npm run build -w @xproeditor/core && npm run build -w @xproeditor/react && npm run dev -w site",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",
