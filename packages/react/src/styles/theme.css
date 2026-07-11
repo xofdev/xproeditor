@@ -10,5 +10,43 @@
   --xpe-muted: #f3f4f6;
   --xpe-border: #e5e7eb;
   --xpe-primary: #4f46e5;
+  --xpe-primary-foreground: #ffffff;
+  /* subtle tint behind active/selected menu rows and drop zones */
+  --xpe-primary-muted: #eef2ff;
+  /* elevated surfaces: popovers, menus, dialogs */
+  --xpe-surface: #ffffff;
+  --xpe-surface-hover: #f9fafb;
+  /* focus/selection ring around media blocks */
+  --xpe-ring: #818cf8;
+  --xpe-danger: #ef4444;
+  --xpe-radius: 12px;
+  --xpe-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.1),
+    0 4px 6px -4px rgb(0 0 0 / 0.05);
   --xpe-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/**
+ * Built-in dark theme. Add the `xpe-dark` class (or `data-xpe-theme="dark"`)
+ * to any ancestor of the editor — typically alongside your app's own dark
+ * mode toggle. Apps with custom palettes can override the same variables
+ * under their own selector instead.
+ */
+.xpe-dark,
+[data-xpe-theme='dark'] {
+  --xpe-background: #111827;
+  --xpe-foreground: #e5e7eb;
+  --xpe-muted-foreground: #9ca3af;
+  --xpe-muted: #1f2937;
+  --xpe-border: #374151;
+  --xpe-primary: #818cf8;
+  --xpe-primary-foreground: #111827;
+  --xpe-primary-muted: rgb(129 140 248 / 0.15);
+  --xpe-surface: #1f2937;
+  --xpe-surface-hover: #273449;
+  --xpe-ring: #6366f1;
+  --xpe-danger: #f87171;
+  --xpe-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.5),
+    0 4px 6px -4px rgb(0 0 0 / 0.4);
 }

@@ -205,7 +205,7 @@ export function BubbleToolbar({
               <button
                 key={t.type}
                 type="button"
-                className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] transition-colors ${t.type === blockType ? 'bg-indigo-50/60 text-indigo-600' : 'text-gray-700 hover:bg-gray-50'}`}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] transition-colors ${t.type === blockType ? 'bg-indigo-50/60 text-indigo-600' : 'text-gray-700 hover:bg-gray-50'}`}
                 onClick={() => {
                   onTurnInto(t.type)
                   setPanel('none')

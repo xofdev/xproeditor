@@ -32,7 +32,8 @@ interface Block {
 type BlockType =
   | 'paragraph' | 'heading_1' | 'heading_2' | 'heading_3'
   | 'bulleted_list_item' | 'numbered_list_item' | 'to_do' | 'toggle'
-  | 'quote' | 'callout' | 'code' | 'divider' | 'image' | 'video' | 'table'
+  | 'quote' | 'callout' | 'code' | 'divider'
+  | 'image' | 'video' | 'audio' | 'file' | 'table'
 ```
 
 ## `InlineSpan` (rich text)
@@ -64,8 +65,11 @@ interface BlockProps {
   collapsed?: boolean       // toggle
   language?: string         // code
   code?: string             // code
-  url?: string              // image/video
-  caption?: string          // image/video
+  url?: string              // image/video/audio/file
+  caption?: string          // image/video/audio
+  name?: string              // audio/file: original file name
+  size?: number              // audio/file: size in bytes
+  mime?: string              // audio/file: MIME type
   width?: number             // image/video width percent (10–100)
   provider?: 'file' | 'youtube' | 'vimeo' // video
   icon?: string              // callout

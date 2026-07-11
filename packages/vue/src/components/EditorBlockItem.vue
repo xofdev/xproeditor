@@ -11,7 +11,9 @@ import {
   IconEmojiPicker,
   IconValueDisplay,
 } from '../ui'
+import EditorAudioBlock from './EditorAudioBlock.vue'
 import EditorCodeBlock from './EditorCodeBlock.vue'
+import EditorFileBlock from './EditorFileBlock.vue'
 import EditorImageBlock from './EditorImageBlock.vue'
 import EditorSelectionHighlight from './EditorSelectionHighlight.vue'
 import EditorTableBlock from './EditorTableBlock.vue'
@@ -365,6 +367,28 @@ defineExpose({
 
         <EditorVideoBlock
           v-else-if="block.type === 'video'"
+          :block="block"
+          :selected="selected"
+          :readonly="readonly"
+          :upload="upload"
+          :pick-media="pickMedia"
+          @patch="p => emit('patch', p)"
+          @select="emit('select')"
+        />
+
+        <EditorAudioBlock
+          v-else-if="block.type === 'audio'"
+          :block="block"
+          :selected="selected"
+          :readonly="readonly"
+          :upload="upload"
+          :pick-media="pickMedia"
+          @patch="p => emit('patch', p)"
+          @select="emit('select')"
+        />
+
+        <EditorFileBlock
+          v-else-if="block.type === 'file'"
           :block="block"
           :selected="selected"
           :readonly="readonly"

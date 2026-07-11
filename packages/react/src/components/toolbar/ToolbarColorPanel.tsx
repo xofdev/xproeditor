@@ -131,7 +131,7 @@ export function ToolbarColorPanel({
             >
               A
               {isPresetActive(color, activeTextColor) && (
-                <Check className="absolute -top-1 -right-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white" />
+                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white" />
               )}
             </button>
           ))}
@@ -176,7 +176,7 @@ export function ToolbarColorPanel({
               onClick={() => selectHighlight(color)}
             >
               {isPresetActive(color, activeHighlight) && (
-                <Check className="absolute -top-1 -right-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white" />
+                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white" />
               )}
             </button>
           ))}
@@ -204,7 +204,7 @@ export function ToolbarColorPanel({
             className="h-7 w-full text-xs text-gray-500"
             onClick={resetCurrent}
           >
-            <Highlighter className="mr-1.5 size-3" />
+            <Highlighter className="me-1.5 size-3" />
             Remove highlight
           </Button>
         )}

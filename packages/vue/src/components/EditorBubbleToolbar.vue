@@ -214,7 +214,7 @@ function turnIntoLabel(): string {
                     v-for="t in TURN_INTO"
                     :key="t.type"
                     type="button"
-                    class="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] transition-colors"
+                    class="flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] transition-colors"
                     :class="
                         t.type === blockType
                             ? 'bg-indigo-50/60 text-indigo-600'

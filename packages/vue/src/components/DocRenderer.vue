@@ -5,6 +5,7 @@ import { ref, computed } from 'vue'
 import {
   computeListNumbering,
   escapeHtml,
+  formatFileSize,
   headingAnchorIds,
   isAllowedEmbedUrl,
   normalizeTableData,
@@ -275,6 +276,26 @@ function safeVideoEmbedUrl(block: Block): string {
         <figcaption v-if="block.props.caption" class="db-caption">{{ block.props.caption }}</figcaption>
       </figure>
 
+      <!-- Audio -->
+      <figure v-else-if="block.type === 'audio' && block.props.url" class="db-figure">
+        <div class="db-audio-wrap">
+          <div v-if="block.props.name" class="db-audio-name">{{ block.props.name }}</div>
+          <audio :src="block.props.url" controls preload="metadata" class="w-full" />
+        </div>
+        <figcaption v-if="block.props.caption" class="db-caption">{{ block.props.caption }}</figcaption>
+      </figure>
+
+      <!-- File -->
+      <a
+        v-else-if="block.type === 'file' && block.props.url"
+        :href="block.props.url"
+        :download="block.props.name ?? true"
+        class="db-file"
+      >
+        <span class="db-file-name">{{ block.props.name || 'Download file' }}</span>
+        <span v-if="block.props.size" class="db-file-size">{{ formatFileSize(block.props.size) }}</span>
+      </a>
+
       <!-- Table -->
       <div
         v-else-if="block.type === 'table' && block.props.table"
@@ -317,7 +338,7 @@ function safeVideoEmbedUrl(block: Block): string {
         @click="lightboxUrl = null"
       >
         <img :src="lightboxUrl" class="max-w-full max-h-full rounded-lg shadow-2xl" alt="" />
-        <button class="absolute top-4 right-4 text-white/80 hover:text-white">
+        <button class="absolute top-4 end-4 text-white/80 hover:text-white">
           <X class="w-6 h-6" />
         </button>
       </div>
@@ -517,6 +538,36 @@ function safeVideoEmbedUrl(block: Block): string {
   font-size: 0.8em;
   color: var(--xpe-muted-foreground);
 }
+
+/* --- Audio / file --- */
+.db-audio-wrap {
+  background: var(--xpe-muted);
+  border: 1px solid var(--xpe-border);
+  border-radius: var(--xpe-radius, 0.75rem);
+  padding: 0.75rem;
+}
+.db-audio-wrap audio { width: 100%; }
+.db-audio-name {
+  font-size: 0.85em;
+  font-weight: 500;
+  margin-bottom: 0.5em;
+  color: var(--xpe-foreground);
+}
+.db-file {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75em 0;
+  padding: 0.65rem 0.9rem;
+  background: var(--xpe-muted);
+  border: 1px solid var(--xpe-border);
+  border-radius: var(--xpe-radius, 0.75rem);
+  text-decoration: none;
+  color: var(--xpe-foreground);
+}
+.db-file:hover { border-color: var(--xpe-primary); }
+.db-file-name { font-size: 0.9em; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-file-size { font-size: 0.8em; color: var(--xpe-muted-foreground); flex-shrink: 0; }
 
 /* --- Table --- */
 .db-table-wrap { overflow-x: auto; margin: 1.25em 0; }

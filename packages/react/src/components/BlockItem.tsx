@@ -10,6 +10,8 @@ import {
   IconEmojiPicker,
 } from '../ui'
 import { CodeBlock, type CodeBlockHandle } from './CodeBlock'
+import { AudioBlock } from './AudioBlock'
+import { FileBlock } from './FileBlock'
 import { ImageBlock } from './ImageBlock'
 import { SelectionHighlight } from './SelectionHighlight'
 import { TableBlock, type TableBlockHandle } from './TableBlock'
@@ -393,6 +395,26 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
               />
             ) : block.type === 'video' ? (
               <VideoBlock
+                block={block}
+                selected={selected}
+                readonly={readonly}
+                upload={upload}
+                pickMedia={pickMedia}
+                onPatch={onPatch}
+                onSelect={onSelect}
+              />
+            ) : block.type === 'audio' ? (
+              <AudioBlock
+                block={block}
+                selected={selected}
+                readonly={readonly}
+                upload={upload}
+                pickMedia={pickMedia}
+                onPatch={onPatch}
+                onSelect={onSelect}
+              />
+            ) : block.type === 'file' ? (
+              <FileBlock
                 block={block}
                 selected={selected}
                 readonly={readonly}

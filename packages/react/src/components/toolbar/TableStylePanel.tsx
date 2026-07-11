@@ -129,7 +129,7 @@ export function TableStylePanel({
             >
               A
               {isPresetActive(color, currentColor) && (
-                <Check className="absolute -top-1 -right-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white" />
+                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white" />
               )}
             </button>
           ))}

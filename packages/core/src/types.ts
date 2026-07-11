@@ -19,6 +19,8 @@ export type BlockType =
   | 'divider'
   | 'image'
   | 'video'
+  | 'audio'
+  | 'file'
   | 'table'
 
 export interface InlineMarks {
@@ -94,9 +96,15 @@ export interface BlockProps {
   /** code */
   language?: string
   code?: string
-  /** image */
+  /** image / video / audio / file */
   url?: string
   caption?: string
+  /** audio / file: original file name */
+  name?: string
+  /** audio / file: size in bytes */
+  size?: number
+  /** audio / file: MIME type */
+  mime?: string
   /** image width percent (10-100) */
   width?: number
   /** video */

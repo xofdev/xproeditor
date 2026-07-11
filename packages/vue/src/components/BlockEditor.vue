@@ -8,7 +8,7 @@ import {
   getSelectionClientRect,
   htmlToBlocks,
   createBlock, cloneBlock, spansToText, splitSpansAt, normalizeSpans,
-  deleteRangeInSpans, applyMarkToRange, rangeHasMark, rangeMarkValue, sliceSpans, detectDir,
+  deleteRangeInSpans, applyMarkToRange, rangeHasMark, rangeMarkValue, sliceSpans,
   applyMarkToTextRange,
   deleteTextRange,
   extractTextRangeAsBlocks,
@@ -26,6 +26,9 @@ import {
   patchTableCellsBackground,
   patchTableStyle,
   isTextBlock,
+  blockTypeForFile,
+  fileToObjectUrl,
+  mediaPropsFromFile,
 } from '@xproeditor/core'
 import type { TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, TableCellCoord, TableCellAlign, TableStyle } from '@xproeditor/core'
 import EditorBlockItem from './EditorBlockItem.vue'
@@ -525,7 +528,7 @@ interface SlashState {
   blockId: string
   index: number
   query: string
-  position: { x: number; y: number }
+  position: { x: number; y: number; top?: number }
 }
 
 const slashState = ref<SlashState | null>(null)
@@ -536,16 +539,11 @@ function closeSlash() {
   slashState.value = null
 }
 
-function slashPosition(): { x: number; y: number } {
+function slashPosition(): { x: number; y: number; top?: number } {
+  // Raw caret anchor; the menu measures itself and flips/clamps to the viewport.
   const rect = getCaretClientRect()
-  const x = Math.min(rect?.left ?? 100, window.innerWidth - 300)
-  let y = (rect?.bottom ?? 100) + 6
 
-  if (y + 330 > window.innerHeight) {
-y = Math.max(8, (rect?.top ?? 100) - 336)
-}
-
-  return { x, y }
+  return { x: rect?.left ?? 100, y: rect?.bottom ?? 100, top: rect?.top ?? 100 }
 }
 
 function updateSlash(block: Block, spans: InlineSpan[], caret: number | null) {
@@ -597,7 +595,7 @@ return
 
   const removeEnd = state.index + 1 + state.query.length
   const spans = deleteRangeInSpans(block.content, state.index, removeEnd)
-  const isInsertType = ['divider', 'image', 'video', 'table', 'code'].includes(item.type)
+  const isInsertType = ['divider', 'image', 'video', 'audio', 'file', 'table', 'code'].includes(item.type)
 
   if (!isInsertType) {
     const defaults = makeBlock(item.type)
@@ -703,15 +701,9 @@ return
 
   block.content = spans
 
-  if (isTextBlock(block.type)) {
-    const text = spansToText(spans)
-
-    if (!block.props.dir || block.props.dir === 'auto') {
-      if (text.trim()) {
-        block.props.dir = detectDir(text)
-      }
-    }
-  }
+  // Direction stays 'auto' unless the user sets it explicitly — rendering
+  // resolves it live from content (resolveBlockDirection), so a block flips
+  // between RTL and LTR as its text changes instead of locking on first input.
 
   if (tryMarkdownShortcut(block, spans, caret)) {
     closeSlash()
@@ -933,6 +925,21 @@ function insertSpansAt(content: InlineSpan[], offset: number, inserted: InlineSp
   return normalizeSpans([...before, ...inserted, ...after])
 }
 
+/** Insert dropped/pasted files as media blocks (image/video/audio/file by MIME). */
+async function insertFileBlocks(files: File[], at: number) {
+  const doUpload = props.upload ?? fileToObjectUrl
+
+  for (const [i, file] of files.entries()) {
+    const type = blockTypeForFile(file)
+    const url = await doUpload(file)
+    const media = mediaPropsFromFile(file, url)
+    const extra = type === 'video' ? { provider: 'file' as const } : {}
+    blocks.value.splice(at + i, 0, makeBlock(type, { props: { ...media, ...extra } }))
+  }
+
+  pushHistory(true)
+}
+
 async function handlePasted(
   block: Block,
   payload: { html: string; text: string; files: File[]; offsets: { start: number; end: number } },
@@ -943,28 +950,9 @@ async function handlePasted(
 return
 }
 
-  // Image files
-  const imageFiles = payload.files.filter(f => f.type.startsWith('image/'))
-  const videoFiles = payload.files.filter(f => f.type.startsWith('video/'))
-
-  if (videoFiles.length > 0 && props.upload) {
-    for (const [i, file] of videoFiles.entries()) {
-      const url = await props.upload(file)
-      blocks.value.splice(idx + 1 + i, 0, makeBlock('video', { props: { url, provider: 'file' } }))
-    }
-
-    pushHistory(true)
-
-    return
-  }
-
-  if (imageFiles.length > 0 && props.upload) {
-    for (const [i, file] of imageFiles.entries()) {
-      const url = await props.upload(file)
-      blocks.value.splice(idx + 1 + i, 0, makeBlock('image', { props: { url } }))
-    }
-
-    pushHistory(true)
+  // Files (image / video / audio / anything else) become media blocks
+  if (payload.files.length > 0) {
+    await insertFileBlocks(payload.files, idx + 1)
 
     return
   }
@@ -2064,8 +2052,36 @@ e.dataTransfer.setDragImage(blockEl as HTMLElement, 0, 12)
   }
 }
 
+function isExternalFileDrag(e: DragEvent): boolean {
+  return !draggingId.value && Array.from(e.dataTransfer?.types ?? []).includes('Files')
+}
+
 function onDragOver(e: DragEvent) {
-  if (props.readonly || !draggingId.value) {
+  if (props.readonly) {
+return
+}
+
+  if (isExternalFileDrag(e)) {
+    e.preventDefault()
+
+    if (e.dataTransfer) {
+e.dataTransfer.dropEffect = 'copy'
+}
+
+    const target = (e.target as HTMLElement).closest('[data-block-id]')
+    const id = target?.getAttribute('data-block-id')
+
+    if (id) {
+      const rect = target!.getBoundingClientRect()
+      dropTarget.value = { id, position: e.clientY < rect.top + rect.height / 2 ? 'before' : 'after' }
+    } else {
+      dropTarget.value = null
+    }
+
+    return
+  }
+
+  if (!draggingId.value) {
 return
 }
 
@@ -2102,6 +2118,28 @@ return
 }
 
   e.preventDefault()
+
+  // External OS files dropped onto the editor become media blocks
+  const externalFiles = !draggingId.value ? Array.from(e.dataTransfer?.files ?? []) : []
+
+  if (externalFiles.length > 0) {
+    const target = dropTarget.value
+    dropTarget.value = null
+    let at = blocks.value.length
+
+    if (target) {
+      const idx = blocks.value.findIndex(b => b.id === target.id)
+
+      if (idx !== -1) {
+at = target.position === 'before' ? idx : idx + 1
+}
+    }
+
+    void insertFileBlocks(externalFiles, at)
+
+    return
+  }
+
   const from = draggingId.value
   const target = dropTarget.value
   draggingId.value = null
@@ -2654,6 +2692,7 @@ focusBlock(last.id, 'end')
       ref="slashMenuRef"
       :query="slashState.query"
       :position="slashState.position"
+      :dir="editorDir ?? 'ltr'"
       @select="onSlashSelect"
       @close="closeSlash"
     />

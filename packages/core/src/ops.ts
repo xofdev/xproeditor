@@ -54,7 +54,7 @@ props.checked = false
 props.icon = '💡'
 }
 
-  if (type === 'video' && props.url === undefined) {
+  if ((type === 'video' || type === 'audio' || type === 'file') && props.url === undefined) {
 props.url = ''
 }
 

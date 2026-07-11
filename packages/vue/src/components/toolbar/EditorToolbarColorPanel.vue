@@ -145,7 +145,7 @@ function isPresetActive(color: string, active: string | null): boolean {
                     A
                     <Check
                         v-if="isPresetActive(color, activeTextColor)"
-                        class="absolute -top-1 -right-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white"
+                        class="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white"
                     />
                 </button>
             </div>
@@ -196,7 +196,7 @@ function isPresetActive(color: string, active: string | null): boolean {
                 >
                     <Check
                         v-if="isPresetActive(color, activeHighlight)"
-                        class="absolute -top-1 -right-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white"
+                        class="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white"
                     />
                 </button>
             </div>
@@ -224,7 +224,7 @@ function isPresetActive(color: string, active: string | null): boolean {
                 class="h-7 w-full text-xs text-gray-500"
                 @click="resetCurrent"
             >
-                <Highlighter class="mr-1.5 size-3" />
+                <Highlighter class="me-1.5 size-3" />
                 Remove highlight
             </Button>
         </TabsContent>

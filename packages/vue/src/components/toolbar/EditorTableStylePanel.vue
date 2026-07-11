@@ -177,7 +177,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                     A
                     <Check
                         v-if="isPresetActive(color, currentColor)"
-                        class="absolute -top-1 -right-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white"
+                        class="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white"
                     />
                 </button>
             </div>

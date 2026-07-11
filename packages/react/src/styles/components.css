@@ -259,6 +259,13 @@
 .db-figure { margin: 1.4em 0; }
 .db-img { border-radius: 0.75rem; cursor: zoom-in; display: block; margin: 0 auto; height: auto; max-width: 100%; }
 .db-caption { margin-top: 0.5em; text-align: center; font-size: 0.8em; color: var(--xpe-muted-foreground); }
+.db-audio-wrap { background: var(--xpe-muted); border: 1px solid var(--xpe-border); border-radius: var(--xpe-radius, 0.75rem); padding: 0.75rem; }
+.db-audio-wrap audio { width: 100%; }
+.db-audio-name { font-size: 0.85em; font-weight: 500; margin-bottom: 0.5em; color: var(--xpe-foreground); }
+.db-file { display: flex; align-items: center; gap: 0.75rem; margin: 0.75em 0; padding: 0.65rem 0.9rem; background: var(--xpe-muted); border: 1px solid var(--xpe-border); border-radius: var(--xpe-radius, 0.75rem); text-decoration: none; color: var(--xpe-foreground); }
+.db-file:hover { border-color: var(--xpe-primary); }
+.db-file-name { font-size: 0.9em; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-file-size { font-size: 0.8em; color: var(--xpe-muted-foreground); flex-shrink: 0; }
 .db-table-wrap { overflow-x: auto; margin: 1.25em 0; }
 .db-table { width: 100%; border-collapse: collapse; border-radius: 0.5rem; overflow: hidden; }
 .db-table th, .db-table td { padding: 0.55em 1em; text-align: start; vertical-align: top; line-height: 1.6; font-size: 0.9em; }

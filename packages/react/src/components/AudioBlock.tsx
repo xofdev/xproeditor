@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { FolderOpen, ImagePlus, Link2, Loader2, Upload } from 'lucide-react'
+import { FolderOpen, Link2, Loader2, Music, Upload } from 'lucide-react'
 import type { Block } from '@xproeditor/core'
-import { fileToObjectUrl, mediaPropsFromFile } from '@xproeditor/core'
+import { fileToObjectUrl, formatFileSize, mediaPropsFromFile } from '@xproeditor/core'
 import type { PickMediaFn, UploadFn } from '../types'
 
-export interface ImageBlockProps {
+export interface AudioBlockProps {
   block: Block
   selected?: boolean
   readonly?: boolean
@@ -14,11 +14,9 @@ export interface ImageBlockProps {
   onSelect: () => void
 }
 
-const WIDTHS = [40, 60, 80, 100]
-
 type InsertMode = 'upload' | 'library' | 'embed'
 
-export function ImageBlock({
+export function AudioBlock({
   block,
   selected,
   readonly,
@@ -26,7 +24,7 @@ export function ImageBlock({
   pickMedia,
   onPatch,
   onSelect,
-}: ImageBlockProps) {
+}: AudioBlockProps) {
   const [mode, setMode] = useState<InsertMode>('upload')
   const [uploading, setUploading] = useState(false)
   const [picking, setPicking] = useState(false)
@@ -43,7 +41,7 @@ export function ImageBlock({
   }, [mode])
 
   async function uploadFile(file: File) {
-    if (!file.type.startsWith('image/')) return
+    if (!file.type.startsWith('audio/')) return
 
     setUploading(true)
     try {
@@ -59,7 +57,7 @@ export function ImageBlock({
 
     setPicking(true)
     try {
-      const result = await pickMedia({ accept: ['image/*'], title: 'Choose image' })
+      const result = await pickMedia({ accept: ['audio/*'], title: 'Choose audio' })
       if (result?.url)
         onPatch({ url: result.url, ...(result.caption ? { caption: result.caption } : {}) })
     } finally {
@@ -72,7 +70,7 @@ export function ImageBlock({
     const url = embedInput.trim()
 
     if (!/^https?:\/\//i.test(url)) {
-      setEmbedError('Enter a valid image URL')
+      setEmbedError('Enter a valid audio file URL')
       return
     }
 
@@ -117,9 +115,9 @@ export function ImageBlock({
             {busy ? (
               <Loader2 className="h-5 w-5 animate-spin text-[var(--xpe-primary)]" />
             ) : (
-              <ImagePlus className="h-5 w-5" />
+              <Music className="h-5 w-5" />
             )}
-            <span className="text-sm">{busy ? 'Working...' : 'Add an image'}</span>
+            <span className="text-sm">{busy ? 'Working...' : 'Add audio'}</span>
           </div>
 
           {!busy && (
@@ -153,12 +151,12 @@ export function ImageBlock({
                     onClick={() => fileInput.current?.click()}
                   >
                     <Upload className="h-3.5 w-3.5" />
-                    Choose image
+                    Choose audio file
                   </button>
                   <input
                     ref={fileInput}
                     type="file"
-                    accept="image/*"
+                    accept="audio/*"
                     className="hidden"
                     onChange={onFilePicked}
                   />
@@ -187,7 +185,7 @@ export function ImageBlock({
                       value={embedInput}
                       type="url"
                       className="min-w-0 flex-1 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-2.5 py-1.5 text-xs text-[var(--xpe-foreground)] outline-none focus:border-[var(--xpe-ring)]"
-                      placeholder="Paste an image URL"
+                      placeholder="Audio file URL (.mp3, .ogg, ...)"
                       onChange={(e) => setEmbedInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
@@ -218,60 +216,40 @@ export function ImageBlock({
 
   return (
     <div className="my-1">
-      <figure className="group/img relative" style={{ width: `${block.props.width ?? 100}%` }}>
-        <div onClick={onSelect}>
-          <img
-            src={block.props.url}
-            alt={block.props.caption || ''}
-            className={`w-full rounded-[var(--xpe-radius)] transition-shadow ${selected ? 'ring-2 ring-[var(--xpe-ring)]' : ''}`}
-            draggable={false}
-          />
+      <figure className="group/audio relative">
+        <div
+          className={`flex flex-col gap-2 rounded-[var(--xpe-radius)] border bg-[var(--xpe-muted)] p-3 transition-shadow ${selected ? 'border-[var(--xpe-ring)] ring-1 ring-[var(--xpe-ring)]' : 'border-[var(--xpe-border)]'}`}
+          onClick={onSelect}
+        >
+          {(block.props.name || block.props.size) && (
+            <div className="flex items-center gap-2 text-xs text-[var(--xpe-muted-foreground)]">
+              <Music className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate font-medium text-[var(--xpe-foreground)]">
+                {block.props.name}
+              </span>
+              {block.props.size ? (
+                <span className="shrink-0">{formatFileSize(block.props.size)}</span>
+              ) : null}
+            </div>
+          )}
+          <audio src={block.props.url} className="w-full" controls preload="metadata" />
         </div>
+
         {!readonly && (
-          <div className="absolute end-2 top-2 hidden items-center gap-0.5 rounded-lg bg-black/60 p-0.5 backdrop-blur group-hover/img:flex">
-            {WIDTHS.map((w) => (
-              <button
-                key={w}
-                className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-colors ${(block.props.width ?? 100) === w ? 'bg-white text-gray-900' : 'text-white/80 hover:bg-white/20'}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onPatch({ width: w })
-                }}
-              >
-                {w}%
-              </button>
-            ))}
+          <div className="absolute end-2 top-2 hidden items-center gap-0.5 rounded-lg bg-black/60 p-0.5 backdrop-blur group-hover/audio:flex">
             <button
               className="rounded-md px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/20"
-              title="Replace upload"
+              title="Remove audio"
               onClick={(e) => {
                 e.stopPropagation()
-                fileInput.current?.click()
+                onPatch({ url: '', name: undefined, size: undefined, mime: undefined })
               }}
             >
-              ↻
+              ✕
             </button>
-            {pickMedia && (
-              <button
-                className="rounded-md px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/20"
-                title="Pick from library"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  pickFromLibrary()
-                }}
-              >
-                Lib
-              </button>
-            )}
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={onFilePicked}
-            />
           </div>
         )}
+
         <figcaption
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}

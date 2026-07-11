@@ -148,6 +148,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           ref={ed.slashMenuApiRef}
           query={ed.slashState.query}
           position={ed.slashState.position}
+          dir={ed.editorDir ?? 'ltr'}
           onSelect={ed.onSlashSelect}
           onClose={ed.closeSlash}
         />

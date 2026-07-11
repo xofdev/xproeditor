@@ -90,6 +90,26 @@ return ''
 
       return `<img src="${escapeHtml(url)}" alt="${alt}">`
     }
+    case 'audio': {
+      const url = block.props.url ?? ''
+
+      if (!url) {
+return ''
+}
+
+      return `<audio controls src="${escapeHtml(url)}"></audio>`
+    }
+    case 'file': {
+      const url = block.props.url ?? ''
+
+      if (!url) {
+return ''
+}
+
+      const name = escapeHtml(block.props.name ?? block.props.caption ?? 'Download file')
+
+      return `<a href="${escapeHtml(url)}" download>${name}</a>`
+    }
     case 'table': {
       const table = normalizeTableData(block.props.table)
 
