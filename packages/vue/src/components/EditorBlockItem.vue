@@ -181,10 +181,10 @@ defineExpose({
             </DropdownMenuTrigger>
             <DropdownMenuContent :align="isRtl ? 'end' : 'start'" class="w-36">
               <DropdownMenuItem @click="emit('duplicate')">
-                <Copy class="w-3.5 h-3.5 text-gray-400" />
+                <Copy class="w-3.5 h-3.5 text-[var(--xpe-muted-foreground)]" />
                 Duplicate
               </DropdownMenuItem>
-              <DropdownMenuItem class="text-red-500 focus:text-red-500" @click="emit('remove')">
+              <DropdownMenuItem class="text-[var(--xpe-danger)] focus:text-[var(--xpe-danger)]" @click="emit('remove')">
                 <Trash2 class="w-3.5 h-3.5" />
                 Delete
               </DropdownMenuItem>
@@ -196,7 +196,7 @@ defineExpose({
       <!-- Block body -->
       <div class="relative flex-1 min-w-0 py-[3px]">
         <!-- Quote -->
-        <div v-if="block.type === 'quote'" class="flex gap-3 border-s-[3px] border-gray-800 ps-3.5">
+        <div v-if="block.type === 'quote'" class="flex gap-3 border-s-[3px] border-[var(--xpe-foreground)] ps-3.5">
           <EditorTextBlock
             ref="inner"
             :block="block"
@@ -220,8 +220,8 @@ defineExpose({
         <!-- Callout -->
         <div
           v-else-if="block.type === 'callout'"
-          class="flex items-start gap-2.5 rounded-xl border border-gray-100 px-3.5 py-3"
-          :style="{ background: block.props.color ?? '#f8fafc' }"
+          class="flex items-start gap-2.5 rounded-xl border border-[var(--xpe-border)] px-3.5 py-3"
+          :style="{ background: block.props.color ?? 'var(--xpe-muted)' }"
         >
           <div class="relative shrink-0" contenteditable="false" @click.stop @pointerdown.stop>
             <IconEmojiPicker
@@ -250,14 +250,14 @@ defineExpose({
             <button
               v-if="!readonly"
               type="button"
-              class="mt-1 block w-full text-[10px] text-gray-400 hover:text-gray-600"
+              class="mt-1 block w-full text-[10px] text-[var(--xpe-muted-foreground)] hover:text-[var(--xpe-foreground)]"
               @click="showCalloutColors = !showCalloutColors"
             >
               Color
             </button>
             <div
               v-if="showCalloutColors && !readonly"
-              class="absolute start-0 top-full z-[60] mt-1 rounded-xl border border-gray-100 bg-white p-2 shadow-xl"
+              class="absolute start-0 top-full z-[60] mt-1 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl"
             >
               <div class="flex gap-1">
                 <button
@@ -293,12 +293,12 @@ defineExpose({
         <!-- Lists / to-do / toggle -->
         <div v-else-if="['bulleted_list_item', 'numbered_list_item', 'to_do', 'toggle'].includes(block.type)" class="ebi-list-row flex items-start gap-1.5">
           <div class="shrink-0 flex items-center justify-center w-6 pt-[5px] select-none" contenteditable="false">
-            <span v-if="block.type === 'bulleted_list_item'" class="text-gray-800 text-base leading-none mt-1">•</span>
-            <span v-else-if="block.type === 'numbered_list_item'" class="text-gray-700 text-[14px] leading-snug tabular-nums">{{ number ?? 1 }}.</span>
+            <span v-if="block.type === 'bulleted_list_item'" class="text-[var(--xpe-foreground)] text-base leading-none mt-1">•</span>
+            <span v-else-if="block.type === 'numbered_list_item'" class="text-[var(--xpe-foreground)] text-[14px] leading-snug tabular-nums">{{ number ?? 1 }}.</span>
             <button
               v-else-if="block.type === 'to_do'"
               class="w-[15px] h-[15px] mt-1 rounded-[4px] border flex items-center justify-center transition-colors"
-              :class="block.props.checked ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 hover:border-indigo-400 bg-white'"
+              :class="block.props.checked ? 'bg-[var(--xpe-primary)] border-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] hover:border-[var(--xpe-ring)] bg-[var(--xpe-surface)]'"
               :disabled="readonly"
               @click="emit('patch', { checked: !block.props.checked })"
             >
@@ -306,7 +306,7 @@ defineExpose({
             </button>
             <button
               v-else
-              class="w-5 h-5 mt-0.5 rounded flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-transform"
+              class="w-5 h-5 mt-0.5 rounded flex items-center justify-center text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)] transition-transform"
               :disabled="readonly"
               @click="emit('patch', { collapsed: !block.props.collapsed })"
             >
@@ -325,7 +325,7 @@ defineExpose({
             :readonly="readonly"
             :placeholder="placeholder ?? (block.type === 'to_do' ? 'To-do' : block.type === 'toggle' ? 'Toggle' : 'List item')"
             class="flex-1"
-            :class="{ 'line-through !text-gray-400': block.type === 'to_do' && block.props.checked }"
+            :class="{ 'line-through !text-[var(--xpe-muted-foreground)]': block.type === 'to_do' && block.props.checked }"
             @input="(s, c) => emit('input', s, c)"
             @enter="o => emit('enter', o)"
             @backspace-start="emit('backspaceStart')"
@@ -419,7 +419,7 @@ defineExpose({
           class="py-2.5 cursor-pointer"
           @click="emit('select')"
         >
-          <hr class="border-gray-200 rounded" :class="{ '!border-indigo-400': selected }" />
+          <hr class="border-[var(--xpe-border)] rounded" :class="{ '!border-[var(--xpe-ring)]': selected }" />
         </div>
 
         <!-- Plain text blocks -->
@@ -455,7 +455,7 @@ defineExpose({
 
 <style scoped>
 .ebi-selected {
-  background: rgb(99 102 241 / 0.06);
+  background: var(--xpe-primary-muted, rgb(99 102 241 / 0.06));
   border-radius: 6px;
 }
 .ebi-drop {
@@ -463,7 +463,7 @@ defineExpose({
   inset-inline-start: 28px;
   inset-inline-end: 0;
   height: 3px;
-  background: #818cf8;
+  background: var(--xpe-ring, #818cf8);
   border-radius: 2px;
   z-index: 10;
   pointer-events: none;
@@ -477,12 +477,12 @@ defineExpose({
   border-radius: 6px;
   border: none;
   background: transparent;
-  color: #c0c4cc;
+  color: var(--xpe-muted-foreground, #c0c4cc);
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
   padding: 0;
 }
-.ebi-gutter-btn:hover { background: #f3f4f6; color: #6b7280; }
+.ebi-gutter-btn:hover { background: var(--xpe-muted, #f3f4f6); color: var(--xpe-foreground, #6b7280); }
 .ebi-chevron-rtl {
   transform: scaleX(-1);
 }
@@ -496,11 +496,11 @@ defineExpose({
   width: 100%;
   padding: 6px 12px;
   font-size: 13px;
-  color: #374151;
+  color: var(--xpe-foreground, #374151);
   background: transparent;
   border: none;
   cursor: pointer;
   text-align: left;
 }
-.ebi-menu-item:hover { background: #f9fafb; }
+.ebi-menu-item:hover { background: var(--xpe-surface-hover, #f9fafb); }
 </style>

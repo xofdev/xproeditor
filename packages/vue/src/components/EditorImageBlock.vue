@@ -221,7 +221,7 @@ watch(mode, (next) => {
                     class="rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-colors"
                     :class="
                         (block.props.width ?? 100) === w
-                            ? 'bg-white text-gray-900'
+                            ? 'bg-[var(--xpe-surface)] text-[var(--xpe-foreground)]'
                             : 'text-white/80 hover:bg-white/20'
                     "
                     @click.stop="emit('patch', { width: w })"

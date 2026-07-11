@@ -13,7 +13,7 @@ export function ToolbarButton({ active, wide, className, ...rest }: ToolbarButto
       className={cn(
         'ebt-btn',
         active && 'ebt-active',
-        wide && '!w-auto gap-1 px-2 text-xs font-medium text-gray-600',
+        wide && '!w-auto gap-1 px-2 text-xs font-medium text-[var(--xpe-muted-foreground)]',
         className,
       )}
       {...rest}

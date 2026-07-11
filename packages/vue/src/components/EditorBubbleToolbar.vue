@@ -92,16 +92,16 @@ function turnIntoLabel(): string {
             @mousedown.prevent
         >
             <div
-                class="flex items-center gap-0.5 rounded-xl border border-gray-100 bg-white px-1 py-1 shadow-xl"
+                class="flex items-center gap-0.5 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-1 py-1 shadow-xl"
             >
                 <button
-                    class="ebt-btn !w-auto gap-1 px-2 text-[12px] font-medium text-gray-600"
+                    class="ebt-btn !w-auto gap-1 px-2 text-[12px] font-medium text-[var(--xpe-muted-foreground)]"
                     @click="panel = panel === 'turninto' ? 'none' : 'turninto'"
                 >
                     {{ turnIntoLabel() }}
                     <ChevronDown class="size-3" />
                 </button>
-                <div class="mx-0.5 h-5 w-px bg-gray-100" />
+                <div class="mx-0.5 h-5 w-px bg-[var(--xpe-muted)]" />
 
                 <button
                     class="ebt-btn"
@@ -144,7 +144,7 @@ function turnIntoLabel(): string {
                     <Code class="size-3.5" />
                 </button>
 
-                <div class="mx-0.5 h-5 w-px bg-gray-100" />
+                <div class="mx-0.5 h-5 w-px bg-[var(--xpe-muted)]" />
 
                 <button
                     class="ebt-btn"
@@ -169,7 +169,7 @@ function turnIntoLabel(): string {
 
             <div
                 v-if="panel === 'link'"
-                class="mt-1.5 flex items-center gap-1.5 rounded-xl border border-gray-100 bg-white p-2 shadow-xl"
+                class="mt-1.5 flex items-center gap-1.5 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl"
             >
                 <Input
                     v-model="linkInput"
@@ -187,7 +187,7 @@ function turnIntoLabel(): string {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    class="h-8 px-2 text-xs text-red-500 hover:bg-red-50 hover:text-red-600"
+                    class="h-8 px-2 text-xs text-[var(--xpe-danger)] hover:bg-red-50 hover:text-red-600"
                     @click="emit('mark', 'link', null); panel = 'none'"
                 >
                     Remove
@@ -196,7 +196,7 @@ function turnIntoLabel(): string {
 
             <div
                 v-if="panel === 'color'"
-                class="mt-1.5 rounded-xl border border-gray-100 bg-white p-2 shadow-xl"
+                class="mt-1.5 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl"
                 @mousedown.stop
             >
                 <EditorToolbarColorPanel
@@ -208,7 +208,7 @@ function turnIntoLabel(): string {
 
             <div
                 v-if="panel === 'turninto'"
-                class="mt-1.5 w-48 rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
+                class="mt-1.5 w-48 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] py-1 shadow-xl"
             >
                 <button
                     v-for="t in TURN_INTO"
@@ -217,16 +217,16 @@ function turnIntoLabel(): string {
                     class="flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] transition-colors"
                     :class="
                         t.type === blockType
-                            ? 'bg-indigo-50/60 text-indigo-600'
-                            : 'text-gray-700 hover:bg-gray-50'
+                            ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]'
+                            : 'text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]'
                     "
                     @click="emit('turnInto', t.type); panel = 'none'"
                 >
-                    <component :is="t.icon" class="size-3.5 shrink-0 text-gray-400" />
+                    <component :is="t.icon" class="size-3.5 shrink-0 text-[var(--xpe-muted-foreground)]" />
                     <span class="flex-1">{{ t.label }}</span>
                     <Check
                         v-if="t.type === blockType"
-                        class="size-3.5 shrink-0 text-indigo-500"
+                        class="size-3.5 shrink-0 text-[var(--xpe-primary)]"
                     />
                 </button>
             </div>
@@ -244,18 +244,18 @@ function turnIntoLabel(): string {
     border-radius: 8px;
     border: none;
     background: transparent;
-    color: #4b5563;
+    color: var(--xpe-muted-foreground, #4b5563);
     cursor: pointer;
     transition:
         background 0.1s,
         color 0.1s;
 }
 .ebt-btn:hover {
-    background: #f3f4f6;
-    color: #111827;
+    background: var(--xpe-muted, #f3f4f6);
+    color: var(--xpe-foreground, #111827);
 }
 .ebt-active {
-    background: #eef2ff;
-    color: #4f46e5;
+    background: var(--xpe-primary-muted, #eef2ff);
+    color: var(--xpe-primary, #4f46e5);
 }
 </style>

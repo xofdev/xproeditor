@@ -8,7 +8,7 @@
 .xpe-tabs-list {
   display: grid;
   gap: 4px;
-  background: #f3f4f6;
+  background: var(--xpe-muted, #f3f4f6);
   border-radius: 8px;
   padding: 3px;
 }

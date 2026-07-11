@@ -58,7 +58,7 @@ function onNativeColorInput(event: Event): void {
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--xpe-border, #e5e7eb);
   border-radius: 8px;
   cursor: pointer;
   background: none;
@@ -66,7 +66,7 @@ function onNativeColorInput(event: Event): void {
 .xpe-color-hex {
   flex: 1;
   height: 32px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--xpe-border, #e5e7eb);
   border-radius: 8px;
   padding: 0 8px;
   font-size: 12px;
@@ -74,6 +74,6 @@ function onNativeColorInput(event: Event): void {
   outline: none;
 }
 .xpe-color-hex:focus {
-  border-color: #6366f1;
+  border-color: var(--xpe-ring, #6366f1);
 }
 </style>

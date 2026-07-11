@@ -163,7 +163,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
         </TabsList>
 
         <TabsContent value="text" class="mt-0 space-y-3">
-            <p class="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">Text color</p>
+            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Text color</p>
             <div class="grid grid-cols-5 gap-1.5">
                 <button
                     v-for="color in TEXT_COLOR_PRESETS"
@@ -177,12 +177,12 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                     A
                     <Check
                         v-if="isPresetActive(color, currentColor)"
-                        class="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white"
+                        class="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white"
                     />
                 </button>
             </div>
 
-            <p class="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">Highlight</p>
+            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Highlight</p>
             <div class="grid grid-cols-4 gap-1.5">
                 <button
                     v-for="color in HIGHLIGHT_PRESETS"
@@ -195,7 +195,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 />
             </div>
 
-            <div class="border-t border-gray-100 pt-3">
+            <div class="border-t border-[var(--xpe-border)] pt-3">
                 <ColorPickerPanel
                     v-model="pickerColor"
                     compact
@@ -242,7 +242,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
         </TabsContent>
 
         <TabsContent value="table" class="mt-0 space-y-3">
-            <p class="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">Table background</p>
+            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Table background</p>
             <div class="grid grid-cols-5 gap-1.5">
                 <button
                     v-for="color in TABLE_BG_PRESETS"
@@ -255,7 +255,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 />
             </div>
 
-            <p class="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">Header background</p>
+            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Header background</p>
             <div class="grid grid-cols-5 gap-1.5">
                 <button
                     v-for="color in TABLE_BG_PRESETS"
@@ -278,10 +278,10 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
 
         <TabsContent value="border" class="mt-0 space-y-3">
             <div
-                class="rounded-md border bg-white p-3"
+                class="rounded-md border bg-[var(--xpe-surface)] p-3"
                 :style="{ border: `${resolvedBorder.width}px ${resolvedBorder.style} ${resolvedBorder.color}` }"
             >
-                <div class="text-xs text-gray-500">Preview</div>
+                <div class="text-xs text-[var(--xpe-muted-foreground)]">Preview</div>
             </div>
 
             <div class="grid grid-cols-4 gap-1.5">
@@ -289,35 +289,35 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                     v-for="color in TABLE_BORDER_PRESETS"
                     :key="color"
                     type="button"
-                    class="relative size-7 rounded-md border-2 bg-white"
+                    class="relative size-7 rounded-md border-2 bg-[var(--xpe-surface)]"
                     :class="cn(isPresetActive(color, resolvedBorder.color) && 'ring-2 ring-indigo-500 ring-offset-1')"
                     :style="{ borderColor: color }"
                     @click="selectBorderColor(color)"
                 />
             </div>
 
-            <p class="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">Width</p>
+            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Width</p>
             <div class="flex flex-wrap gap-1">
                 <button
                     v-for="width in TABLE_BORDER_WIDTHS"
                     :key="width"
                     type="button"
                     class="rounded-md border px-2 py-1 text-[11px]"
-                    :class="resolvedBorder.width === width ? 'border-indigo-300 bg-indigo-50 text-indigo-600' : 'border-gray-200 text-gray-600'"
+                    :class="resolvedBorder.width === width ? 'border-indigo-300 bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] text-[var(--xpe-muted-foreground)]'"
                     @click="selectBorderWidth(width)"
                 >
                     {{ width }}px
                 </button>
             </div>
 
-            <p class="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">Style</p>
+            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Style</p>
             <div class="flex flex-wrap gap-1">
                 <button
                     v-for="style in TABLE_BORDER_STYLES"
                     :key="style"
                     type="button"
                     class="rounded-md border px-2 py-1 text-[11px] capitalize"
-                    :class="resolvedBorder.style === style ? 'border-indigo-300 bg-indigo-50 text-indigo-600' : 'border-gray-200 text-gray-600'"
+                    :class="resolvedBorder.style === style ? 'border-indigo-300 bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] text-[var(--xpe-muted-foreground)]'"
                     @click="selectBorderStyle(style)"
                 >
                     {{ style }}

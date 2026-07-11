@@ -145,13 +145,13 @@ function isPresetActive(color: string, active: string | null): boolean {
                     A
                     <Check
                         v-if="isPresetActive(color, activeTextColor)"
-                        class="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white"
+                        class="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white"
                     />
                 </button>
             </div>
 
-            <div class="border-t border-gray-100 pt-3">
-                <p class="mb-2 text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+            <div class="border-t border-[var(--xpe-border)] pt-3">
+                <p class="mb-2 text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
                     Custom
                 </p>
                 <div @focusin="onPickerFocus">
@@ -170,7 +170,7 @@ function isPresetActive(color: string, active: string | null): boolean {
                 type="button"
                 variant="ghost"
                 size="sm"
-                class="h-7 w-full text-xs text-gray-500"
+                class="h-7 w-full text-xs text-[var(--xpe-muted-foreground)]"
                 @click="resetCurrent"
             >
                 Reset text color
@@ -196,13 +196,13 @@ function isPresetActive(color: string, active: string | null): boolean {
                 >
                     <Check
                         v-if="isPresetActive(color, activeHighlight)"
-                        class="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white"
+                        class="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white"
                     />
                 </button>
             </div>
 
-            <div class="border-t border-gray-100 pt-3">
-                <p class="mb-2 text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+            <div class="border-t border-[var(--xpe-border)] pt-3">
+                <p class="mb-2 text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
                     Custom
                 </p>
                 <div @focusin="onPickerFocus">
@@ -221,7 +221,7 @@ function isPresetActive(color: string, active: string | null): boolean {
                 type="button"
                 variant="ghost"
                 size="sm"
-                class="h-7 w-full text-xs text-gray-500"
+                class="h-7 w-full text-xs text-[var(--xpe-muted-foreground)]"
                 @click="resetCurrent"
             >
                 <Highlighter class="me-1.5 size-3" />

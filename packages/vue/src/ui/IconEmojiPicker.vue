@@ -118,22 +118,22 @@ defineExpose({
   cursor: pointer;
 }
 .xpe-icon-cell:hover {
-  background: #f3f4f6;
+  background: var(--xpe-muted, #f3f4f6);
 }
 .xpe-icon-cell--active {
-  background: #eef2ff;
+  background: var(--xpe-primary-muted, #eef2ff);
 }
 .xpe-icon-custom {
   display: flex;
   gap: 6px;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--xpe-muted, #f3f4f6);
 }
 .xpe-icon-custom-input {
   flex: 1;
   height: 28px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--xpe-border, #e5e7eb);
   border-radius: 6px;
   padding: 0 8px;
   font-size: 12px;
@@ -144,8 +144,8 @@ defineExpose({
   padding: 0 10px;
   border-radius: 6px;
   border: none;
-  background: #4f46e5;
-  color: #fff;
+  background: var(--xpe-primary, #4f46e5);
+  color: var(--xpe-primary-foreground, #fff);
   font-size: 12px;
   cursor: pointer;
 }

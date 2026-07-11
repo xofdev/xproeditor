@@ -115,7 +115,7 @@ export function TableStylePanel({
       </TabsList>
 
       <TabsContent value="text" className="mt-0 space-y-3">
-        <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
           Text color
         </p>
         <div className="grid grid-cols-5 gap-1.5">
@@ -129,13 +129,13 @@ export function TableStylePanel({
             >
               A
               {isPresetActive(color, currentColor) && (
-                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white" />
+                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white" />
               )}
             </button>
           ))}
         </div>
 
-        <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
           Highlight
         </p>
         <div className="grid grid-cols-4 gap-1.5">
@@ -150,7 +150,7 @@ export function TableStylePanel({
           ))}
         </div>
 
-        <div className="border-t border-gray-100 pt-3">
+        <div className="border-t border-[var(--xpe-border)] pt-3">
           <ColorPickerPanel
             value={pickerColor}
             onChange={onPickerInput}
@@ -216,7 +216,7 @@ export function TableStylePanel({
       </TabsContent>
 
       <TabsContent value="table" className="mt-0 space-y-3">
-        <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
           Table background
         </p>
         <div className="grid grid-cols-5 gap-1.5">
@@ -231,7 +231,7 @@ export function TableStylePanel({
           ))}
         </div>
 
-        <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
           Header background
         </p>
         <div className="grid grid-cols-5 gap-1.5">
@@ -266,12 +266,12 @@ export function TableStylePanel({
 
       <TabsContent value="border" className="mt-0 space-y-3">
         <div
-          className="rounded-md border bg-white p-3"
+          className="rounded-md border bg-[var(--xpe-surface)] p-3"
           style={{
             border: `${resolvedBorder.width}px ${resolvedBorder.style} ${resolvedBorder.color}`,
           }}
         >
-          <div className="text-xs text-gray-500">Preview</div>
+          <div className="text-xs text-[var(--xpe-muted-foreground)]">Preview</div>
         </div>
 
         <div className="grid grid-cols-4 gap-1.5">
@@ -279,20 +279,20 @@ export function TableStylePanel({
             <button
               key={color}
               type="button"
-              className={`relative size-7 rounded-md border-2 bg-white ${isPresetActive(color, resolvedBorder.color) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
+              className={`relative size-7 rounded-md border-2 bg-[var(--xpe-surface)] ${isPresetActive(color, resolvedBorder.color) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
               style={{ borderColor: color }}
               onClick={() => onTableStyle({ border: { color } })}
             />
           ))}
         </div>
 
-        <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">Width</p>
+        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Width</p>
         <div className="flex flex-wrap gap-1">
           {TABLE_BORDER_WIDTHS.map((width: TableBorderWidth) => (
             <button
               key={width}
               type="button"
-              className={`rounded-md border px-2 py-1 text-[11px] ${resolvedBorder.width === width ? 'border-indigo-300 bg-indigo-50 text-indigo-600' : 'border-gray-200 text-gray-600'}`}
+              className={`rounded-md border px-2 py-1 text-[11px] ${resolvedBorder.width === width ? 'border-indigo-300 bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] text-[var(--xpe-muted-foreground)]'}`}
               onClick={() => onTableStyle({ border: { width } })}
             >
               {width}px
@@ -300,13 +300,13 @@ export function TableStylePanel({
           ))}
         </div>
 
-        <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">Style</p>
+        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Style</p>
         <div className="flex flex-wrap gap-1">
           {TABLE_BORDER_STYLES.map((style: TableBorderStyleKind) => (
             <button
               key={style}
               type="button"
-              className={`rounded-md border px-2 py-1 text-[11px] capitalize ${resolvedBorder.style === style ? 'border-indigo-300 bg-indigo-50 text-indigo-600' : 'border-gray-200 text-gray-600'}`}
+              className={`rounded-md border px-2 py-1 text-[11px] capitalize ${resolvedBorder.style === style ? 'border-indigo-300 bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] text-[var(--xpe-muted-foreground)]'}`}
               onClick={() => onTableStyle({ border: { style } })}
             >
               {style}

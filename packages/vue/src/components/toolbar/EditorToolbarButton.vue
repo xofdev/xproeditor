@@ -21,7 +21,7 @@ withDefaults(
     <button
         type="button"
         class="ebt-btn"
-        :class="cn(active && 'ebt-active', wide && '!w-auto gap-1 px-2 text-xs font-medium text-gray-600')"
+        :class="cn(active && 'ebt-active', wide && '!w-auto gap-1 px-2 text-xs font-medium text-[var(--xpe-muted-foreground)]')"
         :disabled="disabled"
         :title="title"
     >
@@ -39,22 +39,22 @@ withDefaults(
     border-radius: 8px;
     border: none;
     background: transparent;
-    color: #4b5563;
+    color: var(--xpe-muted-foreground, #4b5563);
     cursor: pointer;
     transition:
         background 0.1s,
         color 0.1s;
 }
 .ebt-btn:hover:not(:disabled) {
-    background: #f3f4f6;
-    color: #111827;
+    background: var(--xpe-muted, #f3f4f6);
+    color: var(--xpe-foreground, #111827);
 }
 .ebt-btn:disabled {
     opacity: 0.35;
     cursor: not-allowed;
 }
 .ebt-active {
-    background: #eef2ff;
-    color: #4f46e5;
+    background: var(--xpe-primary-muted, #eef2ff);
+    color: var(--xpe-primary, #4f46e5);
 }
 </style>

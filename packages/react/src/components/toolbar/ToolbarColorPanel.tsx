@@ -131,14 +131,14 @@ export function ToolbarColorPanel({
             >
               A
               {isPresetActive(color, activeTextColor) && (
-                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white" />
+                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white" />
               )}
             </button>
           ))}
         </div>
 
-        <div className="border-t border-gray-100 pt-3">
-          <p className="mb-2 text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+        <div className="border-t border-[var(--xpe-border)] pt-3">
+          <p className="mb-2 text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
             Custom
           </p>
           <div onFocus={() => (isEditingPicker.current = true)}>
@@ -156,7 +156,7 @@ export function ToolbarColorPanel({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-full text-xs text-gray-500"
+            className="h-7 w-full text-xs text-[var(--xpe-muted-foreground)]"
             onClick={resetCurrent}
           >
             Reset text color
@@ -176,14 +176,14 @@ export function ToolbarColorPanel({
               onClick={() => selectHighlight(color)}
             >
               {isPresetActive(color, activeHighlight) && (
-                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-indigo-500 p-0.5 text-white" />
+                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white" />
               )}
             </button>
           ))}
         </div>
 
-        <div className="border-t border-gray-100 pt-3">
-          <p className="mb-2 text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+        <div className="border-t border-[var(--xpe-border)] pt-3">
+          <p className="mb-2 text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
             Custom
           </p>
           <div onFocus={() => (isEditingPicker.current = true)}>
@@ -201,7 +201,7 @@ export function ToolbarColorPanel({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-full text-xs text-gray-500"
+            className="h-7 w-full text-xs text-[var(--xpe-muted-foreground)]"
             onClick={resetCurrent}
           >
             <Highlighter className="me-1.5 size-3" />

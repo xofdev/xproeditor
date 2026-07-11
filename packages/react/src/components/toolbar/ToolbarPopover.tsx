@@ -30,11 +30,11 @@ export function ToolbarPopover({
         align={align}
         side={side}
         sideOffset={6}
-        className={cn('w-auto rounded-xl border-gray-100 p-2 shadow-xl', contentClassName)}
+        className={cn('w-auto rounded-xl border-[var(--xpe-border)] p-2 shadow-xl', contentClassName)}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {title && (
-          <p className="mb-2 px-1 text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
+          <p className="mb-2 px-1 text-[11px] font-semibold tracking-wide text-[var(--xpe-muted-foreground)] uppercase">
             {title}
           </p>
         )}

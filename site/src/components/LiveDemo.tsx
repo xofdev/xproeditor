@@ -29,8 +29,11 @@ const MODES: { value: ToolbarMode; label: string }[] = [
   { value: 'both', label: 'Both' },
 ]
 
+type EditorTheme = 'bento' | 'default'
+
 export function LiveDemo() {
   const [mode, setMode] = useState<ToolbarMode>('floating')
+  const [editorTheme, setEditorTheme] = useState<EditorTheme>('bento')
   const [resetKey, setResetKey] = useState(0)
   const initialBlocks = useMemo(() => seed(), [resetKey])
 
@@ -62,6 +65,18 @@ export function LiveDemo() {
                 </button>
               ))}
             </div>
+            <div className="mode-switch" role="tablist" aria-label="Editor theme">
+              {(['bento', 'default'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className={editorTheme === t ? 'active' : ''}
+                  onClick={() => setEditorTheme(t)}
+                >
+                  {t === 'bento' ? 'Bento theme' : 'Default'}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               className="nav-link"
@@ -71,12 +86,14 @@ export function LiveDemo() {
               Reset
             </button>
           </div>
-          <div className="demo-body">
+          <div className={`demo-body${editorTheme === 'bento' ? ' editor-theme-bento' : ''}`}>
             <ProEditor key={`${mode}-${resetKey}`} defaultValue={initialBlocks} toolbar={mode} editorDir="ltr" />
           </div>
         </div>
         <p className="demo-hint">
-          Press <code>/</code> for the block menu, or select text for the floating toolbar.
+          Press <code>/</code> for the block menu, or select text for the floating toolbar. The
+          “Bento theme” switch above restyles the editor with just a few <code>--xpe-*</code> CSS
+          variables — no rebuild, no fork.
         </p>
       </div>
     </section>

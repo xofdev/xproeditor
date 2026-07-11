@@ -61,25 +61,25 @@ withDefaults(
   padding: 0;
 }
 .xpe-btn--default {
-  background: #4f46e5;
-  color: #fff;
+  background: var(--xpe-primary, #4f46e5);
+  color: var(--xpe-primary-foreground, #fff);
 }
 .xpe-btn--default:hover:not(:disabled) {
-  background: #4338ca;
+  background: var(--xpe-primary, #4338ca);
 }
 .xpe-btn--outline {
-  background: #fff;
-  border-color: #e5e7eb;
-  color: #374151;
+  background: var(--xpe-surface, #fff);
+  border-color: var(--xpe-border, #e5e7eb);
+  color: var(--xpe-foreground, #374151);
 }
 .xpe-btn--outline:hover:not(:disabled) {
-  background: #f9fafb;
+  background: var(--xpe-surface-hover, #f9fafb);
 }
 .xpe-btn--ghost {
   background: transparent;
-  color: #374151;
+  color: var(--xpe-foreground, #374151);
 }
 .xpe-btn--ghost:hover:not(:disabled) {
-  background: #f3f4f6;
+  background: var(--xpe-muted, #f3f4f6);
 }
 </style>

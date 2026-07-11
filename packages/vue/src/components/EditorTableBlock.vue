@@ -175,7 +175,7 @@ defineExpose({
       <button class="etable-btn" :disabled="!unmergeEnabled" @click="handleUnmerge">
         <SplitSquareHorizontal class="inline h-3 w-3" /> Unmerge
       </button>
-      <div class="flex items-center gap-1 rounded-md border border-gray-100 bg-gray-50 px-1 py-0.5">
+      <div class="flex items-center gap-1 rounded-md border border-[var(--xpe-border)] bg-[var(--xpe-muted)] px-1 py-0.5">
         <button
           class="etable-btn"
           :class="getResolvedTableWidth(table.width).mode === 'percent' ? 'etable-btn-active' : ''"
@@ -206,7 +206,7 @@ defineExpose({
           type="number"
           min="200"
           max="2000"
-          class="w-16 rounded border border-gray-200 px-1 py-0.5 text-[11px]"
+          class="w-16 rounded border border-[var(--xpe-border)] px-1 py-0.5 text-[11px]"
           :value="getResolvedTableWidth(table.width).value"
           @change="setWidthValue(Number(($event.target as HTMLInputElement).value))"
         />
@@ -214,7 +214,7 @@ defineExpose({
     </div>
 
     <div class="flex items-start">
-      <div class="flex-1 overflow-x-auto rounded-lg border border-gray-200" :style="wrapperStyle">
+      <div class="flex-1 overflow-x-auto rounded-lg border border-[var(--xpe-border)]" :style="wrapperStyle">
         <table class="w-full border-collapse">
           <tbody>
             <tr v-for="(row, rowIdx) in table.rows" :key="rowIdx" class="group/row">
@@ -243,7 +243,7 @@ defineExpose({
               <td class="w-6 border-0 align-middle">
                 <button
                   v-if="!readonly"
-                  class="hidden h-5 w-5 items-center justify-center rounded text-gray-300 hover:text-red-500 group-hover/row:flex"
+                  class="hidden h-5 w-5 items-center justify-center rounded text-gray-300 hover:text-[var(--xpe-danger)] group-hover/row:flex"
                   title="Remove row"
                   @click="patchTable(removeTableRow(table, rowIdx))"
                 >
@@ -255,7 +255,7 @@ defineExpose({
         </table>
         <button
           v-if="!readonly"
-          class="flex w-full items-center justify-center py-1 text-gray-300 transition-colors hover:bg-indigo-50/40 hover:text-indigo-500"
+          class="flex w-full items-center justify-center py-1 text-gray-300 transition-colors hover:bg-[var(--xpe-primary-muted)]/40 hover:text-[var(--xpe-primary)]"
           title="Add row"
           @click="patchTable(addTableRow(table))"
         >
@@ -264,7 +264,7 @@ defineExpose({
       </div>
       <div v-if="!readonly" class="ms-1 flex flex-col gap-1 self-stretch">
         <button
-          class="flex items-center rounded px-1 text-gray-300 transition-colors hover:bg-indigo-50/40 hover:text-indigo-500"
+          class="flex items-center rounded px-1 text-gray-300 transition-colors hover:bg-[var(--xpe-primary-muted)]/40 hover:text-[var(--xpe-primary)]"
           title="Add column"
           @click="patchTable(addTableColumn(table))"
         >
@@ -272,7 +272,7 @@ defineExpose({
         </button>
         <button
           v-if="table.rows[0]?.length"
-          class="flex items-center rounded px-1 text-gray-300 transition-colors hover:bg-red-50/40 hover:text-red-500"
+          class="flex items-center rounded px-1 text-gray-300 transition-colors hover:bg-red-50/40 hover:text-[var(--xpe-danger)]"
           title="Remove last column"
           @click="patchTable(removeTableColumn(table, (table.rows[0]?.length ?? 1) - 1))"
         >
@@ -289,15 +289,15 @@ defineExpose({
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: #9ca3af;
-  background: #f9fafb;
-  border: 1px solid #f3f4f6;
+  color: var(--xpe-muted-foreground, #9ca3af);
+  background: var(--xpe-surface-hover, #f9fafb);
+  border: 1px solid var(--xpe-muted, #f3f4f6);
   border-radius: 6px;
   padding: 2px 8px;
   cursor: pointer;
 }
 .etable-btn:hover:not(:disabled) {
-  color: #4f46e5;
+  color: var(--xpe-primary, #4f46e5);
   border-color: #e0e7ff;
 }
 .etable-btn:disabled {
@@ -305,8 +305,8 @@ defineExpose({
   cursor: not-allowed;
 }
 .etable-btn-active {
-  color: #4f46e5;
+  color: var(--xpe-primary, #4f46e5);
   border-color: #c7d2fe;
-  background: #eef2ff;
+  background: var(--xpe-primary-muted, #eef2ff);
 }
 </style>

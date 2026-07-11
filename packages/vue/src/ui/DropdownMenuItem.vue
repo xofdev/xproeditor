@@ -22,11 +22,11 @@ const ctx = inject(popoverContextKey)
   background: transparent;
   border-radius: 6px;
   font-size: 13px;
-  color: #374151;
+  color: var(--xpe-foreground, #374151);
   cursor: pointer;
   text-align: start;
 }
 .xpe-dropdown-item:hover {
-  background: #f9fafb;
+  background: var(--xpe-surface-hover, #f9fafb);
 }
 </style>
