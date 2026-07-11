@@ -2770,6 +2770,7 @@ focusBlock(last.id, 'end')
       :pick-media="pickMedia"
       :editor-dir="editorDir"
       :readonly="readonly"
+      :theme-source="rootEl"
       :class="{ 'opacity-40': draggingId === block.id }"
       :icon-picker-request="iconPickerRequest && iconPickerRequest.blockId === block.id ? { tab: iconPickerRequest.tab } : null"
       @input="(s, c) => handleInput(block, s, c)"

@@ -229,7 +229,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
 
       <div className="flex items-start">
         <div
-          className="flex-1 overflow-x-auto rounded-lg border border-[var(--xpe-border)]"
+          className="xpe-scroll flex-1 overflow-x-auto rounded-lg border border-[var(--xpe-border)]"
           style={wrapperStyle}
         >
           <table className="w-full border-collapse">

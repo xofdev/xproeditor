@@ -487,7 +487,7 @@ function safeVideoEmbedUrl(block: Block): string {
   color: var(--xpe-muted-foreground);
   font-style: italic;
   background: var(--xpe-muted);
-  border-radius: 0.5rem;
+  border-radius: calc(var(--xpe-radius, 0.75rem) * 0.66);
 }
 
 /* --- Callout --- */
@@ -497,7 +497,7 @@ function safeVideoEmbedUrl(block: Block): string {
   gap: 0.7em;
   padding: 0.85em 1.1em;
   margin: 1em 0;
-  border-radius: 0.75rem;
+  border-radius: var(--xpe-radius, 0.75rem);
   border: 1px solid var(--xpe-border);
   background: var(--xpe-muted);
 }
@@ -507,7 +507,7 @@ function safeVideoEmbedUrl(block: Block): string {
 /* --- Code --- */
 .db-code {
   margin: 1.25em 0;
-  border-radius: 0.75rem;
+  border-radius: var(--xpe-radius, 0.75rem);
   overflow: hidden;
   border: 1px solid var(--xpe-border);
 }
@@ -548,7 +548,7 @@ function safeVideoEmbedUrl(block: Block): string {
 /* --- Image --- */
 .db-figure { margin: 1.4em 0; }
 .db-img {
-  border-radius: 0.75rem;
+  border-radius: var(--xpe-radius, 0.75rem);
   cursor: zoom-in;
   display: block;
   margin: 0 auto;
@@ -605,7 +605,7 @@ function safeVideoEmbedUrl(block: Block): string {
 .db-table {
   width: 100%;
   border-collapse: collapse;
-  border-radius: 0.5rem;
+  border-radius: calc(var(--xpe-radius, 0.75rem) * 0.66);
   overflow: hidden;
 }
 .db-table th,

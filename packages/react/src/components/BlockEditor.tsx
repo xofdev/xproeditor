@@ -109,6 +109,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           pickMedia={ed.pickMedia}
           editorDir={ed.editorDir}
           readonly={ed.readonly}
+          themeSource={ed.rootRef.current}
           iconPickerRequest={
             ed.iconPickerRequest && ed.iconPickerRequest.blockId === block.id
               ? { tab: ed.iconPickerRequest.tab }

@@ -70,11 +70,23 @@ const TURN_INTO: Array<{ type: BlockType; label: string; icon: unknown }> = [
 
 const panel = ref<'none' | 'link' | 'color' | 'turninto'>('none');
 const linkInput = ref('');
+let lastPositionKey: string | null = null;
 
 watch(
     () => props.position,
-    () => {
-        panel.value = 'none';
+    (position) => {
+        // `position` is a fresh object on every parent update (e.g. a
+        // same-range selectionchange), so only close an open panel when the
+        // selection actually moved — Vue's default watch compares by
+        // reference, which would close the color/link panel the instant a
+        // swatch inside it is clicked.
+        const key = `${position.x},${position.y}`;
+
+        if (lastPositionKey !== null && lastPositionKey !== key) {
+            panel.value = 'none';
+        }
+
+        lastPositionKey = key;
     },
 );
 

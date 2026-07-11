@@ -67,13 +67,24 @@ export function BubbleToolbar({
   const [panel, setPanel] = useState<Panel>('none')
   const [linkInput, setLinkInput] = useState('')
   const toolbarRef = useRef<HTMLDivElement | null>(null)
+  const lastPositionKey = useRef<string | null>(null)
 
   useEffect(() => {
-    setPanel('none')
-
     if (themeSource && toolbarRef.current) {
       syncThemeVars(themeSource, toolbarRef.current)
     }
+
+    // `position` is a fresh object on every parent render (e.g. a
+    // same-range `selectionchange`), so only close an open panel when the
+    // selection actually moved — comparing by reference would close the
+    // color/link panel the instant a swatch inside it is clicked.
+    const key = `${position.x},${position.y}`
+
+    if (lastPositionKey.current !== null && lastPositionKey.current !== key) {
+      setPanel('none')
+    }
+
+    lastPositionKey.current = key
   }, [position, themeSource])
 
   function openLinkPanel() {

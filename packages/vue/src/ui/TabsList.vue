@@ -9,7 +9,7 @@
   display: grid;
   gap: 4px;
   background: var(--xpe-muted, #f3f4f6);
-  border-radius: 8px;
+  border-radius: calc(var(--xpe-radius, 12px) * 0.66);
   padding: 3px;
 }
 </style>

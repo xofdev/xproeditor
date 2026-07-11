@@ -59,7 +59,7 @@ function onNativeColorInput(event: Event): void {
   height: 32px;
   padding: 0;
   border: 1px solid var(--xpe-border, #e5e7eb);
-  border-radius: 8px;
+  border-radius: calc(var(--xpe-radius, 12px) * 0.66);
   cursor: pointer;
   background: none;
 }
@@ -67,7 +67,7 @@ function onNativeColorInput(event: Event): void {
   flex: 1;
   height: 32px;
   border: 1px solid var(--xpe-border, #e5e7eb);
-  border-radius: 8px;
+  border-radius: calc(var(--xpe-radius, 12px) * 0.66);
   padding: 0 8px;
   font-size: 12px;
   font-family: var(--xpe-font-mono, ui-monospace, monospace);

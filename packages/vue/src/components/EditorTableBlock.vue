@@ -214,7 +214,7 @@ defineExpose({
     </div>
 
     <div class="flex items-start">
-      <div class="flex-1 overflow-x-auto rounded-lg border border-[var(--xpe-border)]" :style="wrapperStyle">
+      <div class="xpe-scroll flex-1 overflow-x-auto rounded-lg border border-[var(--xpe-border)]" :style="wrapperStyle">
         <table class="w-full border-collapse">
           <tbody>
             <tr v-for="(row, rowIdx) in table.rows" :key="rowIdx" class="group/row">

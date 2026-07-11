@@ -334,7 +334,7 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
   return createPortal(
     <div
       ref={menuRef}
-      className="fixed z-[80] w-72 max-h-80 overflow-y-auto border py-1.5 bg-[var(--xpe-surface)] border-[var(--xpe-border)] rounded-[var(--xpe-radius)] [box-shadow:var(--xpe-shadow)]"
+      className="xpe-scroll fixed z-[80] w-72 max-h-80 overflow-y-auto border py-1.5 bg-[var(--xpe-surface)] border-[var(--xpe-border)] rounded-[var(--xpe-radius)] [box-shadow:var(--xpe-shadow)]"
       style={{ left: placed.left, top: placed.top }}
       dir={dir}
       onMouseDown={(e) => e.preventDefault()}

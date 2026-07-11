@@ -123,13 +123,13 @@ export function TableStylePanel({
             <button
               key={color}
               type="button"
-              className={`relative flex size-7 items-center justify-center rounded-md border border-black/5 text-xs font-bold ${isPresetActive(color, currentColor) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
+              className={`relative flex size-7 items-center justify-center rounded-md border border-black/5 text-xs font-bold ${isPresetActive(color, currentColor) ? 'ring-2 ring-[var(--xpe-ring)] ring-offset-1' : ''}`}
               style={{ color }}
               onClick={() => selectTextColor(color)}
             >
               A
               {isPresetActive(color, currentColor) && (
-                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white" />
+                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary)] p-0.5 text-[var(--xpe-primary-foreground)]" />
               )}
             </button>
           ))}
@@ -143,7 +143,7 @@ export function TableStylePanel({
             <button
               key={color}
               type="button"
-              className={`relative size-7 rounded-md border border-black/10 ${isPresetActive(color, currentHighlight) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
+              className={`relative size-7 rounded-md border border-black/10 ${isPresetActive(color, currentHighlight) ? 'ring-2 ring-[var(--xpe-ring)] ring-offset-1' : ''}`}
               style={{ backgroundColor: color }}
               onClick={() => selectHighlight(color)}
             />
@@ -190,7 +190,7 @@ export function TableStylePanel({
             <button
               key={color}
               type="button"
-              className={`relative size-7 rounded-md border border-black/10 ${isPresetActive(color, cellBackground) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
+              className={`relative size-7 rounded-md border border-black/10 ${isPresetActive(color, cellBackground) ? 'ring-2 ring-[var(--xpe-ring)] ring-offset-1' : ''}`}
               style={{ backgroundColor: color }}
               onClick={() => onCellBackground(color)}
             />
@@ -224,7 +224,7 @@ export function TableStylePanel({
             <button
               key={`table-${color}`}
               type="button"
-              className={`relative size-7 rounded-md border border-black/10 ${isPresetActive(color, tableStyle?.background) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
+              className={`relative size-7 rounded-md border border-black/10 ${isPresetActive(color, tableStyle?.background) ? 'ring-2 ring-[var(--xpe-ring)] ring-offset-1' : ''}`}
               style={{ backgroundColor: color }}
               onClick={() => onTableStyle({ background: color })}
             />
@@ -239,7 +239,7 @@ export function TableStylePanel({
             <button
               key={`header-${color}`}
               type="button"
-              className={`relative size-7 rounded-md border border-black/10 ${isPresetActive(color, tableStyle?.headerBackground) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
+              className={`relative size-7 rounded-md border border-black/10 ${isPresetActive(color, tableStyle?.headerBackground) ? 'ring-2 ring-[var(--xpe-ring)] ring-offset-1' : ''}`}
               style={{ backgroundColor: color }}
               onClick={() => onTableStyle({ headerBackground: color })}
             />
@@ -279,7 +279,7 @@ export function TableStylePanel({
             <button
               key={color}
               type="button"
-              className={`relative size-7 rounded-md border-2 bg-[var(--xpe-surface)] ${isPresetActive(color, resolvedBorder.color) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
+              className={`relative size-7 rounded-md border-2 bg-[var(--xpe-surface)] ${isPresetActive(color, resolvedBorder.color) ? 'ring-2 ring-[var(--xpe-ring)] ring-offset-1' : ''}`}
               style={{ borderColor: color }}
               onClick={() => onTableStyle({ border: { color } })}
             />

@@ -135,7 +135,7 @@ function isPresetActive(color: string, active: string | null): boolean {
                     :class="
                         cn(
                             isPresetActive(color, activeTextColor) &&
-                                'ring-2 ring-indigo-500 ring-offset-1',
+                                'ring-2 ring-[var(--xpe-ring)] ring-offset-1',
                         )
                     "
                     :style="{ color }"
@@ -145,7 +145,7 @@ function isPresetActive(color: string, active: string | null): boolean {
                     A
                     <Check
                         v-if="isPresetActive(color, activeTextColor)"
-                        class="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white"
+                        class="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary)] p-0.5 text-[var(--xpe-primary-foreground)]"
                     />
                 </button>
             </div>
@@ -187,7 +187,7 @@ function isPresetActive(color: string, active: string | null): boolean {
                     :class="
                         cn(
                             isPresetActive(color, activeHighlight) &&
-                                'ring-2 ring-indigo-500 ring-offset-1',
+                                'ring-2 ring-[var(--xpe-ring)] ring-offset-1',
                         )
                     "
                     :style="{ backgroundColor: color }"
@@ -196,7 +196,7 @@ function isPresetActive(color: string, active: string | null): boolean {
                 >
                     <Check
                         v-if="isPresetActive(color, activeHighlight)"
-                        class="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white"
+                        class="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary)] p-0.5 text-[var(--xpe-primary-foreground)]"
                     />
                 </button>
             </div>

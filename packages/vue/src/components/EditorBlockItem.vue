@@ -12,6 +12,7 @@ import {
   IconValueDisplay,
 } from '../ui'
 import EditorAudioBlock from './EditorAudioBlock.vue'
+import EditorBlockContextMenu from './EditorBlockContextMenu.vue'
 import EditorButtonBlock from './EditorButtonBlock.vue'
 import EditorCodeBlock from './EditorCodeBlock.vue'
 import EditorFileBlock from './EditorFileBlock.vue'
@@ -36,6 +37,7 @@ const props = defineProps<{
   /** Shell / language direction fallback when block dir is auto. */
   editorDir?: 'ltr' | 'rtl'
   readonly?: boolean
+  themeSource?: HTMLElement | null
   /** When set, opens the callout icon picker (slash command / programmatic). */
   iconPickerRequest?: { tab: 'emoji' | 'icon' } | null
 }>()
@@ -73,6 +75,17 @@ const CALLOUT_COLORS = ['#f8fafc', '#fefce8', '#fff7ed', '#fef2f2', '#f0fdf4', '
 const inner = ref<InstanceType<typeof EditorTextBlock> | InstanceType<typeof EditorCodeBlock> | InstanceType<typeof EditorTableBlock> | InstanceType<typeof EditorButtonBlock> | null>(null)
 const calloutIconPickerRef = ref<InstanceType<typeof IconEmojiPicker> | null>(null)
 const showCalloutColors = ref(false)
+const contextMenuPos = ref<{ x: number; y: number } | null>(null)
+
+function onContextMenu(e: MouseEvent) {
+  if (props.readonly) {
+return
+}
+
+  e.preventDefault()
+  emit('select')
+  contextMenuPos.value = { x: e.clientX, y: e.clientY }
+}
 
 const calloutIcon = computed({
   get: () => props.block.props.icon ?? '💡',
@@ -147,6 +160,7 @@ defineExpose({
     :dir="blockDir"
     :style="{ paddingInlineStart: `${indent * 28}px` }"
     @pointerdown="emit('pointerdown', $event)"
+    @contextmenu="onContextMenu"
   >
     <!-- Drop indicator -->
     <div v-if="dropPosition === 'before'" class="ebi-drop -top-[2px]" />
@@ -221,7 +235,7 @@ defineExpose({
         <!-- Callout -->
         <div
           v-else-if="block.type === 'callout'"
-          class="flex items-start gap-2.5 rounded-xl border border-[var(--xpe-border)] px-3.5 py-3"
+          class="flex items-start gap-2.5 rounded-[var(--xpe-radius)] border border-[var(--xpe-border)] px-3.5 py-3"
           :style="{ background: block.props.color ?? 'var(--xpe-muted)' }"
         >
           <div class="relative shrink-0" contenteditable="false" @click.stop @pointerdown.stop>
@@ -258,7 +272,7 @@ defineExpose({
             </button>
             <div
               v-if="showCalloutColors && !readonly"
-              class="absolute start-0 top-full z-[60] mt-1 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl"
+              class="absolute start-0 top-full z-[60] mt-1 rounded-[var(--xpe-radius)] border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl"
             >
               <div class="flex gap-1">
                 <button
@@ -473,6 +487,18 @@ defineExpose({
         />
       </div>
     </div>
+
+    <EditorBlockContextMenu
+      v-if="contextMenuPos"
+      :position="contextMenuPos"
+      :theme-source="themeSource"
+      :color-presets="block.type === 'callout' ? CALLOUT_COLORS : undefined"
+      :current-color="block.props.color"
+      @color="c => emit('patch', { color: c })"
+      @duplicate="emit('duplicate')"
+      @delete="emit('remove')"
+      @close="contextMenuPos = null"
+    />
   </div>
 </template>
 

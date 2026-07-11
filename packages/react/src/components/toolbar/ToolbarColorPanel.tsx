@@ -124,14 +124,14 @@ export function ToolbarColorPanel({
             <button
               key={color}
               type="button"
-              className={`relative flex size-7 items-center justify-center rounded-md border border-black/5 text-xs font-bold transition-transform hover:scale-105 ${isPresetActive(color, activeTextColor) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
+              className={`relative flex size-7 items-center justify-center rounded-md border border-black/5 text-xs font-bold transition-transform hover:scale-105 ${isPresetActive(color, activeTextColor) ? 'ring-2 ring-[var(--xpe-ring)] ring-offset-1' : ''}`}
               style={{ color }}
               title={color}
               onClick={() => selectTextColor(color)}
             >
               A
               {isPresetActive(color, activeTextColor) && (
-                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white" />
+                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary)] p-0.5 text-[var(--xpe-primary-foreground)]" />
               )}
             </button>
           ))}
@@ -170,13 +170,13 @@ export function ToolbarColorPanel({
             <button
               key={color}
               type="button"
-              className={`relative size-7 rounded-md border border-black/10 transition-transform hover:scale-105 ${isPresetActive(color, activeHighlight) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
+              className={`relative size-7 rounded-md border border-black/10 transition-transform hover:scale-105 ${isPresetActive(color, activeHighlight) ? 'ring-2 ring-[var(--xpe-ring)] ring-offset-1' : ''}`}
               style={{ backgroundColor: color }}
               title={color}
               onClick={() => selectHighlight(color)}
             >
               {isPresetActive(color, activeHighlight) && (
-                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white" />
+                <Check className="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary)] p-0.5 text-[var(--xpe-primary-foreground)]" />
               )}
             </button>
           ))}

@@ -11,6 +11,7 @@ import {
 } from '../ui'
 import { CodeBlock, type CodeBlockHandle } from './CodeBlock'
 import { AudioBlock } from './AudioBlock'
+import { BlockContextMenu } from './BlockContextMenu'
 import { ButtonBlock } from './ButtonBlock'
 import { FileBlock } from './FileBlock'
 import { ImageBlock } from './ImageBlock'
@@ -34,6 +35,7 @@ export interface BlockItemProps {
   pickMedia?: PickMediaFn
   editorDir?: 'ltr' | 'rtl'
   readonly?: boolean
+  themeSource?: HTMLElement | null
   iconPickerRequest?: { tab: 'emoji' | 'icon' } | null
   onInput: (spans: InlineSpan[], caret: number | null) => void
   onEnter: (offsets: { start: number; end: number }) => void
@@ -89,6 +91,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
       pickMedia,
       editorDir,
       readonly,
+      themeSource,
       iconPickerRequest,
       onInput,
       onEnter,
@@ -120,6 +123,15 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
     const innerRef = useRef<TextBlockHandle | CodeBlockHandle | TableBlockHandle | null>(null)
     const calloutIconPickerRef = useRef<{ open: (tab?: 'emoji' | 'icon') => void } | null>(null)
     const [showCalloutColors, setShowCalloutColors] = useState(false)
+    const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
+
+    function onContextMenu(e: React.MouseEvent) {
+      if (readonly) return
+
+      e.preventDefault()
+      onSelect()
+      setContextMenuPos({ x: e.clientX, y: e.clientY })
+    }
 
     useEffect(() => {
       if (!iconPickerRequest || readonly || block.type !== 'callout') return
@@ -201,6 +213,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
         dir={blockDir}
         style={{ paddingInlineStart: `${indent * 28}px` }}
         onPointerDown={onPointerDown}
+        onContextMenu={onContextMenu}
       >
         {dropPosition === 'before' && <div className="ebi-drop -top-[2px]" />}
         {dropPosition === 'after' && <div className="ebi-drop -bottom-[2px]" />}
@@ -255,7 +268,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
               </div>
             ) : block.type === 'callout' ? (
               <div
-                className="flex items-start gap-2.5 rounded-xl border border-[var(--xpe-border)] px-3.5 py-3"
+                className="flex items-start gap-2.5 rounded-[var(--xpe-radius)] border border-[var(--xpe-border)] px-3.5 py-3"
                 style={{ background: block.props.color ?? 'var(--xpe-muted)' }}
               >
                 <div
@@ -297,7 +310,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                     </button>
                   )}
                   {showCalloutColors && !readonly && (
-                    <div className="absolute start-0 top-full z-[60] mt-1 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl">
+                    <div className="absolute start-0 top-full z-[60] mt-1 rounded-[var(--xpe-radius)] border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl">
                       <div className="flex gap-1">
                         {CALLOUT_COLORS.map((c) => (
                           <button
@@ -476,6 +489,19 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
             )}
           </div>
         </div>
+
+        {contextMenuPos && (
+          <BlockContextMenu
+            position={contextMenuPos}
+            themeSource={themeSource}
+            colorPresets={block.type === 'callout' ? CALLOUT_COLORS : undefined}
+            currentColor={block.props.color}
+            onColor={(color) => onPatch({ color })}
+            onDuplicate={onDuplicate}
+            onDelete={onRemove}
+            onClose={() => setContextMenuPos(null)}
+          />
+        )}
       </div>
     )
   },

@@ -121,7 +121,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .xpe-popover-content {
   z-index: 80;
-  border-radius: 12px;
+  border-radius: var(--xpe-radius, 12px);
   border: 1px solid var(--xpe-muted, #f3f4f6);
   background: var(--xpe-surface, #fff);
   box-shadow:

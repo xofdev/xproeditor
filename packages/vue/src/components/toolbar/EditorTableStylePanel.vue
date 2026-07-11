@@ -170,14 +170,14 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                     :key="color"
                     type="button"
                     class="relative flex size-7 items-center justify-center rounded-md border border-black/5 text-xs font-bold"
-                    :class="cn(isPresetActive(color, currentColor) && 'ring-2 ring-indigo-500 ring-offset-1')"
+                    :class="cn(isPresetActive(color, currentColor) && 'ring-2 ring-[var(--xpe-ring)] ring-offset-1')"
                     :style="{ color }"
                     @click="selectTextColor(color)"
                 >
                     A
                     <Check
                         v-if="isPresetActive(color, currentColor)"
-                        class="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary-muted)]0 p-0.5 text-white"
+                        class="absolute -top-1 -end-1 size-3 rounded-full bg-[var(--xpe-primary)] p-0.5 text-[var(--xpe-primary-foreground)]"
                     />
                 </button>
             </div>
@@ -189,7 +189,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                     :key="color"
                     type="button"
                     class="relative size-7 rounded-md border border-black/10"
-                    :class="cn(isPresetActive(color, currentHighlight) && 'ring-2 ring-indigo-500 ring-offset-1')"
+                    :class="cn(isPresetActive(color, currentHighlight) && 'ring-2 ring-[var(--xpe-ring)] ring-offset-1')"
                     :style="{ backgroundColor: color }"
                     @click="selectHighlight(color)"
                 />
@@ -223,7 +223,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                     :key="color"
                     type="button"
                     class="relative size-7 rounded-md border border-black/10"
-                    :class="cn(isPresetActive(color, cellBackground) && 'ring-2 ring-indigo-500 ring-offset-1')"
+                    :class="cn(isPresetActive(color, cellBackground) && 'ring-2 ring-[var(--xpe-ring)] ring-offset-1')"
                     :style="{ backgroundColor: color }"
                     @click="selectCellBackground(color)"
                 />
@@ -249,7 +249,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                     :key="`table-${color}`"
                     type="button"
                     class="relative size-7 rounded-md border border-black/10"
-                    :class="cn(isPresetActive(color, tableStyle?.background) && 'ring-2 ring-indigo-500 ring-offset-1')"
+                    :class="cn(isPresetActive(color, tableStyle?.background) && 'ring-2 ring-[var(--xpe-ring)] ring-offset-1')"
                     :style="{ backgroundColor: color }"
                     @click="selectTableBackground(color)"
                 />
@@ -262,7 +262,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                     :key="`header-${color}`"
                     type="button"
                     class="relative size-7 rounded-md border border-black/10"
-                    :class="cn(isPresetActive(color, tableStyle?.headerBackground) && 'ring-2 ring-indigo-500 ring-offset-1')"
+                    :class="cn(isPresetActive(color, tableStyle?.headerBackground) && 'ring-2 ring-[var(--xpe-ring)] ring-offset-1')"
                     :style="{ backgroundColor: color }"
                     @click="selectHeaderBackground(color)"
                 />
@@ -290,7 +290,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                     :key="color"
                     type="button"
                     class="relative size-7 rounded-md border-2 bg-[var(--xpe-surface)]"
-                    :class="cn(isPresetActive(color, resolvedBorder.color) && 'ring-2 ring-indigo-500 ring-offset-1')"
+                    :class="cn(isPresetActive(color, resolvedBorder.color) && 'ring-2 ring-[var(--xpe-ring)] ring-offset-1')"
                     :style="{ borderColor: color }"
                     @click="selectBorderColor(color)"
                 />

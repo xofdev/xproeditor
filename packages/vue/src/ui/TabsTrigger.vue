@@ -27,7 +27,7 @@ const isActive = computed(() => ctx.active.value === props.value)
 .xpe-tabs-trigger {
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: calc(var(--xpe-radius, 12px) * 0.5);
   padding: 5px 8px;
   font-size: 12px;
   font-weight: 500;

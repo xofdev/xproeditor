@@ -34,7 +34,7 @@ withDefaults(
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 8px;
+  border-radius: calc(var(--xpe-radius, 12px) * 0.66);
   border: 1px solid transparent;
   font-weight: 500;
   cursor: pointer;

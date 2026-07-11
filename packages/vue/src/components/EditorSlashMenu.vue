@@ -182,7 +182,7 @@ defineExpose({ move, confirm })
   <Teleport to="body">
     <div
       ref="menuEl"
-      class="fixed z-[80] w-72 max-h-80 overflow-y-auto border py-1.5 bg-[var(--xpe-surface)] border-[var(--xpe-border)] rounded-[var(--xpe-radius)] [box-shadow:var(--xpe-shadow)]"
+      class="xpe-scroll fixed z-[80] w-72 max-h-80 overflow-y-auto border py-1.5 bg-[var(--xpe-surface)] border-[var(--xpe-border)] rounded-[var(--xpe-radius)] [box-shadow:var(--xpe-shadow)]"
       :style="{ left: `${placed.left}px`, top: `${placed.top}px` }"
       :dir="dir"
       @mousedown.prevent

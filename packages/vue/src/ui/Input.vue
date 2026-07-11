@@ -13,7 +13,7 @@ const model = defineModel<string>({ default: '' })
 <style scoped>
 .xpe-input {
   width: 100%;
-  border-radius: 8px;
+  border-radius: calc(var(--xpe-radius, 12px) * 0.66);
   border: 1px solid var(--xpe-border, #e5e7eb);
   padding: 0 10px;
   font-size: 13px;
