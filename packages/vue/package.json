@@ -1,6 +1,6 @@
 {
   "name": "@xproeditor/vue",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Notion-like block editor for Vue 3 — supports a sticky format toolbar and/or a floating Notion-like bubble toolbar + slash menu.",
   "type": "module",
   "license": "MIT",
@@ -10,8 +10,18 @@
     "directory": "packages/vue"
   },
   "homepage": "https://github.com/xofdev/xproeditor#readme",
-  "keywords": ["vue", "editor", "block-editor", "notion", "wysiwyg", "rich-text", "contenteditable"],
-  "sideEffects": ["**/*.css"],
+  "keywords": [
+    "vue",
+    "editor",
+    "block-editor",
+    "notion",
+    "wysiwyg",
+    "rich-text",
+    "contenteditable"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -24,7 +34,11 @@
     "./style.css": "./dist/style.css",
     "./package.json": "./package.json"
   },
-  "files": ["dist", "LICENSE", "README.md"],
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
@@ -34,7 +48,7 @@
     "vue": "^3.4.0"
   },
   "dependencies": {
-    "@xproeditor/core": "0.1.0",
+    "@xproeditor/core": "0.2.0",
     "highlight.js": "^11.10.0",
     "lucide-vue-next": "^0.469.0"
   },
