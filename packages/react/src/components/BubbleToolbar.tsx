@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { syncThemeVars } from '@xproeditor/core'
 import {
   Bold,
   Check,
@@ -31,6 +32,9 @@ export interface BubbleToolbarProps {
   currentColor?: string | null
   currentHighlight?: string | null
   blockType: BlockType
+  /** Element still inside the editor's themed DOM scope — used to resync
+   * `--xpe-*` variables onto this toolbar once it's portaled to `<body>`. */
+  themeSource?: HTMLElement | null
   onMark: (mark: MarkName, value: boolean | string | null) => void
   onTurnInto: (type: BlockType) => void
 }
@@ -56,15 +60,21 @@ export function BubbleToolbar({
   currentColor,
   currentHighlight,
   blockType,
+  themeSource,
   onMark,
   onTurnInto,
 }: BubbleToolbarProps) {
   const [panel, setPanel] = useState<Panel>('none')
   const [linkInput, setLinkInput] = useState('')
+  const toolbarRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setPanel('none')
-  }, [position])
+
+    if (themeSource && toolbarRef.current) {
+      syncThemeVars(themeSource, toolbarRef.current)
+    }
+  }, [position, themeSource])
 
   function openLinkPanel() {
     setLinkInput(currentLink ?? '')
@@ -81,6 +91,7 @@ export function BubbleToolbar({
 
   return createPortal(
     <div
+      ref={toolbarRef}
       className="fixed z-[70] flex flex-col items-stretch"
       style={{ left: position.x, top: position.y, transform: 'translate(-50%, calc(-100% - 8px))' }}
       onMouseDown={(e) => e.preventDefault()}

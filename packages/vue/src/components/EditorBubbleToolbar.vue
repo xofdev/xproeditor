@@ -19,7 +19,8 @@ import {
     Lightbulb,
     Underline,
 } from 'lucide-vue-next';
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
+import { syncThemeVars } from '@xproeditor/core';
 import type { BlockType, MarkName } from '@xproeditor/core';
 import { Button, Input } from '../ui';
 import EditorToolbarColorPanel from './toolbar/EditorToolbarColorPanel.vue';
@@ -31,7 +32,24 @@ const props = defineProps<{
     currentColor?: string | null;
     currentHighlight?: string | null;
     blockType: BlockType;
+    /** Element still inside the editor's themed DOM scope — used to resync
+     * `--xpe-*` variables onto this toolbar once it's teleported to `<body>`. */
+    themeSource?: HTMLElement | null;
 }>();
+
+const toolbarEl = ref<HTMLElement | null>(null);
+
+watch(
+    [() => props.position, () => props.themeSource],
+    async () => {
+        await nextTick();
+
+        if (props.themeSource && toolbarEl.value) {
+            syncThemeVars(props.themeSource, toolbarEl.value);
+        }
+    },
+    { immediate: true },
+);
 
 const emit = defineEmits<{
     mark: [mark: MarkName, value: boolean | string | null];
@@ -83,6 +101,7 @@ function turnIntoLabel(): string {
 <template>
     <Teleport to="body">
         <div
+            ref="toolbarEl"
             class="fixed z-[70] flex flex-col items-stretch"
             :style="{
                 left: `${position.x}px`,

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { syncThemeVars } from '@xproeditor/core'
 
 export interface PopoverContextValue {
   open: boolean
@@ -82,6 +83,11 @@ export function PopoverContent({
     const trigger = ctx.triggerRef.current
     const content = contentRef.current
     if (!trigger || !content) return
+
+    // The popover is portaled to <body>, which escapes any scoped theme
+    // class applied to an ancestor of the editor — resync inline so it
+    // still picks up a custom --xpe-* theme.
+    syncThemeVars(trigger, content)
 
     const anchor = (trigger.firstElementChild as HTMLElement | null) ?? trigger
     const rect = anchor.getBoundingClientRect()

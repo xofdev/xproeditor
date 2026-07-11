@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ALL_EMOJIS } from '../ui/emojiData'
 import {
   applyMarkToRange,
   applyMarkToTextRange,
@@ -78,6 +79,13 @@ interface SlashState {
   position: { x: number; y: number; top?: number }
 }
 
+interface EmojiTriggerState {
+  blockId: string
+  index: number
+  query: string
+  position: { x: number; y: number; top?: number }
+}
+
 interface BubbleState {
   blockId: string
   range: { start: number; end: number }
@@ -149,6 +157,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   const [textRangeSelection, setTextRangeSelection] = useState<TextRangeSelection | null>(null)
   const [managedTextSelection, setManagedTextSelectionFlag] = useState(false)
   const [slashState, setSlashState] = useState<SlashState | null>(null)
+  const [emojiTriggerState, setEmojiTriggerState] = useState<EmojiTriggerState | null>(null)
   const [iconPickerRequest, setIconPickerRequest] = useState<{
     blockId: string
     tab: 'emoji' | 'icon'
@@ -601,6 +610,52 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     else selectBlock(newBlock.id)
   }
 
+  // ─── Inline emoji trigger (":" — Slack/Discord-style) ─────────────────────
+
+  function closeEmojiTrigger() {
+    setEmojiTriggerState(null)
+  }
+
+  function updateEmojiTrigger(block: Block, spans: InlineSpan[], caret: number | null) {
+    const text = spansToText(spans)
+
+    setEmojiTriggerState((state) => {
+      if (state && state.blockId === block.id) {
+        if (caret === null || caret <= state.index || text[state.index] !== ':') return null
+
+        const query = text.slice(state.index + 1, caret)
+        if (/\s/.test(query) || query.length > 20) return null
+
+        return { ...state, query }
+      }
+
+      if (caret !== null && caret > 0 && text[caret - 1] === ':') {
+        const before = caret >= 2 ? text[caret - 2] : ''
+
+        if (before === '' || /\s/.test(before)) {
+          return { blockId: block.id, index: caret - 1, query: '', position: slashPosition() }
+        }
+      }
+
+      return state
+    })
+  }
+
+  function onEmojiTriggerSelect(emoji: string) {
+    const state = emojiTriggerState
+    if (!state) return
+
+    const block = byId(state.blockId)
+    closeEmojiTrigger()
+    if (!block) return
+
+    const removeEnd = state.index + 1 + state.query.length
+    const withoutTrigger = deleteRangeInSpans(block.content, state.index, removeEnd)
+    block.content = insertSpansAt(withoutTrigger, state.index, [{ text: emoji }])
+    pushHistory(true)
+    focusBlock(block.id, state.index + emoji.length)
+  }
+
   // ─── Markdown shortcuts ────────────────────────────────────────────────────
 
   function tryMarkdownShortcut(block: Block, spans: InlineSpan[], caret: number | null): boolean {
@@ -657,10 +712,18 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     if (tryMarkdownShortcut(block, spans, caret)) {
       closeSlash()
+      closeEmojiTrigger()
       return
     }
 
     updateSlash(block, spans, caret)
+
+    if (slashState) {
+      closeEmojiTrigger()
+    } else {
+      updateEmojiTrigger(block, spans, caret)
+    }
+
     pushHistory()
   }
 
@@ -1960,7 +2023,65 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   }
 
   function onKeydownCapture(e: React.KeyboardEvent) {
-    if (readonly || isNativeInputTarget(e.target)) return
+    if (readonly) return
+
+    // Slash menu lives inside the contenteditable block being typed into, so
+    // this must run before the isNativeInputTarget bail-out below (which
+    // exists to let text blocks handle their own keys normally).
+    if (slashState) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        e.stopPropagation()
+        slashMenuApiRef.current?.move(1)
+        return
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        e.stopPropagation()
+        slashMenuApiRef.current?.move(-1)
+        return
+      }
+
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        e.stopPropagation()
+        slashMenuApiRef.current?.confirm()
+        return
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        closeSlash()
+        return
+      }
+    }
+
+    if (emojiTriggerState) {
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        e.stopPropagation()
+        const q = emojiTriggerState.query.toLowerCase()
+        const match = q
+          ? ALL_EMOJIS.find((en) => en.name.includes(q) || en.keywords.some((k) => k.includes(q)))
+          : null
+
+        if (match) onEmojiTriggerSelect(match.char)
+        else closeEmojiTrigger()
+
+        return
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        closeEmojiTrigger()
+        return
+      }
+    }
+
+    if (isNativeInputTarget(e.target)) return
 
     const mod = e.ctrlKey || e.metaKey
 
@@ -2030,35 +2151,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       return
     }
 
-    if (slashState) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        e.stopPropagation()
-        slashMenuApiRef.current?.move(1)
-        return
-      }
-
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        e.stopPropagation()
-        slashMenuApiRef.current?.move(-1)
-        return
-      }
-
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault()
-        e.stopPropagation()
-        slashMenuApiRef.current?.confirm()
-        return
-      }
-
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        e.stopPropagation()
-        closeSlash()
-        return
-      }
-    } else if (e.key === 'Escape' && bubble) {
+    if (e.key === 'Escape' && bubble) {
       setBubble(null)
     }
   }
@@ -2153,6 +2246,8 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     if (slashState && !target.closest('.fixed')) closeSlash()
 
+    if (emojiTriggerState && !target.closest('.fixed')) closeEmojiTrigger()
+
     if (selectedBlockId && !target.closest(`[data-block-id="${selectedBlockId}"]`)) {
       setSelectedBlockId(null)
     }
@@ -2227,6 +2322,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     dropTarget,
     slashState,
     slashMenuApiRef,
+    emojiTriggerState,
     bubble,
     iconPickerRequest,
     setIconPickerRequest,
@@ -2277,6 +2373,8 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     onDragHandleStart,
     onSlashSelect,
     closeSlash,
+    onEmojiTriggerSelect,
+    closeEmojiTrigger,
     onBubbleMark,
     onBubbleTurnInto,
     handleInput,

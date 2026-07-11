@@ -19,6 +19,8 @@ export interface FormatToolbarState {
   cellBackground?: string | null
 }
 
+export type SlashGroup = 'basic' | 'lists' | 'media' | 'advanced'
+
 export interface SlashItem {
   id: string
   type: BlockType
@@ -26,6 +28,7 @@ export interface SlashItem {
   description: string
   keywords: string[]
   icon: React.ComponentType<{ className?: string }>
+  group: SlashGroup
   /** After applying the block, open the icon picker on this tab. */
   pickIcon?: 'emoji' | 'icon'
 }

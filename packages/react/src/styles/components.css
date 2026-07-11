@@ -102,14 +102,26 @@
 /* ── ui/IconEmojiPicker & IconValueDisplay ────────────────────────────── */
 .xpe-icon-value { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
 .xpe-icon-trigger { display: inline-flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1; background: transparent; border: none; cursor: pointer; padding: 0; }
-.xpe-icon-popover { padding: 10px; width: 232px; }
-.xpe-icon-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
-.xpe-icon-cell { display: flex; align-items: center; justify-content: center; height: 26px; border-radius: 6px; border: none; background: transparent; font-size: 15px; cursor: pointer; }
-.xpe-icon-cell:hover { background: var(--xpe-muted, #f3f4f6); }
-.xpe-icon-cell--active { background: var(--xpe-primary-muted, #eef2ff); }
-.xpe-icon-custom { display: flex; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--xpe-border, #f3f4f6); }
+.xpe-icon-popover { padding: 0; width: 300px; overflow: hidden; }
+.xpe-icon-custom { display: flex; gap: 6px; margin: 0; padding: 8px 10px; border-top: 1px solid var(--xpe-border, #f3f4f6); }
 .xpe-icon-custom-input { flex: 1; height: 28px; border: 1px solid var(--xpe-border, #e5e7eb); border-radius: 6px; padding: 0 8px; font-size: 12px; outline: none; }
 .xpe-icon-custom-apply { height: 28px; padding: 0 10px; border-radius: 6px; border: none; background: var(--xpe-primary, #4f46e5); color: var(--xpe-primary-foreground, #fff); font-size: 12px; cursor: pointer; }
+
+/* ── ui/EmojiPicker (standalone: callout icon, ':' inline trigger) ──────── */
+.xpe-emoji-picker { display: flex; flex-direction: column; width: 300px; height: 340px; }
+.xpe-emoji-picker--controlled { height: auto; max-height: 260px; width: 280px; }
+.xpe-emoji-search { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--xpe-border, #e5e7eb); flex-shrink: 0; }
+.xpe-emoji-search-input { flex: 1; border: none; background: transparent; outline: none; font-size: 13px; color: var(--xpe-foreground, #111827); }
+.xpe-emoji-search-input::placeholder { color: var(--xpe-muted-foreground, #9ca3af); }
+.xpe-emoji-scroll { flex: 1; overflow-y: auto; padding: 6px 8px; }
+.xpe-emoji-heading { padding: 6px 4px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--xpe-muted-foreground, #9ca3af); }
+.xpe-emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+.xpe-emoji-cell { display: flex; align-items: center; justify-content: center; height: 32px; border-radius: 8px; border: none; background: transparent; font-size: 19px; line-height: 1; cursor: pointer; transition: background 0.1s, transform 0.1s; }
+.xpe-emoji-cell:hover { background: var(--xpe-muted, #f3f4f6); transform: scale(1.12); }
+.xpe-emoji-empty { padding: 24px 8px; text-align: center; font-size: 12px; color: var(--xpe-muted-foreground, #9ca3af); }
+.xpe-emoji-catbar { display: flex; align-items: center; justify-content: space-between; gap: 2px; padding: 6px 8px; border-top: 1px solid var(--xpe-border, #e5e7eb); flex-shrink: 0; }
+.xpe-emoji-catbar button { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent; color: var(--xpe-muted-foreground, #9ca3af); cursor: pointer; transition: background 0.1s, color 0.1s; }
+.xpe-emoji-catbar button:hover { background: var(--xpe-muted, #f3f4f6); color: var(--xpe-foreground, #111827); }
 
 /* ── toolbar/ToolbarButton (also used standalone in BubbleToolbar) ──────── */
 .ebt-btn {
@@ -240,9 +252,8 @@
   margin-top: 0.45em;
   border-radius: 4px;
   border: 1.5px solid var(--xpe-border);
-  color: white;
 }
-.db-todo-checked { background: var(--xpe-primary); border-color: var(--xpe-primary); }
+.db-todo-checked { background: var(--xpe-primary); border-color: var(--xpe-primary); color: var(--xpe-primary-foreground); }
 .db-todo-box svg { width: 10px; height: 10px; }
 .db-toggle { cursor: pointer; user-select: none; }
 .db-toggle-chevron { flex-shrink: 0; display: inline-flex; margin-top: 0.4em; color: var(--xpe-muted-foreground); transition: transform 0.15s; }
@@ -266,6 +277,17 @@
 .db-file:hover { border-color: var(--xpe-primary); }
 .db-file-name { font-size: 0.9em; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .db-file-size { font-size: 0.8em; color: var(--xpe-muted-foreground); flex-shrink: 0; }
+.db-button-row { display: flex; margin: 0.75em 0; }
+.db-button { display: inline-flex; align-items: center; justify-content: center; min-width: 64px; padding: 0.5em 1.1em; border-radius: var(--xpe-radius, 0.6rem); font-size: 0.9em; font-weight: 600; text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: opacity 0.12s; }
+.db-button:hover { opacity: 0.88; }
+.db-button--primary { background: var(--xpe-primary); color: var(--xpe-primary-foreground); }
+.db-button--outline { background: transparent; border-color: var(--xpe-border); color: var(--xpe-foreground); }
+.db-button--ghost { background: var(--xpe-muted); color: var(--xpe-foreground); }
+
+/* Button block label: the editable .etb always sets its own color, so the
+   button variant's contrast-correct text color needs a more specific rule
+   to win the cascade instead of being silently overridden. */
+.xpe-btn .etb { color: inherit; }
 .db-table-wrap { overflow-x: auto; margin: 1.25em 0; }
 .db-table { width: 100%; border-collapse: collapse; border-radius: 0.5rem; overflow: hidden; }
 .db-table th, .db-table td { padding: 0.55em 1em; text-align: start; vertical-align: top; line-height: 1.6; font-size: 0.9em; }

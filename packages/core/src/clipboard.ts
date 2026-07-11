@@ -110,6 +110,16 @@ return ''
 
       return `<a href="${escapeHtml(url)}" download>${name}</a>`
     }
+    case 'button': {
+      const url = block.props.url ?? ''
+      const label = spansToHtml(block.content) || 'Button'
+      const target = block.props.openInNewTab ? ' target="_blank" rel="noopener noreferrer"' : ''
+      const alignStyle = block.props.align ? `text-align:${block.props.align};` : ''
+
+      return url
+        ? `<p style="${alignStyle}"><a href="${escapeHtml(url)}"${target}>${label}</a></p>`
+        : `<p style="${alignStyle}">${label}</p>`
+    }
     case 'table': {
       const table = normalizeTableData(block.props.table)
 

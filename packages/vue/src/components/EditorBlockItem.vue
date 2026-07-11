@@ -12,6 +12,7 @@ import {
   IconValueDisplay,
 } from '../ui'
 import EditorAudioBlock from './EditorAudioBlock.vue'
+import EditorButtonBlock from './EditorButtonBlock.vue'
 import EditorCodeBlock from './EditorCodeBlock.vue'
 import EditorFileBlock from './EditorFileBlock.vue'
 import EditorImageBlock from './EditorImageBlock.vue'
@@ -69,7 +70,7 @@ const emit = defineEmits<{
 
 const CALLOUT_COLORS = ['#f8fafc', '#fefce8', '#fff7ed', '#fef2f2', '#f0fdf4', '#eff6ff', '#faf5ff']
 
-const inner = ref<InstanceType<typeof EditorTextBlock> | InstanceType<typeof EditorCodeBlock> | InstanceType<typeof EditorTableBlock> | null>(null)
+const inner = ref<InstanceType<typeof EditorTextBlock> | InstanceType<typeof EditorCodeBlock> | InstanceType<typeof EditorTableBlock> | InstanceType<typeof EditorButtonBlock> | null>(null)
 const calloutIconPickerRef = ref<InstanceType<typeof IconEmojiPicker> | null>(null)
 const showCalloutColors = ref(false)
 
@@ -297,12 +298,12 @@ defineExpose({
             <span v-else-if="block.type === 'numbered_list_item'" class="text-[var(--xpe-foreground)] text-[14px] leading-snug tabular-nums">{{ number ?? 1 }}.</span>
             <button
               v-else-if="block.type === 'to_do'"
-              class="w-[15px] h-[15px] mt-1 rounded-[4px] border flex items-center justify-center transition-colors"
+              class="appearance-none w-[15px] h-[15px] mt-1 rounded-[4px] border flex items-center justify-center transition-colors"
               :class="block.props.checked ? 'bg-[var(--xpe-primary)] border-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] hover:border-[var(--xpe-ring)] bg-[var(--xpe-surface)]'"
               :disabled="readonly"
               @click="emit('patch', { checked: !block.props.checked })"
             >
-              <svg v-if="block.props.checked" class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
+              <svg v-if="block.props.checked" width="10" height="10" class="shrink-0 text-[var(--xpe-primary-foreground)]" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
             </button>
             <button
               v-else
@@ -311,7 +312,8 @@ defineExpose({
               @click="emit('patch', { collapsed: !block.props.collapsed })"
             >
               <ChevronRight
-                class="h-3.5 w-3.5 transition-transform"
+                :size="14"
+                class="shrink-0 transition-transform"
                 :class="{
                   'rotate-90': !block.props.collapsed,
                   'ebi-chevron-rtl': isRtl,
@@ -421,6 +423,27 @@ defineExpose({
         >
           <hr class="border-[var(--xpe-border)] rounded" :class="{ '!border-[var(--xpe-ring)]': selected }" />
         </div>
+
+        <!-- Button -->
+        <EditorButtonBlock
+          v-else-if="block.type === 'button'"
+          ref="inner"
+          :block="block"
+          :readonly="readonly"
+          @input="(s, c) => emit('input', s, c)"
+          @enter="o => emit('enter', o)"
+          @backspace-start="emit('backspaceStart')"
+          @delete-end="emit('deleteEnd')"
+          @arrow-up="emit('arrowUp')"
+          @arrow-down="emit('arrowDown')"
+          @tab="s => emit('tab', s)"
+          @format="m => emit('format', m)"
+          @pasted="p => emit('pasted', p)"
+          @focus="emit('focus')"
+          @selection-pointer-down="p => emit('selectionPointerDown', p)"
+          @patch="p => emit('patch', p)"
+          @select="emit('select')"
+        />
 
         <!-- Plain text blocks -->
         <EditorTextBlock

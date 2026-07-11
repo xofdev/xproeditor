@@ -296,6 +296,29 @@ function safeVideoEmbedUrl(block: Block): string {
         <span v-if="block.props.size" class="db-file-size">{{ formatFileSize(block.props.size) }}</span>
       </a>
 
+      <!-- Button -->
+      <div
+        v-else-if="block.type === 'button'"
+        class="db-button-row"
+        :style="{ justifyContent: block.props.align === 'center' ? 'center' : block.props.align === 'right' ? 'flex-end' : 'flex-start' }"
+      >
+        <a
+          v-if="block.props.url"
+          :href="block.props.url"
+          :target="block.props.openInNewTab ? '_blank' : undefined"
+          :rel="block.props.openInNewTab ? 'noopener noreferrer' : undefined"
+          class="db-button"
+          :class="`db-button--${block.props.buttonStyle ?? 'primary'}`"
+          v-html="inlineHtml(block) || 'Button'"
+        />
+        <span
+          v-else
+          class="db-button"
+          :class="`db-button--${block.props.buttonStyle ?? 'primary'}`"
+          v-html="inlineHtml(block) || 'Button'"
+        />
+      </div>
+
       <!-- Table -->
       <div
         v-else-if="block.type === 'table' && block.props.table"
@@ -433,11 +456,11 @@ function safeVideoEmbedUrl(block: Block): string {
   margin-top: 0.45em;
   border-radius: 4px;
   border: 1.5px solid var(--xpe-border);
-  color: white;
 }
 .db-todo-checked {
   background: var(--xpe-primary);
   border-color: var(--xpe-primary);
+  color: var(--xpe-primary-foreground);
 }
 .db-todo-box svg { width: 10px; height: 10px; }
 
@@ -568,6 +591,14 @@ function safeVideoEmbedUrl(block: Block): string {
 .db-file:hover { border-color: var(--xpe-primary); }
 .db-file-name { font-size: 0.9em; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .db-file-size { font-size: 0.8em; color: var(--xpe-muted-foreground); flex-shrink: 0; }
+
+/* --- Button --- */
+.db-button-row { display: flex; margin: 0.75em 0; }
+.db-button { display: inline-flex; align-items: center; justify-content: center; min-width: 64px; padding: 0.5em 1.1em; border-radius: var(--xpe-radius, 0.6rem); font-size: 0.9em; font-weight: 600; text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: opacity 0.12s; }
+.db-button:hover { opacity: 0.88; }
+.db-button--primary { background: var(--xpe-primary); color: var(--xpe-primary-foreground); }
+.db-button--outline { background: transparent; border-color: var(--xpe-border); color: var(--xpe-foreground); }
+.db-button--ghost { background: var(--xpe-muted); color: var(--xpe-foreground); }
 
 /* --- Table --- */
 .db-table-wrap { overflow-x: auto; margin: 1.25em 0; }

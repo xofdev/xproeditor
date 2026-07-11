@@ -33,9 +33,12 @@ import {
 import type { TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, TableCellCoord, TableCellAlign, TableStyle } from '@xproeditor/core'
 import EditorBlockItem from './EditorBlockItem.vue'
 import EditorBubbleToolbar from './EditorBubbleToolbar.vue'
+import EditorEmojiTriggerMenu from './EditorEmojiTriggerMenu.vue'
 import type { FormatToolbarAlign, FormatToolbarState } from './EditorFormatToolbar.vue'
 import EditorSlashMenu from './EditorSlashMenu.vue'
 import type {SlashItem} from './EditorSlashMenu.vue';
+import { EmojiPicker } from '../ui'
+import { ALL_EMOJIS } from '../ui/emojiData'
 
 const props = defineProps<{
   /** Live block array — the editor mutates it in place. */
@@ -632,6 +635,75 @@ selectBlock(newBlock.id)
 }
 }
 
+// ─── Inline emoji trigger (":" — Slack/Discord-style) ──────────────────────────
+
+interface EmojiTriggerState {
+  blockId: string
+  index: number
+  query: string
+  position: { x: number; y: number; top?: number }
+}
+
+const emojiTriggerState = ref<EmojiTriggerState | null>(null)
+
+function closeEmojiTrigger() {
+  emojiTriggerState.value = null
+}
+
+function updateEmojiTrigger(block: Block, spans: InlineSpan[], caret: number | null) {
+  const text = spansToText(spans)
+  const state = emojiTriggerState.value
+
+  if (state && state.blockId === block.id) {
+    if (caret === null || caret <= state.index || text[state.index] !== ':') {
+      closeEmojiTrigger()
+
+      return
+    }
+
+    const query = text.slice(state.index + 1, caret)
+
+    if (/\s/.test(query) || query.length > 20) {
+      closeEmojiTrigger()
+
+      return
+    }
+
+    state.query = query
+
+    return
+  }
+
+  if (caret !== null && caret > 0 && text[caret - 1] === ':') {
+    const before = caret >= 2 ? text[caret - 2] : ''
+
+    if (before === '' || /\s/.test(before)) {
+      emojiTriggerState.value = { blockId: block.id, index: caret - 1, query: '', position: slashPosition() }
+    }
+  }
+}
+
+function onEmojiTriggerSelect(emoji: string) {
+  const state = emojiTriggerState.value
+
+  if (!state) {
+return
+}
+
+  const block = byId(state.blockId)
+  closeEmojiTrigger()
+
+  if (!block) {
+return
+}
+
+  const removeEnd = state.index + 1 + state.query.length
+  const withoutTrigger = deleteRangeInSpans(block.content, state.index, removeEnd)
+  block.content = insertSpansAt(withoutTrigger, state.index, [{ text: emoji }])
+  pushHistory(true)
+  focusBlock(block.id, state.index + emoji.length)
+}
+
 // ─── Markdown shortcuts ───────────────────────────────────────────────────────
 
 const MD_PATTERNS: Array<{ prefix: string; type: BlockType }> = [
@@ -707,11 +779,19 @@ return
 
   if (tryMarkdownShortcut(block, spans, caret)) {
     closeSlash()
+    closeEmojiTrigger()
 
     return
   }
 
   updateSlash(block, spans, caret)
+
+  if (slashState.value) {
+    closeEmojiTrigger()
+  } else {
+    updateEmojiTrigger(block, spans, caret)
+  }
+
   pushHistory()
 }
 
@@ -2301,7 +2381,62 @@ function handleSelectAllShortcut(target: HTMLElement) {
 }
 
 function onKeydownCapture(e: KeyboardEvent) {
-  if (props.readonly || isNativeInputTarget(e.target)) {
+  if (props.readonly) {
+return
+}
+
+  // Slash menu lives inside the contenteditable block being typed into, so
+  // this must run before the isNativeInputTarget bail-out below (which
+  // exists to let text blocks handle their own keys normally).
+  if (slashState.value) {
+    if (e.key === 'ArrowDown') {
+ e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.move(1);
+
+ return
+}
+
+    if (e.key === 'ArrowUp') {
+ e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.move(-1);
+
+ return
+}
+
+    if (e.key === 'Enter' || e.key === 'Tab') {
+ e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.confirm();
+
+ return
+}
+
+    if (e.key === 'Escape') {
+ e.preventDefault(); e.stopPropagation(); closeSlash();
+
+ return
+}
+  }
+
+  if (emojiTriggerState.value) {
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault(); e.stopPropagation()
+      const q = emojiTriggerState.value.query.toLowerCase()
+      const match = q ? ALL_EMOJIS.find(en => en.name.includes(q) || en.keywords.some(k => k.includes(q))) : null
+
+      if (match) {
+onEmojiTriggerSelect(match.char)
+} else {
+closeEmojiTrigger()
+}
+
+      return
+    }
+
+    if (e.key === 'Escape') {
+ e.preventDefault(); e.stopPropagation(); closeEmojiTrigger();
+
+ return
+}
+  }
+
+  if (isNativeInputTarget(e.target)) {
 return
 }
 
@@ -2386,31 +2521,7 @@ undo()
     return
   }
 
-  if (slashState.value) {
-    if (e.key === 'ArrowDown') {
- e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.move(1);
-
- return 
-}
-
-    if (e.key === 'ArrowUp') {
- e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.move(-1);
-
- return 
-}
-
-    if (e.key === 'Enter' || e.key === 'Tab') {
- e.preventDefault(); e.stopPropagation(); slashMenuRef.value?.confirm();
-
- return 
-}
-
-    if (e.key === 'Escape') {
- e.preventDefault(); e.stopPropagation(); closeSlash();
-
- return 
-}
-  } else if (e.key === 'Escape' && bubble.value) {
+  if (e.key === 'Escape' && bubble.value) {
     bubble.value = null
   }
 }
@@ -2530,6 +2641,10 @@ function onDocMouseDown(e: MouseEvent) {
 
   if (slashState.value && !target.closest('.fixed')) {
 closeSlash()
+}
+
+  if (emojiTriggerState.value && !target.closest('.fixed')) {
+closeEmojiTrigger()
 }
 
   if (selectedBlockId.value && !target.closest(`[data-block-id="${selectedBlockId.value}"]`)) {
@@ -2693,8 +2808,18 @@ focusBlock(last.id, 'end')
       :query="slashState.query"
       :position="slashState.position"
       :dir="editorDir ?? 'ltr'"
+      :theme-source="rootEl"
       @select="onSlashSelect"
       @close="closeSlash"
+    />
+
+    <EditorEmojiTriggerMenu
+      v-if="emojiTriggerState && !readonly"
+      :query="emojiTriggerState.query"
+      :position="emojiTriggerState.position"
+      :dir="editorDir ?? 'ltr'"
+      :theme-source="rootEl"
+      @select="onEmojiTriggerSelect"
     />
 
     <EditorBubbleToolbar
@@ -2705,6 +2830,7 @@ focusBlock(last.id, 'end')
       :current-color="bubble.currentColor"
       :current-highlight="bubble.currentHighlight"
       :block-type="bubble.blockType"
+      :theme-source="rootEl"
       @mark="onBubbleMark"
       @turn-into="onBubbleTurnInto"
     />

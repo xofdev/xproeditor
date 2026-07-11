@@ -11,6 +11,7 @@ import {
 } from '../ui'
 import { CodeBlock, type CodeBlockHandle } from './CodeBlock'
 import { AudioBlock } from './AudioBlock'
+import { ButtonBlock } from './ButtonBlock'
 import { FileBlock } from './FileBlock'
 import { ImageBlock } from './ImageBlock'
 import { SelectionHighlight } from './SelectionHighlight'
@@ -332,13 +333,15 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                   )}
                   {block.type === 'to_do' && (
                     <button
-                      className={`w-[15px] h-[15px] mt-1 rounded-[4px] border flex items-center justify-center transition-colors ${block.props.checked ? 'bg-[var(--xpe-primary)] border-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] hover:border-[var(--xpe-ring)] bg-[var(--xpe-surface)]'}`}
+                      className={`appearance-none w-[15px] h-[15px] mt-1 rounded-[4px] border flex items-center justify-center transition-colors ${block.props.checked ? 'bg-[var(--xpe-primary)] border-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] hover:border-[var(--xpe-ring)] bg-[var(--xpe-surface)]'}`}
                       disabled={readonly}
                       onClick={() => onPatch({ checked: !block.props.checked })}
                     >
                       {block.props.checked && (
                         <svg
-                          className="w-2.5 h-2.5 text-white"
+                          width={10}
+                          height={10}
+                          className="shrink-0 text-[var(--xpe-primary-foreground)]"
                           fill="none"
                           stroke="currentColor"
                           strokeWidth={3}
@@ -356,7 +359,8 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                       onClick={() => onPatch({ collapsed: !block.props.collapsed })}
                     >
                       <ChevronRight
-                        className={`h-3.5 w-3.5 transition-transform${!block.props.collapsed ? ' rotate-90' : ''}${isRtl ? ' ebi-chevron-rtl' : ''}`}
+                        size={14}
+                        className={`shrink-0 transition-transform${!block.props.collapsed ? ' rotate-90' : ''}${isRtl ? ' ebi-chevron-rtl' : ''}`}
                       />
                     </button>
                   )}
@@ -440,6 +444,25 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
               <div className="py-2.5 cursor-pointer" onClick={onSelect}>
                 <hr className={`border-[var(--xpe-border)] rounded${selected ? ' !border-[var(--xpe-ring)]' : ''}`} />
               </div>
+            ) : block.type === 'button' ? (
+              <ButtonBlock
+                ref={innerRef as React.Ref<TextBlockHandle>}
+                block={block}
+                readonly={readonly}
+                onInput={onInput}
+                onEnter={onEnter}
+                onBackspaceStart={onBackspaceStart}
+                onDeleteEnd={onDeleteEnd}
+                onArrowUp={onArrowUp}
+                onArrowDown={onArrowDown}
+                onTab={onTab}
+                onFormat={onFormat}
+                onPasted={onPasted}
+                onFocus={onFocus}
+                onSelectionPointerDown={onSelectionPointerDown}
+                onPatch={onPatch}
+                onSelect={onSelect}
+              />
             ) : (
               renderTextBlock()
             )}

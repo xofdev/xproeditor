@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useState, type ReactNode } from 'react'
-import { EMOJI_PRESETS } from './emojiPresets'
+import { EmojiPicker } from './EmojiPicker'
 import { Popover, PopoverContent, PopoverTrigger } from './Popover'
 
 export interface IconEmojiPickerHandle {
@@ -61,18 +61,7 @@ export const IconEmojiPicker = forwardRef<IconEmojiPickerHandle, IconEmojiPicker
           )}
         </PopoverTrigger>
         <PopoverContent align={align} side={side} className="xpe-icon-popover">
-          <div className="xpe-icon-grid">
-            {EMOJI_PRESETS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                className={`xpe-icon-cell${emoji === value ? ' xpe-icon-cell--active' : ''}`}
-                onClick={() => pick(emoji)}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
+          <EmojiPicker onSelect={pick} />
           <div className="xpe-icon-custom">
             <input
               type="text"

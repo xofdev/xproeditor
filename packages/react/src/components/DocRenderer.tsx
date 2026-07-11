@@ -336,6 +336,29 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           )
         }
 
+        if (block.type === 'button') {
+          const variant = block.props.buttonStyle ?? 'primary'
+          const justify =
+            block.props.align === 'center' ? 'center' : block.props.align === 'right' ? 'flex-end' : 'flex-start'
+          const label = spansToHtml(block.content) || 'Button'
+
+          return (
+            <div key={idx} className="db-button-row" style={{ justifyContent: justify }}>
+              {block.props.url ? (
+                <a
+                  href={block.props.url}
+                  target={block.props.openInNewTab ? '_blank' : undefined}
+                  rel={block.props.openInNewTab ? 'noopener noreferrer' : undefined}
+                  className={`db-button db-button--${variant}`}
+                  dangerouslySetInnerHTML={{ __html: label }}
+                />
+              ) : (
+                <span className={`db-button db-button--${variant}`} dangerouslySetInnerHTML={{ __html: label }} />
+              )}
+            </div>
+          )
+        }
+
         if (block.type === 'table' && block.props.table) {
           const table = normalizeTableData(block.props.table)
 

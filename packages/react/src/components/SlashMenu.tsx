@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { lockPageScroll, syncThemeVars } from '@xproeditor/core'
 import {
   Type,
   Heading1,
@@ -29,8 +30,16 @@ import {
   Music,
   Paperclip,
   SearchX,
+  SquareMousePointer,
 } from 'lucide-react'
-import type { SlashItem } from '../types'
+import type { SlashGroup, SlashItem } from '../types'
+
+const GROUP_LABELS: Record<SlashGroup, string> = {
+  basic: 'Basic blocks',
+  lists: 'Lists & tasks',
+  media: 'Media',
+  advanced: 'Advanced',
+}
 
 const ITEMS: SlashItem[] = [
   {
@@ -40,6 +49,7 @@ const ITEMS: SlashItem[] = [
     description: 'Plain paragraph',
     keywords: ['text', 'paragraph', 'p'],
     icon: Type,
+    group: 'basic',
   },
   {
     id: 'heading_1',
@@ -48,6 +58,7 @@ const ITEMS: SlashItem[] = [
     description: 'Large section heading',
     keywords: ['h1', 'heading', 'title'],
     icon: Heading1,
+    group: 'basic',
   },
   {
     id: 'heading_2',
@@ -56,6 +67,7 @@ const ITEMS: SlashItem[] = [
     description: 'Medium section heading',
     keywords: ['h2', 'heading', 'subtitle'],
     icon: Heading2,
+    group: 'basic',
   },
   {
     id: 'heading_3',
@@ -64,6 +76,7 @@ const ITEMS: SlashItem[] = [
     description: 'Small section heading',
     keywords: ['h3', 'heading'],
     icon: Heading3,
+    group: 'basic',
   },
   {
     id: 'bulleted_list_item',
@@ -72,6 +85,7 @@ const ITEMS: SlashItem[] = [
     description: 'Simple bullet list',
     keywords: ['bullet', 'list', 'ul'],
     icon: List,
+    group: 'lists',
   },
   {
     id: 'numbered_list_item',
@@ -80,6 +94,7 @@ const ITEMS: SlashItem[] = [
     description: 'Ordered list',
     keywords: ['number', 'ordered', 'ol'],
     icon: ListOrdered,
+    group: 'lists',
   },
   {
     id: 'to_do',
@@ -88,6 +103,7 @@ const ITEMS: SlashItem[] = [
     description: 'Checkbox task',
     keywords: ['todo', 'check', 'task'],
     icon: CheckSquare,
+    group: 'lists',
   },
   {
     id: 'toggle',
@@ -96,6 +112,43 @@ const ITEMS: SlashItem[] = [
     description: 'Collapsible content',
     keywords: ['toggle', 'collapse', 'accordion'],
     icon: ChevronRight,
+    group: 'lists',
+  },
+  {
+    id: 'image',
+    type: 'image',
+    label: 'Image',
+    description: 'Upload an image',
+    keywords: ['image', 'photo', 'picture', 'upload'],
+    icon: ImageIcon,
+    group: 'media',
+  },
+  {
+    id: 'video',
+    type: 'video',
+    label: 'Video',
+    description: 'Upload or embed a video',
+    keywords: ['video', 'youtube', 'vimeo', 'movie'],
+    icon: Video,
+    group: 'media',
+  },
+  {
+    id: 'audio',
+    type: 'audio',
+    label: 'Audio',
+    description: 'Upload or link audio',
+    keywords: ['audio', 'music', 'song', 'sound', 'mp3'],
+    icon: Music,
+    group: 'media',
+  },
+  {
+    id: 'file',
+    type: 'file',
+    label: 'File',
+    description: 'Attach a downloadable file',
+    keywords: ['file', 'attachment', 'pdf', 'document', 'download'],
+    icon: Paperclip,
+    group: 'media',
   },
   {
     id: 'quote',
@@ -104,6 +157,7 @@ const ITEMS: SlashItem[] = [
     description: 'Capture a quote',
     keywords: ['quote', 'blockquote'],
     icon: Quote,
+    group: 'advanced',
   },
   {
     id: 'callout',
@@ -112,6 +166,7 @@ const ITEMS: SlashItem[] = [
     description: 'Highlighted note',
     keywords: ['callout', 'note', 'info', 'warning'],
     icon: Lightbulb,
+    group: 'advanced',
   },
   {
     id: 'emoji',
@@ -120,6 +175,7 @@ const ITEMS: SlashItem[] = [
     description: 'Callout with emoji icon',
     keywords: ['emoji', 'emoticon', 'smile'],
     icon: Smile,
+    group: 'advanced',
     pickIcon: 'emoji',
   },
   {
@@ -129,6 +185,7 @@ const ITEMS: SlashItem[] = [
     description: 'Callout with vector icon',
     keywords: ['icon', 'symbol', 'lucide'],
     icon: Blocks,
+    group: 'advanced',
     pickIcon: 'icon',
   },
   {
@@ -138,6 +195,7 @@ const ITEMS: SlashItem[] = [
     description: 'Code block with syntax',
     keywords: ['code', 'snippet', 'pre'],
     icon: Code2,
+    group: 'advanced',
   },
   {
     id: 'divider',
@@ -146,38 +204,7 @@ const ITEMS: SlashItem[] = [
     description: 'Horizontal line',
     keywords: ['divider', 'hr', 'separator', 'line'],
     icon: Minus,
-  },
-  {
-    id: 'image',
-    type: 'image',
-    label: 'Image',
-    description: 'Upload an image',
-    keywords: ['image', 'photo', 'picture', 'upload'],
-    icon: ImageIcon,
-  },
-  {
-    id: 'video',
-    type: 'video',
-    label: 'Video',
-    description: 'Upload or embed a video',
-    keywords: ['video', 'youtube', 'vimeo', 'movie'],
-    icon: Video,
-  },
-  {
-    id: 'audio',
-    type: 'audio',
-    label: 'Audio',
-    description: 'Upload or link audio',
-    keywords: ['audio', 'music', 'song', 'sound', 'mp3'],
-    icon: Music,
-  },
-  {
-    id: 'file',
-    type: 'file',
-    label: 'File',
-    description: 'Attach a downloadable file',
-    keywords: ['file', 'attachment', 'pdf', 'document', 'download'],
-    icon: Paperclip,
+    group: 'advanced',
   },
   {
     id: 'table',
@@ -186,6 +213,16 @@ const ITEMS: SlashItem[] = [
     description: 'Simple table',
     keywords: ['table', 'grid'],
     icon: Table2,
+    group: 'advanced',
+  },
+  {
+    id: 'button',
+    type: 'button',
+    label: 'Button',
+    description: 'A clickable link styled as a button',
+    keywords: ['button', 'link', 'cta', 'action'],
+    icon: SquareMousePointer,
+    group: 'advanced',
   },
 ]
 
@@ -199,12 +236,15 @@ export interface SlashMenuProps {
   /** Caret anchor in viewport coordinates: menu opens below `y`, flips above `top` when needed. */
   position: { x: number; y: number; top?: number }
   dir?: 'ltr' | 'rtl'
+  /** Element still inside the editor's themed DOM scope — used to resync
+   * `--xpe-*` variables onto this menu once it's portaled to `<body>`. */
+  themeSource?: HTMLElement | null
   onSelect: (item: SlashItem) => void
   onClose: () => void
 }
 
 export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function SlashMenu(
-  { query, position, dir, onSelect },
+  { query, position, dir, themeSource, onSelect },
   ref,
 ) {
   const [activeIndex, setActiveIndex] = useState(0)
@@ -225,6 +265,14 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
 
   useEffect(() => setActiveIndex(0), [query])
 
+  // Lock page scroll while the menu is open (Notion-like) — a scrollable
+  // ancestor outside document.body can still move, so `place` below still
+  // listens for scroll to keep the menu anchored if that happens.
+  useEffect(() => {
+    const unlock = lockPageScroll()
+    return unlock
+  }, [])
+
   // Place the menu with its real measured size: below the caret when it fits,
   // flipped above otherwise, clamped to the viewport. In RTL the menu grows
   // toward the start (its end edge hugs the caret).
@@ -232,6 +280,8 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
     function place() {
       const el = menuRef.current
       if (!el) return
+
+      if (themeSource) syncThemeVars(themeSource, el)
 
       const margin = 8
       const gap = 6
@@ -255,7 +305,7 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
       window.removeEventListener('resize', place)
       window.removeEventListener('scroll', place, true)
     }
-  }, [position, dir, filtered.length])
+  }, [position, dir, themeSource, filtered.length])
 
   function scrollActiveIntoView() {
     requestAnimationFrame(() => {
@@ -289,11 +339,8 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
       dir={dir}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <p className="px-3 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--xpe-muted-foreground)]">
-        Blocks
-      </p>
       {filtered.length === 0 && (
-        <div className="flex items-center gap-2 px-3 py-3 text-[13px] text-[var(--xpe-muted-foreground)]">
+        <div className="flex items-center gap-2 px-3 py-4 text-[13px] text-[var(--xpe-muted-foreground)]">
           <SearchX className="w-4 h-4" />
           No results for “{query}”
         </div>
@@ -301,28 +348,35 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
       <div ref={listRef}>
         {filtered.map((item, idx) => {
           const Icon = item.icon
+          const showHeader = idx === 0 || filtered[idx - 1].group !== item.group
           return (
-            <button
-              key={item.id}
-              className={`flex items-center gap-3 w-full px-3 py-1.5 text-start transition-colors ${idx === activeIndex ? 'bg-[var(--xpe-primary-muted)]' : 'hover:bg-[var(--xpe-surface-hover)]'}`}
-              data-active={idx === activeIndex}
-              onMouseEnter={() => setActiveIndex(idx)}
-              onClick={() => onSelect(item)}
-            >
-              <span
-                className={`flex items-center justify-center w-8 h-8 rounded-lg border shrink-0 ${idx === activeIndex ? 'border-[var(--xpe-border)] bg-[var(--xpe-surface)] text-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] bg-[var(--xpe-muted)] text-[var(--xpe-muted-foreground)]'}`}
+            <div key={item.id}>
+              {showHeader && (
+                <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--xpe-muted-foreground)] first:pt-1">
+                  {GROUP_LABELS[item.group]}
+                </p>
+              )}
+              <button
+                className={`flex items-center gap-3 w-full px-3 py-1.5 text-start transition-colors ${idx === activeIndex ? 'bg-[var(--xpe-primary-muted)]' : 'hover:bg-[var(--xpe-surface-hover)]'}`}
+                data-active={idx === activeIndex}
+                onMouseEnter={() => setActiveIndex(idx)}
+                onClick={() => onSelect(item)}
               >
-                <Icon className="w-4 h-4" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[13px] font-medium text-[var(--xpe-foreground)]">
-                  {item.label}
+                <span
+                  className={`flex items-center justify-center w-8 h-8 rounded-lg border shrink-0 ${idx === activeIndex ? 'border-[var(--xpe-border)] bg-[var(--xpe-surface)] text-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] bg-[var(--xpe-muted)] text-[var(--xpe-muted-foreground)]'}`}
+                >
+                  <Icon className="w-4 h-4" />
                 </span>
-                <span className="block text-[11px] text-[var(--xpe-muted-foreground)] truncate">
-                  {item.description}
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-medium text-[var(--xpe-foreground)]">
+                    {item.label}
+                  </span>
+                  <span className="block text-[11px] text-[var(--xpe-muted-foreground)] truncate">
+                    {item.description}
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+            </div>
           )
         })}
       </div>

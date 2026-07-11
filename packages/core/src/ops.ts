@@ -33,7 +33,8 @@ export function createBlock(
       type === 'to_do' ||
       type === 'toggle' ||
       type === 'quote' ||
-      type === 'callout')
+      type === 'callout' ||
+      type === 'button')
   ) {
     props.dir = options.defaultDir
   }
@@ -65,6 +66,18 @@ props.provider = 'file'
   if (type === 'table' && !props.table) {
     props.table = createDefaultTableData()
   }
+
+  if (type === 'button' && props.url === undefined) {
+props.url = ''
+}
+
+  if (type === 'button' && props.buttonStyle === undefined) {
+props.buttonStyle = 'primary'
+}
+
+  if (type === 'button' && props.align === undefined) {
+props.align = 'left'
+}
 
   return {
     id: partial.id ?? generateBlockId(),
