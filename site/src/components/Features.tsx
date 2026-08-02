@@ -17,7 +17,7 @@ const FEATURES: { icon: LucideIcon; title: string; desc: string }[] = [
   {
     icon: Blocks,
     title: 'Every block you expect',
-    desc: 'Headings, lists, to-dos, toggles, quotes, callouts, code with syntax highlighting, images, video, and tables.',
+    desc: 'Headings, lists, to-dos, toggles, quotes, callouts, code with syntax highlighting, dividers, buttons, images, video, audio, file attachments, and tables.',
   },
   {
     icon: Keyboard,

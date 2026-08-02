@@ -2,7 +2,8 @@
 
 A Notion-like block editor for Vue 3 — contentEditable-based, with a flat
 block model (paragraphs, headings, lists, to-dos, toggles, quotes, callouts,
-code, images, video, tables) and two editing styles built in:
+code, dividers, buttons, images, video, audio, file attachments, tables)
+and two editing styles built in:
 
 - **Fixed toolbar** — a sticky top toolbar, classic WYSIWYG feel.
 - **Floating (Notion-like)** — a bubble toolbar on text selection plus a `/`
@@ -77,7 +78,7 @@ const formatState = ref<FormatToolbarState | null>(null)
 | --- | --- | --- | --- |
 | `modelValue` | `Block[]` | — | Live block array; mutated in place |
 | `toolbar` | `'fixed' \| 'floating' \| 'both' \| 'none'` | `'floating'` | Which toolbar UI to render |
-| `upload` | `(file: File) => Promise<string>` | — | Called for drag/drop/paste of images & video |
+| `upload` | `(file: File) => Promise<string>` | — | Called for drag/drop/paste of images, video, audio & files |
 | `pickMedia` | `(opts: { accept: string[]; title?: string }) => Promise<{url, alt?, caption?} \| null>` | — | Hook up your media library picker |
 | `editorDir` | `'ltr' \| 'rtl'` | `'ltr'` | Default direction for new blocks |
 | `readonly` | `boolean` | `false` | Disable editing |

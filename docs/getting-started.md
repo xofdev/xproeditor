@@ -75,6 +75,22 @@ export function Editor() {
 block array and calls `onChange(blocks)` when it changes. To load different
 content, remount by changing the component's `key`.
 
+## Controlled (Vue) vs uncontrolled (React)
+
+This is the one place the two adapters differ on purpose, because each
+follows its own framework's convention rather than a shared abstraction:
+
+| | Vue | React |
+| --- | --- | --- |
+| Prop | `:model-value="blocks"` | `defaultValue={blocks}` |
+| Ownership | Your `ref` is the source of truth | The editor owns the array |
+| Reading changes | Mutations land on your `ref`; `@change` fires after | `onChange(blocks)` |
+| Loading new content | Assign to the `ref` | Remount via `key` |
+
+Everything else — block model, keyboard shortcuts, toolbar modes, theming
+tokens, the `Block[]` you persist — is identical, so documents move between
+the two adapters unchanged.
+
 ## Persisting content
 
 Store the `Block[]` array as JSON (e.g. wrapped in the `BlocksContent` shape —

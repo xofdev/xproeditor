@@ -9,8 +9,10 @@ for **Vue 3** and **React**. Two editing styles come built in — a classic
 
 ```
 paragraphs · headings · bulleted & numbered lists · to-dos · toggles
-quotes · callouts · code (with syntax highlighting) · images · video · tables
+quotes · callouts · code (with syntax highlighting) · dividers · buttons
+images · video · audio · file attachments · tables
 undo/redo · markdown shortcuts · multi-block selection · rich clipboard
+light & dark themes · RTL · read-only document renderer
 ```
 
 ## Packages

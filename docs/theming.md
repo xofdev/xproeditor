@@ -18,6 +18,14 @@ If your app *does* use Tailwind already, nothing conflicts — the generated
 classes are just standard Tailwind utilities (`flex`, `rounded-xl`, `text-gray-600`,
 ...) at the default specificity.
 
+Because preflight is disabled, the stylesheet carries one narrow reset of its
+own: `<button>` elements *inside the editor's own roots* (`.xpe-pro-editor`,
+`.block-editor`, `.doc-blocks`, `.xpe-menu`, `.xpe-popover-content`) have their
+user-agent background and border cleared, so the browser's default button
+chrome doesn't show through on the editor's controls in dark mode. It is
+written with `:where(...)`, so it carries **zero specificity** — any rule of
+your own, however weak, still wins.
+
 ## CSS variables
 
 A small set of design tokens is exposed as CSS custom properties with
@@ -39,6 +47,7 @@ any ancestor of the editor:
   --xpe-surface-hover: #f9fafb;      /* hover rows inside menus */
   --xpe-ring: #818cf8;               /* focus/selection ring around media blocks */
   --xpe-danger: #ef4444;             /* validation errors */
+  --xpe-danger-muted: #fef2f2;       /* tint behind destructive hover states */
   --xpe-radius: 12px;                /* corner radius of cards, menus, media */
   --xpe-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.05);
   --xpe-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;

@@ -33,7 +33,7 @@ type BlockType =
   | 'paragraph' | 'heading_1' | 'heading_2' | 'heading_3'
   | 'bulleted_list_item' | 'numbered_list_item' | 'to_do' | 'toggle'
   | 'quote' | 'callout' | 'code' | 'divider'
-  | 'image' | 'video' | 'audio' | 'file' | 'table'
+  | 'image' | 'video' | 'audio' | 'file' | 'table' | 'button'
 ```
 
 ## `InlineSpan` (rich text)
@@ -65,7 +65,7 @@ interface BlockProps {
   collapsed?: boolean       // toggle
   language?: string         // code
   code?: string             // code
-  url?: string              // image/video/audio/file
+  url?: string              // image/video/audio/file/button
   caption?: string          // image/video/audio
   name?: string              // audio/file: original file name
   size?: number              // audio/file: size in bytes
@@ -75,6 +75,8 @@ interface BlockProps {
   icon?: string              // callout
   color?: string             // callout background
   table?: TableData          // table
+  buttonStyle?: 'primary' | 'outline' | 'ghost' // button
+  openInNewTab?: boolean     // button: open url in a new tab
   dir?: 'auto' | 'ltr' | 'rtl'
   align?: 'left' | 'center' | 'right'
 }
