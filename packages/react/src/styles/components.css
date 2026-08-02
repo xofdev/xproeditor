@@ -209,8 +209,7 @@
 .etc-editor { white-space: pre-wrap; word-break: break-word; caret-color: var(--xpe-primary, #4f46e5); }
 .etc-editor:empty::before { content: ' '; pointer-events: none; }
 .etc-editor code { background: var(--xpe-muted, #f1f3f5); border: 1px solid var(--xpe-border, #e9ecef); border-radius: 4px; padding: 1px 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; color: #e0316e; }
-.etc-editor a { color: #4f46e5; text-decoration: underline; text-underline-offset: 2px; }
-.border-gray-150 { border-color: #eceef1; }
+.etc-editor a { color: var(--xpe-primary, #4f46e5); text-decoration: underline; text-underline-offset: 2px; }
 
 /* ── EditorSelectionHighlight ──────────────────────────────────────────── */
 .esh-rect { background: var(--pro-editor-selection, rgb(35 131 226 / 0.18)); border-radius: 2px; }

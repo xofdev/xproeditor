@@ -221,7 +221,7 @@ export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function Ta
 
   return (
     <Tag
-      className={`etc-cell border border-gray-150 p-0 relative min-w-[100px] align-top ${isHeader ? 'bg-[var(--xpe-muted)]/80' : ''} ${selected ? 'ring-2 ring-[var(--xpe-ring)] ring-inset' : ''}`}
+      className={`etc-cell border border-[var(--xpe-border)] p-0 relative min-w-[100px] align-top ${isHeader ? 'bg-[var(--xpe-muted)]' : ''} ${selected ? 'ring-2 ring-[var(--xpe-ring)] ring-inset' : ''}`}
       style={cellStyle}
       colSpan={cell.colspan && cell.colspan > 1 ? cell.colspan : undefined}
       rowSpan={cell.rowspan && cell.rowspan > 1 ? cell.rowspan : undefined}

@@ -8,8 +8,13 @@ import type {
   TableWidth,
 } from './types'
 
+/**
+ * Default cell border. The colour resolves against the adapters' `--xpe-border`
+ * theme token so tables follow light/dark mode, with a literal fallback for
+ * headless rendering where the token stylesheet isn't loaded.
+ */
 export const DEFAULT_TABLE_BORDER = {
-  color: '#eceef1',
+  color: 'var(--xpe-border, #eceef1)',
   width: 1 as const,
   style: 'solid' as const,
 }

@@ -232,9 +232,9 @@ defineExpose({ focusAt, getSelection, setSelection, el })
 <template>
   <component
     :is="isHeader ? 'th' : 'td'"
-    class="etc-cell border border-gray-150 p-0 relative min-w-[100px] align-top"
+    class="etc-cell border border-[var(--xpe-border)] p-0 relative min-w-[100px] align-top"
     :class="[
-      isHeader ? 'bg-[var(--xpe-muted)]/80' : '',
+      isHeader ? 'bg-[var(--xpe-muted)]' : '',
       selected ? 'ring-2 ring-[var(--xpe-ring)] ring-inset' : '',
     ]"
     :style="cellStyle"
@@ -281,8 +281,5 @@ defineExpose({ focusAt, getSelection, setSelection, el })
   color: var(--xpe-primary, #4f46e5);
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-.border-gray-150 {
-  border-color: #eceef1;
 }
 </style>

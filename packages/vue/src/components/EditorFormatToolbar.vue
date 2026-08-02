@@ -265,7 +265,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
                         type="button"
                         variant="ghost"
                         size="sm"
-                        class="h-8 px-2 text-xs text-[var(--xpe-danger)] hover:bg-red-50 hover:text-red-600"
+                        class="h-8 px-2 text-xs text-[var(--xpe-danger)] hover:bg-[var(--xpe-danger-muted)]"
                         @click="emit('mark', 'link', null); linkOpen = false"
                     >
                         Remove

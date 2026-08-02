@@ -115,7 +115,7 @@ defineExpose({ focusAt })
 </script>
 
 <template>
-  <div class="ecb group/code rounded-xl overflow-hidden border border-gray-200" dir="ltr">
+  <div class="ecb group/code rounded-xl overflow-hidden border border-[var(--xpe-border)]" dir="ltr">
     <div class="flex items-center justify-between px-3 py-1.5 bg-[#16182a] border-b border-white/5">
       <select
         class="bg-transparent text-[11px] text-gray-400 outline-none cursor-pointer hover:text-gray-200"

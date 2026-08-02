@@ -273,7 +273,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
                   <td className="w-6 border-0 align-middle">
                     {!readonly && (
                       <button
-                        className="hidden h-5 w-5 items-center justify-center rounded text-gray-300 hover:text-[var(--xpe-danger)] group-hover/row:flex"
+                        className="hidden h-5 w-5 items-center justify-center rounded text-[var(--xpe-muted-foreground)] hover:text-[var(--xpe-danger)] group-hover/row:flex"
                         title="Remove row"
                         onClick={() => updateTable(removeTableRow(table, rowIdx))}
                       >
@@ -287,7 +287,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
           </table>
           {!readonly && (
             <button
-              className="flex w-full items-center justify-center py-1 text-gray-300 transition-colors hover:bg-[var(--xpe-primary-muted)]/40 hover:text-[var(--xpe-primary)]"
+              className="flex w-full items-center justify-center py-1 text-[var(--xpe-muted-foreground)] transition-colors hover:bg-[var(--xpe-primary-muted)] hover:text-[var(--xpe-primary)]"
               title="Add row"
               onClick={() => updateTable(addTableRow(table))}
             >
@@ -298,7 +298,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
         {!readonly && (
           <div className="ms-1 flex flex-col gap-1 self-stretch">
             <button
-              className="flex items-center rounded px-1 text-gray-300 transition-colors hover:bg-[var(--xpe-primary-muted)]/40 hover:text-[var(--xpe-primary)]"
+              className="flex items-center rounded px-1 text-[var(--xpe-muted-foreground)] transition-colors hover:bg-[var(--xpe-primary-muted)] hover:text-[var(--xpe-primary)]"
               title="Add column"
               onClick={() => updateTable(addTableColumn(table))}
             >
@@ -306,7 +306,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
             </button>
             {table.rows[0]?.length ? (
               <button
-                className="flex items-center rounded px-1 text-gray-300 transition-colors hover:bg-red-50/40 hover:text-[var(--xpe-danger)]"
+                className="flex items-center rounded px-1 text-[var(--xpe-muted-foreground)] transition-colors hover:bg-[var(--xpe-danger-muted)] hover:text-[var(--xpe-danger)]"
                 title="Remove last column"
                 onClick={() =>
                   updateTable(removeTableColumn(table, (table.rows[0]?.length ?? 1) - 1))

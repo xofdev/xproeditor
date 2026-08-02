@@ -255,7 +255,7 @@ export function FormatToolbar({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2 text-xs text-[var(--xpe-danger)] hover:bg-red-50 hover:text-red-600"
+                className="h-8 px-2 text-xs text-[var(--xpe-danger)] hover:bg-[var(--xpe-danger-muted)]"
                 onClick={() => {
                   onMark('link', null)
                   setLinkOpen(false)

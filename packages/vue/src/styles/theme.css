@@ -19,6 +19,8 @@
   /* focus/selection ring around media blocks */
   --xpe-ring: #818cf8;
   --xpe-danger: #ef4444;
+  /* subtle tint behind destructive hover states */
+  --xpe-danger-muted: #fef2f2;
   --xpe-radius: 12px;
   --xpe-shadow:
     0 10px 15px -3px rgb(0 0 0 / 0.1),
@@ -46,9 +48,24 @@
   --xpe-surface-hover: #273449;
   --xpe-ring: #6366f1;
   --xpe-danger: #f87171;
+  --xpe-danger-muted: rgb(248 113 113 / 0.15);
   --xpe-shadow:
     0 10px 15px -3px rgb(0 0 0 / 0.5),
     0 4px 6px -4px rgb(0 0 0 / 0.4);
+}
+
+/**
+ * Tailwind's preflight is intentionally disabled (consumers never install
+ * Tailwind), so the user-agent's `<button>` styling — a light `buttonface`
+ * background and default border — shows through on every control that
+ * doesn't set its own, which reads as light-grey chips in dark mode.
+ * Reset it scoped to the editor's own roots and at zero specificity
+ * (`:where`), so any utility class or consumer stylesheet still wins.
+ */
+:where(.xpe-pro-editor, .block-editor, .doc-blocks, .xpe-popover-content, .xpe-menu) :where(button) {
+  background-color: transparent;
+  border: 0;
+  color: inherit;
 }
 
 /**
