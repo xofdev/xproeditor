@@ -1,6 +1,13 @@
 import { useState } from 'react'
 
-export function CodeBlock({ code }: { code: string }) {
+export function CodeBlock({
+  code,
+  variant = 'code',
+}: {
+  code: string
+  /** 'command' renders a single shell line with a non-copyable `$` prompt. */
+  variant?: 'code' | 'command'
+}) {
   const [copied, setCopied] = useState(false)
 
   async function copy() {
@@ -14,8 +21,13 @@ export function CodeBlock({ code }: { code: string }) {
   }
 
   return (
-    <div className="code-block">
-      <button className="copy-btn" onClick={copy} type="button">
+    <div className={variant === 'command' ? 'code-block code-block--command' : 'code-block'}>
+      <button
+        className="copy-btn"
+        onClick={copy}
+        type="button"
+        aria-label={variant === 'command' ? `Copy install command: ${code}` : 'Copy code'}
+      >
         {copied ? 'Copied!' : 'Copy'}
       </button>
       <pre>

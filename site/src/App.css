@@ -575,6 +575,29 @@ section {
   background: rgba(255, 255, 255, 0.14);
 }
 
+/*
+ * The `npm install` line, shown above the usage snippet. Kept visually
+ * separate so it reads as its own step and copies on its own — it used to be
+ * the first line of the code sample, which meant copying the snippet also
+ * grabbed a shell command.
+ */
+.code-block--command {
+  background: #171717;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.code-block--command pre {
+  padding: 14px 50px 14px 18px;
+  overflow-x: auto;
+}
+
+/* Prompt marker is decorative, so it never lands in the copied text. */
+.code-block--command code::before {
+  content: '$ ';
+  color: #6f6f6f;
+  user-select: none;
+}
+
 .code-comment {
   color: #7d7d7d;
 }

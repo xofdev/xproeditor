@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { CodeBlock } from './CodeBlock'
 
-const VUE_SNIPPET = `npm install @xproeditor/vue
+const INSTALL = {
+  vue: 'npm install @xproeditor/vue',
+  react: 'npm install @xproeditor/react',
+} as const
 
-<script setup lang="ts">
+const VUE_SNIPPET = `<script setup lang="ts">
 import { ProEditor, createBlock } from '@xproeditor/vue'
 import '@xproeditor/vue/style.css'
 
@@ -14,9 +17,7 @@ const blocks = ref([createBlock('paragraph', { content: [{ text: 'Hello!' }] })]
   <ProEditor :model-value="blocks" toolbar="floating" />
 </template>`
 
-const REACT_SNIPPET = `npm install @xproeditor/react
-
-import { ProEditor, createBlock } from '@xproeditor/react'
+const REACT_SNIPPET = `import { ProEditor, createBlock } from '@xproeditor/react'
 import '@xproeditor/react/style.css'
 
 const initialBlocks = [createBlock('paragraph', { content: [{ text: 'Hello!' }] })]
@@ -50,6 +51,7 @@ export function InstallTabs() {
               React
             </button>
           </div>
+          <CodeBlock variant="command" code={INSTALL[tab]} />
           <CodeBlock code={tab === 'vue' ? VUE_SNIPPET : REACT_SNIPPET} />
         </div>
       </div>
