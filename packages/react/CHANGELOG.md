@@ -1,5 +1,19 @@
 # @xproeditor/react
 
+## 0.3.0
+
+### Minor Changes
+
+- 8877759: The turn-into menu now offers **Toggle list**, alongside the paragraph, heading, list, to-do, quote and callout conversions it already supported.
+
+### Patch Changes
+
+- 8877759: Screen readers now announce the to-do checkbox and its checked state, and the callout icon button is labelled — both previously had no accessible name. The callout's "Color" control now fades in on hover or keyboard focus instead of sitting permanently inside every callout.
+- 8877759: Fix dark mode across the editor. Table borders now follow the `--xpe-border` token instead of a hardcoded light grey baked into an inline style, table header backgrounds and table control hover tints now render at all (they were written with Tailwind opacity modifiers on `var()` colours, which silently produce no CSS), and the browser's default button chrome no longer shows through as light-grey chips on editor controls — most visibly on every row of the slash menu. Adds a `--xpe-danger-muted` token for destructive hover states.
+- Updated dependencies [8877759]
+- Updated dependencies [8877759]
+  - @xproeditor/core@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
