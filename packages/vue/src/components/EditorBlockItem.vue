@@ -249,6 +249,8 @@ defineExpose({
               <template #trigger="{ selected, isIconify, toggle }">
                 <button
                   type="button"
+                  aria-label="Change callout icon"
+                  title="Change callout icon"
                   class="mt-0.5 text-lg leading-none transition-transform"
                   :class="{ 'hover:scale-110': !readonly }"
                   :disabled="readonly"
@@ -265,7 +267,9 @@ defineExpose({
             <button
               v-if="!readonly"
               type="button"
-              class="mt-1 block w-full text-[10px] text-[var(--xpe-muted-foreground)] hover:text-[var(--xpe-foreground)]"
+              title="Change callout color"
+              class="mt-1 block w-full text-[10px] text-[var(--xpe-muted-foreground)] transition-opacity hover:text-[var(--xpe-foreground)] focus-visible:opacity-100"
+              :class="showCalloutColors ? 'opacity-100' : 'opacity-0 group-hover/block:opacity-100'"
               @click="showCalloutColors = !showCalloutColors"
             >
               Color
@@ -312,6 +316,9 @@ defineExpose({
             <span v-else-if="block.type === 'numbered_list_item'" class="text-[var(--xpe-foreground)] text-[14px] leading-snug tabular-nums">{{ number ?? 1 }}.</span>
             <button
               v-else-if="block.type === 'to_do'"
+              role="checkbox"
+              aria-label="Toggle to-do"
+              :aria-checked="!!block.props.checked"
               class="appearance-none w-[15px] h-[15px] mt-1 rounded-[4px] border flex items-center justify-center transition-colors"
               :class="block.props.checked ? 'bg-[var(--xpe-primary)] border-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] hover:border-[var(--xpe-ring)] bg-[var(--xpe-surface)]'"
               :disabled="readonly"

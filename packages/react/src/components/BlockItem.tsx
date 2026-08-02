@@ -288,6 +288,8 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                     renderTrigger={({ selected: sel, toggle }) => (
                       <button
                         type="button"
+                        aria-label="Change callout icon"
+                        title="Change callout icon"
                         className={`mt-0.5 text-lg leading-none transition-transform${!readonly ? ' hover:scale-110' : ''}`}
                         disabled={readonly}
                         onClick={(e) => {
@@ -303,7 +305,8 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                   {!readonly && (
                     <button
                       type="button"
-                      className="mt-1 block w-full text-[10px] text-[var(--xpe-muted-foreground)] hover:text-[var(--xpe-foreground)]"
+                      title="Change callout color"
+                      className={`mt-1 block w-full text-[10px] text-[var(--xpe-muted-foreground)] transition-opacity hover:text-[var(--xpe-foreground)] focus-visible:opacity-100 ${showCalloutColors ? 'opacity-100' : 'opacity-0 group-hover/block:opacity-100'}`}
                       onClick={() => setShowCalloutColors((v) => !v)}
                     >
                       Color
@@ -346,6 +349,9 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                   )}
                   {block.type === 'to_do' && (
                     <button
+                      role="checkbox"
+                      aria-label="Toggle to-do"
+                      aria-checked={!!block.props.checked}
                       className={`appearance-none w-[15px] h-[15px] mt-1 rounded-[4px] border flex items-center justify-center transition-colors ${block.props.checked ? 'bg-[var(--xpe-primary)] border-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] hover:border-[var(--xpe-ring)] bg-[var(--xpe-surface)]'}`}
                       disabled={readonly}
                       onClick={() => onPatch({ checked: !block.props.checked })}

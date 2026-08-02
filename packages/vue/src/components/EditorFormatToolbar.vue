@@ -7,6 +7,7 @@ import {
     Bold,
     Check,
     ChevronDown,
+    ChevronRight,
     Code,
     IndentDecrease,
     IndentIncrease,
@@ -78,6 +79,7 @@ const TURN_INTO: Array<{ type: BlockType; label: string; icon: unknown }> = [
     { type: 'bulleted_list_item', label: 'Bulleted list', icon: List },
     { type: 'numbered_list_item', label: 'Numbered list', icon: ListOrdered },
     { type: 'to_do', label: 'To-do', icon: CheckSquare },
+    { type: 'toggle', label: 'Toggle list', icon: ChevronRight },
     { type: 'quote', label: 'Quote', icon: Quote },
     { type: 'callout', label: 'Callout', icon: Lightbulb },
 ];
