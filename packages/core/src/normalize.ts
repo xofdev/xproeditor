@@ -458,14 +458,27 @@ out.push(createBlock('paragraph', { content: spans }))
   }
 }
 
+/**
+ * Elements that carry no document text. Their `textContent` would otherwise
+ * fall through to the inline handler and be pasted in as a paragraph — copying
+ * a region of a web page would drop its stylesheet or script source into the
+ * document as visible text.
+ */
+const NON_CONTENT_SELECTOR = 'script, style, noscript, template, iframe, object'
+
 export function htmlToBlocks(html: string): Block[] {
   if (typeof DOMParser === 'undefined') {
-    const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+    const text = html
+      .replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
 
     return text ? [createBlock('paragraph', { content: [{ text }] })] : []
   }
 
   const doc = new DOMParser().parseFromString(html, 'text/html')
+  doc.body.querySelectorAll(NON_CONTENT_SELECTOR).forEach((el) => el.remove())
   const out: Block[] = []
   let inlineBuffer: Node[] = []
   const flush = () => {
