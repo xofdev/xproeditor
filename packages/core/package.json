@@ -1,6 +1,6 @@
 {
   "name": "@xproeditor/core",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Framework-agnostic engine for the XProEditor Notion-like block editor: block model, selection, clipboard, HTML conversion, and table operations.",
   "type": "module",
   "license": "MIT",

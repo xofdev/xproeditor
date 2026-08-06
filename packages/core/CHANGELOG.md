@@ -1,5 +1,11 @@
 # @xproeditor/core
 
+## 0.3.0
+
+### Minor Changes
+
+- f79a611: Improve button block UX with label/URL/color controls, include non-text blocks in multi-block copy/cut/delete, add Markdown paste plus lossy import/export APIs, and ship a pluggable Ask AI agent (slash `/ai`, toolbar, Accept/Reject).
+
 ## 0.2.1
 
 ### Patch Changes
