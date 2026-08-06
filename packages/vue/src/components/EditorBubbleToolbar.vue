@@ -17,6 +17,7 @@ import {
     CheckSquare,
     Quote,
     Lightbulb,
+    SquareMousePointer,
     Underline,
 } from 'lucide-vue-next';
 import { nextTick, ref, watch } from 'vue';
@@ -66,6 +67,7 @@ const TURN_INTO: Array<{ type: BlockType; label: string; icon: unknown }> = [
     { type: 'to_do', label: 'To-do', icon: CheckSquare },
     { type: 'quote', label: 'Quote', icon: Quote },
     { type: 'callout', label: 'Callout', icon: Lightbulb },
+    { type: 'button', label: 'Button', icon: SquareMousePointer },
 ];
 
 const panel = ref<'none' | 'link' | 'color' | 'turninto'>('none');

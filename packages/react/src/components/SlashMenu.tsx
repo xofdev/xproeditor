@@ -31,6 +31,7 @@ import {
   Paperclip,
   SearchX,
   SquareMousePointer,
+  Sparkles,
 } from 'lucide-react'
 import type { SlashGroup, SlashItem } from '../types'
 
@@ -39,6 +40,7 @@ const GROUP_LABELS: Record<SlashGroup, string> = {
   lists: 'Lists & tasks',
   media: 'Media',
   advanced: 'Advanced',
+  ai: 'AI',
 }
 
 const ITEMS: SlashItem[] = [
@@ -224,6 +226,16 @@ const ITEMS: SlashItem[] = [
     icon: SquareMousePointer,
     group: 'advanced',
   },
+  {
+    id: 'ai',
+    type: 'paragraph',
+    label: 'Ask AI',
+    description: 'Generate or edit with AI',
+    keywords: ['ai', 'ask', 'gpt', 'write', 'generate'],
+    icon: Sparkles,
+    group: 'ai',
+    action: 'ai',
+  },
 ]
 
 export interface SlashMenuHandle {
@@ -239,12 +251,14 @@ export interface SlashMenuProps {
   /** Element still inside the editor's themed DOM scope — used to resync
    * `--xpe-*` variables onto this menu once it's portaled to `<body>`. */
   themeSource?: HTMLElement | null
+  /** Show Ask AI slash item (requires host AI transport). */
+  showAI?: boolean
   onSelect: (item: SlashItem) => void
   onClose: () => void
 }
 
 export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function SlashMenu(
-  { query, position, dir, themeSource, onSelect },
+  { query, position, dir, themeSource, showAI = false, onSelect },
   ref,
 ) {
   const [activeIndex, setActiveIndex] = useState(0)
@@ -256,12 +270,13 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
   const menuRef = useRef<HTMLDivElement | null>(null)
 
   const filtered = useMemo(() => {
+    const base = showAI ? ITEMS : ITEMS.filter((item) => item.action !== 'ai')
     const q = query.toLowerCase().trim()
-    if (!q) return ITEMS
-    return ITEMS.filter(
+    if (!q) return base
+    return base.filter(
       (item) => item.label.toLowerCase().includes(q) || item.keywords.some((k) => k.startsWith(q)),
     )
-  }, [query])
+  }, [query, showAI])
 
   useEffect(() => setActiveIndex(0), [query])
 

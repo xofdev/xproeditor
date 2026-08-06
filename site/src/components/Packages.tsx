@@ -1,17 +1,17 @@
 const PACKAGES = [
   {
     name: '@xproeditor/core',
-    desc: 'The framework-agnostic engine: block model, selection, clipboard, table ops.',
+    desc: 'Block model, selection, Markdown, clipboard, tables, and pluggable AI helpers — zero UI.',
     href: 'https://github.com/xofdev/xproeditor/tree/main/packages/core',
   },
   {
     name: '@xproeditor/vue',
-    desc: 'Vue 3 components, built on @xproeditor/core.',
+    desc: 'Vue 3 ProEditor, slash menu, toolbars, Ask AI menu, DocRenderer.',
     href: 'https://github.com/xofdev/xproeditor/tree/main/packages/vue',
   },
   {
     name: '@xproeditor/react',
-    desc: 'React components, built on @xproeditor/core.',
+    desc: 'React ProEditor with the same behavior as Vue — including AI transport.',
     href: 'https://github.com/xofdev/xproeditor/tree/main/packages/react',
   },
 ]
@@ -23,7 +23,7 @@ export function Packages() {
         <div className="section-head">
           <span className="eyebrow">Packages</span>
           <h2>One repo, three packages</h2>
-          <p>Install only what you need — the adapters share zero UI code but the same behavior.</p>
+          <p>Install only what you need — adapters share behavior through @xproeditor/core.</p>
         </div>
         <div className="package-grid">
           {PACKAGES.map((pkg) => (

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import hljs from 'highlight.js/lib/common'
 import { ChevronRight, Link as LinkIcon, X } from 'lucide-react'
@@ -341,6 +341,14 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           const justify =
             block.props.align === 'center' ? 'center' : block.props.align === 'right' ? 'flex-end' : 'flex-start'
           const label = spansToHtml(block.content) || 'Button'
+          const accent = block.props.color
+          const style: CSSProperties | undefined = accent
+            ? variant === 'primary'
+              ? { background: accent, borderColor: accent, color: '#fff', ['--xpe-btn-accent' as string]: accent }
+              : variant === 'outline'
+                ? { borderColor: accent, color: accent, ['--xpe-btn-accent' as string]: accent }
+                : { color: accent, ['--xpe-btn-accent' as string]: accent }
+            : undefined
 
           return (
             <div key={idx} className="db-button-row" style={{ justifyContent: justify }}>
@@ -350,10 +358,15 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
                   target={block.props.openInNewTab ? '_blank' : undefined}
                   rel={block.props.openInNewTab ? 'noopener noreferrer' : undefined}
                   className={`db-button db-button--${variant}`}
+                  style={style}
                   dangerouslySetInnerHTML={{ __html: label }}
                 />
               ) : (
-                <span className={`db-button db-button--${variant}`} dangerouslySetInnerHTML={{ __html: label }} />
+                <span
+                  className={`db-button db-button--${variant}`}
+                  style={style}
+                  dangerouslySetInnerHTML={{ __html: label }}
+                />
               )}
             </div>
           )

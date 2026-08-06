@@ -110,8 +110,9 @@ export interface BlockProps {
   width?: number
   /** video */
   provider?: 'file' | 'youtube' | 'vimeo'
-  /** callout */
+  /** callout icon */
   icon?: string
+  /** callout background, or button accent/background color */
   color?: string
   /** table */
   table?: TableData
@@ -123,6 +124,20 @@ export interface BlockProps {
   dir?: 'auto' | 'ltr' | 'rtl'
   align?: 'left' | 'center' | 'right'
 }
+
+/** Preset accent colors for button blocks (adapters may show swatches). */
+export const BUTTON_COLOR_PRESETS = [
+  '#4f46e5',
+  '#2563eb',
+  '#0891b2',
+  '#16a34a',
+  '#ca8a04',
+  '#ea580c',
+  '#dc2626',
+  '#db2777',
+  '#9333ea',
+  '#111827',
+] as const
 
 export interface Block {
   id: string

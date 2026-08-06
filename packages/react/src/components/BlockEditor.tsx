@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle } from 'react'
-import type { Block } from '@xproeditor/core'
+import type { AICommand, AITransport, Block } from '@xproeditor/core'
 import { useBlockEditor, type UseBlockEditorOptions } from '../hooks/useBlockEditor'
+import { AIMenu } from './AIMenu'
 import { BlockItem } from './BlockItem'
 import { BubbleToolbar } from './BubbleToolbar'
 import { EmojiTriggerMenu } from './EmojiTriggerMenu'
@@ -16,6 +17,11 @@ export interface BlockEditorProps {
   readonly?: boolean
   /** Floating bubble toolbar on text selection (disabled when using a sticky format toolbar). */
   showBubbleToolbar?: boolean
+  /** Pluggable AI agent — host supplies transport (OpenAI/Anthropic/custom). */
+  ai?: {
+    transport: AITransport
+    commands?: AICommand[]
+  }
   onChange?: (blocks: Block[]) => void
   onFormatState?: (state: FormatToolbarState | null) => void
 }
@@ -34,6 +40,7 @@ export interface BlockEditorHandle {
   setFocusedCalloutIcon: (icon: string | null) => void
   patchTableStyle: ReturnType<typeof useBlockEditor>['patchTableStyle']
   patchTableCellBackground: (color: string | null) => void
+  openAIMenu: () => void
   focusFirst: () => void
   focusEnd: () => void
 }
@@ -46,6 +53,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
     editorDir,
     readonly,
     showBubbleToolbar,
+    ai,
     onChange,
     onFormatState,
   },
@@ -58,6 +66,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
     editorDir,
     readonly,
     showBubbleToolbar,
+    ai,
     onChange,
     onFormatState,
   })
@@ -76,6 +85,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
     setFocusedCalloutIcon: ed.setFocusedCalloutIcon,
     patchTableStyle: ed.patchTableStyle,
     patchTableCellBackground: ed.patchTableCellBackground,
+    openAIMenu: ed.openAIMenu,
     focusFirst: ed.focusFirst,
     focusEnd: ed.focusEnd,
   }))
@@ -102,7 +112,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           block={block}
           number={ed.numbering.get(block.id)}
           placeholder={ed.placeholderFor(block)}
-          selected={ed.selectedBlockId === block.id}
+          selected={ed.isBlockChromeSelected(block.id)}
           textHighlight={ed.textHighlightForBlock(block.id)}
           dropPosition={ed.dropTarget && ed.dropTarget.id === block.id ? ed.dropTarget.position : null}
           upload={ed.upload}
@@ -152,6 +162,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           position={ed.slashState.position}
           dir={ed.editorDir ?? 'ltr'}
           themeSource={ed.rootRef.current}
+          showAI={!!ed.ai?.transport}
           onSelect={ed.onSlashSelect}
           onClose={ed.closeSlash}
         />
@@ -178,6 +189,21 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           themeSource={ed.rootRef.current}
           onMark={ed.onBubbleMark}
           onTurnInto={ed.onBubbleTurnInto}
+        />
+      )}
+
+      {ed.aiMenu && ed.ai?.transport && !ed.readonly && (
+        <AIMenu
+          open
+          position={ed.aiMenu.position}
+          transport={ed.ai.transport}
+          commands={ed.ai.commands}
+          blocks={ed.blocks}
+          selectionBlocks={ed.getAISelectionBlocks()}
+          focusBlockId={ed.focusedBlockId ?? ed.selectedBlockId}
+          themeSource={ed.rootRef.current}
+          onApply={ed.replaceDocumentBlocks}
+          onClose={ed.closeAIMenu}
         />
       )}
     </div>

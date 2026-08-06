@@ -6,25 +6,45 @@ const INSTALL = {
   react: 'npm install @xproeditor/react',
 } as const
 
+const REACT_SNIPPET = `import { ProEditor, DocRenderer, createBlock } from '@xproeditor/react'
+import '@xproeditor/react/style.css'
+import { useState } from 'react'
+
+const initial = [createBlock('heading_1', { content: [{ text: 'My post' }] })]
+
+export default function BlogAdmin() {
+  const [blocks, setBlocks] = useState(initial)
+  const [published, setPublished] = useState(false)
+
+  if (published) return <DocRenderer blocks={blocks} />
+
+  return (
+    <ProEditor
+      defaultValue={blocks}
+      toolbar="floating"
+      onChange={setBlocks}
+    />
+  )
+}`
+
 const VUE_SNIPPET = `<script setup lang="ts">
-import { ProEditor, createBlock } from '@xproeditor/vue'
+import { ref } from 'vue'
+import { ProEditor, DocRenderer, createBlock } from '@xproeditor/vue'
 import '@xproeditor/vue/style.css'
 
-const blocks = ref([createBlock('paragraph', { content: [{ text: 'Hello!' }] })])
+const blocks = ref([createBlock('heading_1', { content: [{ text: 'My post' }] })])
+const published = ref(false)
 </script>
 
 <template>
-  <ProEditor :model-value="blocks" toolbar="floating" />
+  <DocRenderer v-if="published" :blocks="blocks" />
+  <ProEditor
+    v-else
+    :model-value="blocks"
+    toolbar="floating"
+    @change="/* persist blocks */"
+  />
 </template>`
-
-const REACT_SNIPPET = `import { ProEditor, createBlock } from '@xproeditor/react'
-import '@xproeditor/react/style.css'
-
-const initialBlocks = [createBlock('paragraph', { content: [{ text: 'Hello!' }] })]
-
-export default () => (
-  <ProEditor defaultValue={initialBlocks} toolbar="floating" />
-)`
 
 export function InstallTabs() {
   const [tab, setTab] = useState<'vue' | 'react'>('react')
@@ -34,8 +54,12 @@ export function InstallTabs() {
       <div className="container">
         <div className="section-head">
           <span className="eyebrow">Get started</span>
-          <h2>Two lines to a Notion-like editor</h2>
-          <p>No Tailwind, no Radix, no shadcn required — styles ship precompiled.</p>
+          <h2>Install, drop in, optionally plug AI</h2>
+          <p>
+            No Tailwind, no Radix, no shadcn required — styles ship precompiled. Pass{' '}
+            <code>ai.transport</code> only when you want Ask AI. For public pages, render the same
+            blocks with <code>DocRenderer</code>.
+          </p>
         </div>
 
         <div className="install-card">

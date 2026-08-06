@@ -28,6 +28,7 @@ export { default as EditorSelectionHighlight } from './components/EditorSelectio
 export { default as EditorBubbleToolbar } from './components/EditorBubbleToolbar.vue'
 export { default as EditorFormatToolbar } from './components/EditorFormatToolbar.vue'
 export { default as EditorSlashMenu } from './components/EditorSlashMenu.vue'
+export { default as EditorAIMenu } from './components/EditorAIMenu.vue'
 export { default as DocRenderer } from './components/DocRenderer.vue'
 
 export { default as EditorTableStylePanel } from './components/toolbar/EditorTableStylePanel.vue'

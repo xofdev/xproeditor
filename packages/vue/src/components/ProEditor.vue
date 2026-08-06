@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { Block } from '@xproeditor/core'
+import type { AICommand, AITransport, Block } from '@xproeditor/core'
 import BlockEditor from './BlockEditor.vue'
 import EditorFormatToolbar from './EditorFormatToolbar.vue'
 import type { FormatToolbarState } from './EditorFormatToolbar.vue'
@@ -27,6 +27,10 @@ const props = withDefaults(
     }) => Promise<{ url: string; alt?: string; caption?: string } | null>
     editorDir?: 'ltr' | 'rtl'
     readonly?: boolean
+    ai?: {
+      transport: AITransport
+      commands?: AICommand[]
+    }
   }>(),
   {
     toolbar: 'floating',
@@ -46,6 +50,7 @@ const showBubbleToolbar = () => props.toolbar === 'floating' || props.toolbar ==
 defineExpose({
   undo: () => editorRef.value?.undo(),
   redo: () => editorRef.value?.redo(),
+  openAIMenu: () => editorRef.value?.openAIMenu(),
   focusFirst: () => editorRef.value?.focusFirst(),
   focusEnd: () => editorRef.value?.focusEnd(),
 })
@@ -56,6 +61,7 @@ defineExpose({
     <EditorFormatToolbar
       v-if="showFixedToolbar()"
       :state="formatState"
+      :show-ai="!!ai?.transport"
       @mark="(mark, value) => editorRef?.applyToolbarMark(mark, value)"
       @turn-into="(type) => editorRef?.turnIntoBlock(type)"
       @indent="() => editorRef?.indentFocusedBlock()"
@@ -65,6 +71,7 @@ defineExpose({
       @callout-icon="(icon) => editorRef?.setFocusedCalloutIcon(icon)"
       @table-style="(patch) => editorRef?.patchTableStyle(patch)"
       @cell-background="(color) => editorRef?.patchTableCellBackground(color)"
+      @ask-ai="() => editorRef?.openAIMenu()"
     />
 
     <BlockEditor
@@ -75,6 +82,7 @@ defineExpose({
       :editor-dir="editorDir"
       :readonly="readonly"
       :show-bubble-toolbar="showBubbleToolbar()"
+      :ai="ai"
       @change="emit('change')"
       @format-state="formatState = $event"
     />

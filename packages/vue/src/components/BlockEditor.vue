@@ -14,6 +14,7 @@ import {
   extractTextRangeAsBlocks,
   fullBlockTextRange,
   getTextRangeSegments,
+  isBlockCoveredByTextRange,
   isBlockFullySelected,
   isCrossBlockTextRange,
   isTextRangeCollapsed,
@@ -29,14 +30,16 @@ import {
   blockTypeForFile,
   fileToObjectUrl,
   mediaPropsFromFile,
+  tryParseMarkdownToBlocks,
 } from '@xproeditor/core'
-import type { TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, TableCellCoord, TableCellAlign, TableStyle } from '@xproeditor/core'
+import type { TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, TableCellCoord, TableCellAlign, TableStyle, AICommand, AITransport } from '@xproeditor/core'
 import EditorBlockItem from './EditorBlockItem.vue'
 import EditorBubbleToolbar from './EditorBubbleToolbar.vue'
 import EditorEmojiTriggerMenu from './EditorEmojiTriggerMenu.vue'
 import type { FormatToolbarAlign, FormatToolbarState } from './EditorFormatToolbar.vue'
 import EditorSlashMenu from './EditorSlashMenu.vue'
 import type {SlashItem} from './EditorSlashMenu.vue';
+import EditorAIMenu from './EditorAIMenu.vue'
 import { EmojiPicker } from '../ui'
 import { ALL_EMOJIS } from '../ui/emojiData'
 
@@ -53,6 +56,11 @@ const props = defineProps<{
   readonly?: boolean
   /** Floating bubble toolbar on text selection (disabled when using sticky format toolbar). */
   showBubbleToolbar?: boolean
+  /** Pluggable AI agent — host supplies transport (OpenAI/Anthropic/custom). */
+  ai?: {
+    transport: AITransport
+    commands?: AICommand[]
+  }
 }>()
 
 const emit = defineEmits<{
@@ -155,6 +163,14 @@ function textHighlightForBlock(id: string): { start: number; end: number } | nul
   }
 
   return { start: segment.start, end: segment.end }
+}
+
+function isBlockChromeSelected(id: string): boolean {
+  if (selectedBlockId.value === id) return true
+  if (!hasActiveManagedSelection() || !textRangeSelection.value) return false
+  const block = byId(id)
+  if (!block || isTextBlock(block.type)) return false
+  return isBlockCoveredByTextRange(id, textRangeSelection.value, blocks.value, visibleBlocks.value)
 }
 
 function clearTextRangeSelection(): void {
@@ -535,6 +551,7 @@ interface SlashState {
 }
 
 const slashState = ref<SlashState | null>(null)
+const aiMenu = ref<{ position: { x: number; y: number } } | null>(null)
 const slashMenuRef = ref<InstanceType<typeof EditorSlashMenu> | null>(null)
 const iconPickerRequest = ref<{ blockId: string; tab: 'emoji' | 'icon' } | null>(null)
 
@@ -582,12 +599,58 @@ function updateSlash(block: Block, spans: InlineSpan[], caret: number | null) {
   }
 }
 
+function openAIMenu(position?: { x: number; y: number }) {
+  if (!props.ai?.transport || props.readonly) return
+  closeSlash()
+  bubble.value = null
+  const pos = position ?? slashPosition()
+  aiMenu.value = { position: { x: pos.x, y: pos.y } }
+}
+
+function closeAIMenu() {
+  aiMenu.value = null
+}
+
+function getAISelectionBlocks(): Block[] {
+  if (hasActiveManagedSelection() && textRangeSelection.value) {
+    return extractTextRangeAsBlocks(textRangeSelection.value, blocks.value, visibleBlocks.value)
+  }
+  if (focusedBlockId.value) {
+    const b = byId(focusedBlockId.value)
+    return b ? [b] : []
+  }
+  if (selectedBlockId.value) {
+    const b = byId(selectedBlockId.value)
+    return b ? [b] : []
+  }
+  return []
+}
+
+function replaceDocumentBlocks(next: Block[], focusId: string | null) {
+  blocks.value.splice(0, blocks.value.length, ...next)
+  ensureNotEmpty()
+  pushHistory(true)
+  clearTextRangeSelection()
+  if (focusId) {
+    const b = byId(focusId)
+    if (b && isTextBlock(b.type)) focusBlock(focusId, 'end')
+    else if (b) selectBlock(focusId)
+  }
+}
+
 function onSlashSelect(item: SlashItem) {
   const state = slashState.value
 
   if (!state) {
 return
 }
+
+  if (item.action === 'ai') {
+    const pos = state.position
+    closeSlash()
+    openAIMenu({ x: pos.x, y: pos.y })
+    return
+  }
 
   const block = byId(state.blockId)
   closeSlash()
@@ -1045,7 +1108,12 @@ return
 
   const at = payload.offsets.start
 
-  const pastedBlocks = payload.html && payload.html.includes('<') ? htmlToBlocks(payload.html) : []
+  let pastedBlocks = payload.html && payload.html.includes('<') ? htmlToBlocks(payload.html) : []
+
+  if (pastedBlocks.length === 0) {
+    const fromMd = tryParseMarkdownToBlocks(payload.text)
+    if (fromMd?.length) pastedBlocks = fromMd
+  }
 
   if (pastedBlocks.length === 0) {
     const text = payload.text
@@ -1319,13 +1387,30 @@ return
   if (hasActiveManagedSelection() || selectedBlockId.value) {
     const html = e.clipboardData.getData('text/html')
     const text = e.clipboardData.getData('text/plain')
+    const mdMime = e.clipboardData.getData('text/markdown')
+    const fromMd = tryParseMarkdownToBlocks(mdMime || text)
+    const prioritizeMd = !html || !html.includes('<') || !!mdMime
+
+    if (fromMd && prioritizeMd) {
+      e.preventDefault()
+      e.stopPropagation()
+      insertBlocksFromClipboard(fromMd)
+      return
+    }
+
     const external = html && html.includes('<') ? htmlToBlocks(html) : []
 
     if (external.length > 0) {
       e.preventDefault()
       e.stopPropagation()
       insertBlocksFromClipboard(external)
+      return
+    }
 
+    if (fromMd) {
+      e.preventDefault()
+      e.stopPropagation()
+      insertBlocksFromClipboard(fromMd)
       return
     }
 
@@ -2724,6 +2809,8 @@ defineExpose({
   setFocusedCalloutIcon,
   patchTableStyle: patchTableStyleForFocused,
   patchTableCellBackground: patchTableCellBackgroundForFocused,
+  openAIMenu,
+  closeAIMenu,
   focusFirst: () => {
     const first = visibleBlocks.value[0]
 
@@ -2763,7 +2850,7 @@ focusBlock(last.id, 'end')
       :block="block"
       :number="numbering.get(block.id)"
       :placeholder="placeholderFor(block)"
-      :selected="selectedBlockId === block.id"
+      :selected="isBlockChromeSelected(block.id)"
       :text-highlight="textHighlightForBlock(block.id)"
       :drop-position="dropTarget && dropTarget.id === block.id ? dropTarget.position : null"
       :upload="upload"
@@ -2810,6 +2897,7 @@ focusBlock(last.id, 'end')
       :position="slashState.position"
       :dir="editorDir ?? 'ltr'"
       :theme-source="rootEl"
+      :show-ai="!!ai?.transport"
       @select="onSlashSelect"
       @close="closeSlash"
     />
@@ -2834,6 +2922,20 @@ focusBlock(last.id, 'end')
       :theme-source="rootEl"
       @mark="onBubbleMark"
       @turn-into="onBubbleTurnInto"
+    />
+
+    <EditorAIMenu
+      v-if="aiMenu && ai?.transport && !readonly"
+      :open="true"
+      :position="aiMenu.position"
+      :transport="ai.transport"
+      :commands="ai.commands"
+      :blocks="blocks"
+      :selection-blocks="getAISelectionBlocks()"
+      :focus-block-id="focusedBlockId ?? selectedBlockId"
+      :theme-source="rootEl"
+      @apply="replaceDocumentBlocks"
+      @close="closeAIMenu"
     />
   </div>
 </template>

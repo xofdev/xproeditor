@@ -2,13 +2,13 @@
 import {
   Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
   ChevronRight, Quote, Lightbulb, Code2, Minus, Image as ImageIcon, Video, Table2,
-  Smile, Blocks, Music, Paperclip, SearchX, SquareMousePointer,
+  Smile, Blocks, Music, Paperclip, SearchX, SquareMousePointer, Sparkles,
 } from 'lucide-vue-next'
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { lockPageScroll, syncThemeVars } from '@xproeditor/core'
 import type { BlockType } from '@xproeditor/core'
 
-export type SlashGroup = 'basic' | 'lists' | 'media' | 'advanced'
+export type SlashGroup = 'basic' | 'lists' | 'media' | 'advanced' | 'ai'
 
 export interface SlashItem {
   id: string
@@ -20,6 +20,7 @@ export interface SlashItem {
   group: SlashGroup
   /** After applying the block, open the icon picker on this tab. */
   pickIcon?: 'emoji' | 'icon'
+  action?: 'ai'
 }
 
 const GROUP_LABELS: Record<SlashGroup, string> = {
@@ -27,6 +28,7 @@ const GROUP_LABELS: Record<SlashGroup, string> = {
   lists: 'Lists & tasks',
   media: 'Media',
   advanced: 'Advanced',
+  ai: 'AI',
 }
 
 const ITEMS: SlashItem[] = [
@@ -50,6 +52,7 @@ const ITEMS: SlashItem[] = [
   { id: 'divider', type: 'divider', label: 'Divider', description: 'Horizontal line', keywords: ['divider', 'hr', 'separator', 'line'], icon: Minus, group: 'advanced' },
   { id: 'table', type: 'table', label: 'Table', description: 'Simple table', keywords: ['table', 'grid'], icon: Table2, group: 'advanced' },
   { id: 'button', type: 'button', label: 'Button', description: 'A clickable link styled as a button', keywords: ['button', 'link', 'cta', 'action'], icon: SquareMousePointer, group: 'advanced' },
+  { id: 'ai', type: 'paragraph', label: 'Ask AI', description: 'Generate or edit with AI', keywords: ['ai', 'ask', 'gpt', 'write', 'generate'], icon: Sparkles, group: 'ai', action: 'ai' },
 ]
 
 const props = defineProps<{
@@ -60,6 +63,7 @@ const props = defineProps<{
   /** Element still inside the editor's themed DOM scope — used to resync
    * `--xpe-*` variables onto this menu once it's teleported to `<body>`. */
   themeSource?: HTMLElement | null
+  showAI?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -73,13 +77,14 @@ const menuEl = ref<HTMLElement | null>(null)
 const placed = ref<{ left: number; top: number }>({ left: props.position.x, top: props.position.y })
 
 const filtered = computed(() => {
+  const base = props.showAI ? ITEMS : ITEMS.filter(item => item.action !== 'ai')
   const q = props.query.toLowerCase().trim()
 
   if (!q) {
-return ITEMS
+return base
 }
 
-  return ITEMS.filter(item =>
+  return base.filter(item =>
     item.label.toLowerCase().includes(q) || item.keywords.some(k => k.startsWith(q)),
   )
 })

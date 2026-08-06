@@ -25,6 +25,8 @@ import {
     Heading3,
     CheckSquare,
     Lightbulb,
+    SquareMousePointer,
+    Sparkles,
     Underline,
 } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
@@ -57,6 +59,7 @@ export type FormatToolbarState = {
 
 const props = defineProps<{
     state: FormatToolbarState | null;
+    showAI?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -69,6 +72,7 @@ const emit = defineEmits<{
     calloutIcon: [icon: string | null];
     tableStyle: [patch: Partial<TableStyle>];
     cellBackground: [color: string | null];
+    askAI: [];
 }>();
 
 const TURN_INTO: Array<{ type: BlockType; label: string; icon: unknown }> = [
@@ -82,6 +86,7 @@ const TURN_INTO: Array<{ type: BlockType; label: string; icon: unknown }> = [
     { type: 'toggle', label: 'Toggle list', icon: ChevronRight },
     { type: 'quote', label: 'Quote', icon: Quote },
     { type: 'callout', label: 'Callout', icon: Lightbulb },
+    { type: 'button', label: 'Button', icon: SquareMousePointer },
 ];
 
 const turnIntoOpen = ref(false);
@@ -190,6 +195,10 @@ const tableActionsDisabled = () => disabled() || !isTable();
                     />
                 </button>
             </EditorToolbarPopover>
+
+            <EditorToolbarButton v-if="showAI" title="Ask AI" @click="emit('askAI')">
+                <Sparkles class="size-3.5" />
+            </EditorToolbarButton>
 
             <EditorToolbarSeparator />
 

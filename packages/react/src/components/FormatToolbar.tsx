@@ -25,6 +25,8 @@ import {
   Heading3,
   CheckSquare,
   Lightbulb,
+  SquareMousePointer,
+  Sparkles,
   Underline,
 } from 'lucide-react'
 import type { BlockType, MarkName, TableStyle } from '@xproeditor/core'
@@ -42,6 +44,7 @@ export type { FormatToolbarAlign, FormatToolbarState }
 
 export interface FormatToolbarProps {
   state: FormatToolbarState | null
+  showAI?: boolean
   onMark: (mark: MarkName, value: boolean | string | null) => void
   onTurnInto: (type: BlockType) => void
   onIndent: () => void
@@ -51,6 +54,7 @@ export interface FormatToolbarProps {
   onCalloutIcon: (icon: string | null) => void
   onTableStyle: (patch: Partial<TableStyle>) => void
   onCellBackground: (color: string | null) => void
+  onAskAI?: () => void
 }
 
 const TURN_INTO: Array<{ type: BlockType; label: string; icon: typeof Type }> = [
@@ -64,10 +68,12 @@ const TURN_INTO: Array<{ type: BlockType; label: string; icon: typeof Type }> = 
   { type: 'toggle', label: 'Toggle list', icon: ChevronRight },
   { type: 'quote', label: 'Quote', icon: Quote },
   { type: 'callout', label: 'Callout', icon: Lightbulb },
+  { type: 'button', label: 'Button', icon: SquareMousePointer },
 ]
 
 export function FormatToolbar({
   state,
+  showAI,
   onMark,
   onTurnInto,
   onIndent,
@@ -77,6 +83,7 @@ export function FormatToolbar({
   onCalloutIcon,
   onTableStyle,
   onCellBackground,
+  onAskAI,
 }: FormatToolbarProps) {
   const [turnIntoOpen, setTurnIntoOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
@@ -175,6 +182,12 @@ export function FormatToolbar({
             )
           })}
         </ToolbarPopover>
+
+        {showAI && onAskAI && (
+          <ToolbarButton title="Ask AI" onClick={onAskAI}>
+            <Sparkles className="size-3.5" />
+          </ToolbarButton>
+        )}
 
         <ToolbarSeparator />
 

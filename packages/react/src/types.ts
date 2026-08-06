@@ -19,7 +19,7 @@ export interface FormatToolbarState {
   cellBackground?: string | null
 }
 
-export type SlashGroup = 'basic' | 'lists' | 'media' | 'advanced'
+export type SlashGroup = 'basic' | 'lists' | 'media' | 'advanced' | 'ai'
 
 export interface SlashItem {
   id: string
@@ -31,6 +31,8 @@ export interface SlashItem {
   group: SlashGroup
   /** After applying the block, open the icon picker on this tab. */
   pickIcon?: 'emoji' | 'icon'
+  /** Non-block action (e.g. open AI menu). */
+  action?: 'ai'
 }
 
 export interface BlockItemHandle {

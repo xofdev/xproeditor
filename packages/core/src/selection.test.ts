@@ -116,6 +116,29 @@ describe('extractTextRangeAsBlocks', () => {
     expect(extracted[0].content).toEqual([{ text: 'Title' }])
     expect(extracted[1].content).toEqual([{ text: 'bo' }])
   })
+
+  it('includes non-text blocks between text endpoints', () => {
+    const blocks = [
+      p('a', 'hello'),
+      createBlock('divider', { id: 'd' }),
+      createBlock('image', { id: 'img', props: { url: 'https://example.com/x.png' } }),
+      p('b', 'world'),
+    ]
+    const range = {
+      anchor: { blockId: 'a', offset: 0 },
+      focus: { blockId: 'b', offset: 5 },
+    }
+
+    const extracted = extractTextRangeAsBlocks(range, blocks, blocks)
+
+    expect(extracted.map(b => b.type)).toEqual([
+      'paragraph',
+      'divider',
+      'image',
+      'paragraph',
+    ])
+    expect(extracted[2].props.url).toBe('https://example.com/x.png')
+  })
 })
 
 describe('applyMarkToTextRange', () => {

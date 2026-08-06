@@ -22,13 +22,16 @@ describe('button block model', () => {
       props: { url: 'https://example.com', openInNewTab: true },
     })
     const html = blocksToHtmlContent([block])
-    expect(html).toContain('<a href="https://example.com" target="_blank" rel="noopener noreferrer">Visit site</a>')
+    expect(html).toContain('data-xpe-type="button"')
+    expect(html).toContain('href="https://example.com"')
+    expect(html).toContain('target="_blank"')
+    expect(html).toContain('Visit site')
   })
 
   it('exports a button with no url as plain text', () => {
     const block = createBlock('button', { content: [{ text: 'No link yet' }] })
     const html = blocksToHtmlContent([block])
-    expect(html).not.toContain('<a ')
+    expect(html).toContain('data-xpe-type="button"')
     expect(html).toContain('No link yet')
   })
 

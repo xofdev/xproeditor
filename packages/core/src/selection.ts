@@ -264,22 +264,96 @@ export function deleteTextRange(
   }
 }
 
+/**
+ * True when a block sits inside a managed cross-block range (including
+ * non-text blocks between the text endpoints — images, code, dividers, etc.).
+ */
+export function isBlockCoveredByTextRange(
+  blockId: string,
+  range: TextRangeSelection,
+  blocks: Block[],
+  visibleBlocks: Block[],
+): boolean {
+  const normalized = normalizeTextRange(range, visibleBlocks)
+
+  if (!normalized || isTextRangeCollapsed(range, visibleBlocks)) {
+    return false
+  }
+
+  const startIdx = blocks.findIndex(b => b.id === normalized.startBlockId)
+  const endIdx = blocks.findIndex(b => b.id === normalized.endBlockId)
+  const idx = blocks.findIndex(b => b.id === blockId)
+
+  if (startIdx === -1 || endIdx === -1 || idx === -1) {
+    return false
+  }
+
+  if (idx < startIdx || idx > endIdx) {
+    return false
+  }
+
+  const block = blocks[idx]
+
+  if (!isTextBlock(block.type)) {
+    return true
+  }
+
+  return isBlockFullySelected(blockId, range, blocks, visibleBlocks)
+    || getPartialTextHighlight(blockId, range, blocks, visibleBlocks) !== null
+}
+
 /** Extract selected content as blocks for clipboard (cloned with new ids). */
 export function extractTextRangeAsBlocks(
   range: TextRangeSelection,
   blocks: Block[],
   visibleBlocks: Block[],
 ): Block[] {
-  const segments = getTextRangeSegments(range, blocks, visibleBlocks)
+  const normalized = normalizeTextRange(range, visibleBlocks)
 
-  return segments.map((segment) => {
-    const content = sliceSpans(segment.block.content, segment.start, segment.end)
+  if (!normalized || isTextRangeCollapsed(range, visibleBlocks)) {
+    return []
+  }
 
-    return cloneBlock({
-      ...segment.block,
-      content,
-    })
-  })
+  const startIdx = blocks.findIndex(b => b.id === normalized.startBlockId)
+  const endIdx = blocks.findIndex(b => b.id === normalized.endBlockId)
+
+  if (startIdx === -1 || endIdx === -1) {
+    return []
+  }
+
+  const result: Block[] = []
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const block = blocks[i]
+
+    if (!isTextBlock(block.type)) {
+      result.push(cloneBlock(block))
+      continue
+    }
+
+    const len = blockLength(block)
+    let start = 0
+    let end = len
+
+    if (i === startIdx) {
+      start = normalized.startOffset
+    }
+
+    if (i === endIdx) {
+      end = normalized.endOffset
+    }
+
+    if (end <= start) {
+      continue
+    }
+
+    result.push(cloneBlock({
+      ...block,
+      content: sliceSpans(block.content, start, end),
+    }))
+  }
+
+  return result
 }
 
 /** True when every segment in range is a full block (whole-block selection). */

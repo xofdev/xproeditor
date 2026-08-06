@@ -17,6 +17,7 @@ import {
   getSelectionClientRect,
   getTextRangeSegments,
   htmlToBlocks,
+  isBlockCoveredByTextRange,
   isBlockFullySelected,
   isCrossBlockTextRange,
   isTextBlock,
@@ -36,9 +37,12 @@ import {
   sliceSpans,
   spansToText,
   splitSpansAt,
+  tryParseMarkdownToBlocks,
   writeBlocksToClipboardData,
 } from '@xproeditor/core'
 import type {
+  AICommand,
+  AITransport,
   Block,
   BlockType,
   InlineSpan,
@@ -68,6 +72,11 @@ export interface UseBlockEditorOptions {
   readonly?: boolean
   /** Floating bubble toolbar on text selection (Notion-like). */
   showBubbleToolbar?: boolean
+  /** Optional pluggable AI agent (slash `/ai` + toolbar). */
+  ai?: {
+    transport: AITransport
+    commands?: AICommand[]
+  }
   onChange?: (blocks: Block[]) => void
   onFormatState?: (state: FormatToolbarState | null) => void
 }
@@ -130,7 +139,7 @@ const MD_PATTERNS: Array<{ prefix: string; type: BlockType }> = [
  * A `version` counter forces re-render after in-place mutations.
  */
 export function useBlockEditor(options: UseBlockEditorOptions) {
-  const { readonly = false, editorDir, showBubbleToolbar = false, upload, pickMedia } = options
+  const { readonly = false, editorDir, showBubbleToolbar = false, upload, pickMedia, ai } = options
   const onChangeRef = useRef(options.onChange)
   onChangeRef.current = options.onChange
   const onFormatStateRef = useRef(options.onFormatState)
@@ -163,6 +172,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     tab: 'emoji' | 'icon'
   } | null>(null)
   const [bubble, setBubble] = useState<BubbleState | null>(null)
+  const [aiMenu, setAiMenu] = useState<{ position: { x: number; y: number } } | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ id: string; position: 'before' | 'after' } | null>(
     null,
@@ -341,6 +351,15 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     const segment = segments.find((s) => s.blockId === id)
 
     return segment ? { start: segment.start, end: segment.end } : null
+  }
+
+  /** Non-text blocks (media/code/divider/table) highlighted inside a multi-block range. */
+  function isBlockChromeSelected(id: string): boolean {
+    if (selectedBlockId === id) return true
+    if (!hasActiveManagedSelection() || !textRangeSelection) return false
+    const block = byId(id)
+    if (!block || isTextBlock(block.type)) return false
+    return isBlockCoveredByTextRange(id, textRangeSelection, blocksRef.current, visibleBlocks)
   }
 
   function clearTextRangeSelection(): void {
@@ -568,9 +587,55 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     })
   }
 
+  function openAIMenu(position?: { x: number; y: number }) {
+    if (!ai?.transport || readonly) return
+    closeSlash()
+    setBubble(null)
+    const pos = position ?? slashPosition()
+    setAiMenu({ position: { x: pos.x, y: pos.y } })
+  }
+
+  function closeAIMenu() {
+    setAiMenu(null)
+  }
+
+  function getAISelectionBlocks(): Block[] {
+    if (hasActiveManagedSelection() && textRangeSelection) {
+      return extractTextRangeAsBlocks(textRangeSelection, blocksRef.current, visibleBlocks)
+    }
+    if (focusedBlockId) {
+      const b = byId(focusedBlockId)
+      return b ? [b] : []
+    }
+    if (selectedBlockId) {
+      const b = byId(selectedBlockId)
+      return b ? [b] : []
+    }
+    return []
+  }
+
+  function replaceDocumentBlocks(next: Block[], focusId: string | null) {
+    blocksRef.current.splice(0, blocksRef.current.length, ...next)
+    ensureNotEmpty()
+    pushHistory(true)
+    clearTextRangeSelection()
+    if (focusId) {
+      const b = byId(focusId)
+      if (b && isTextBlock(b.type)) focusBlock(focusId, 'end')
+      else if (b) selectBlock(focusId)
+    }
+  }
+
   function onSlashSelect(item: SlashItem) {
     const state = slashState
     if (!state) return
+
+    if (item.action === 'ai') {
+      const pos = state.position
+      closeSlash()
+      openAIMenu({ x: pos.x, y: pos.y })
+      return
+    }
 
     const block = byId(state.blockId)
     closeSlash()
@@ -919,8 +984,13 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     }
 
     const at = payload.offsets.start
-    const pastedBlocks =
+    let pastedBlocks =
       payload.html && payload.html.includes('<') ? htmlToBlocks(payload.html) : []
+
+    if (pastedBlocks.length === 0) {
+      const fromMd = tryParseMarkdownToBlocks(payload.text)
+      if (fromMd?.length) pastedBlocks = fromMd
+    }
 
     if (pastedBlocks.length === 0) {
       const text = payload.text
@@ -1150,12 +1220,30 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     if (hasActiveManagedSelection() || selectedBlockId) {
       const html = e.clipboardData.getData('text/html')
       const text = e.clipboardData.getData('text/plain')
+      const mdMime = e.clipboardData.getData('text/markdown')
+      const fromMd = tryParseMarkdownToBlocks(mdMime || text)
+      const prioritizeMd = !html || !html.includes('<') || !!mdMime
+
+      if (fromMd && prioritizeMd) {
+        e.preventDefault()
+        e.stopPropagation()
+        insertBlocksFromClipboard(fromMd)
+        return
+      }
+
       const external = html && html.includes('<') ? htmlToBlocks(html) : []
 
       if (external.length > 0) {
         e.preventDefault()
         e.stopPropagation()
         insertBlocksFromClipboard(external)
+        return
+      }
+
+      if (fromMd) {
+        e.preventDefault()
+        e.stopPropagation()
+        insertBlocksFromClipboard(fromMd)
         return
       }
 
@@ -2322,6 +2410,8 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     dropTarget,
     slashState,
     slashMenuApiRef,
+    aiMenu,
+    ai,
     emojiTriggerState,
     bubble,
     iconPickerRequest,
@@ -2333,6 +2423,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     editorDir,
     setItemRef,
     textHighlightForBlock,
+    isBlockChromeSelected,
     placeholderFor,
     formatToolbarState,
     canUndo,
@@ -2348,6 +2439,10 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     setFocusedCalloutIcon,
     patchTableStyle: patchTableStyleForFocused,
     patchTableCellBackground: patchTableCellBackgroundForFocused,
+    openAIMenu,
+    closeAIMenu,
+    getAISelectionBlocks,
+    replaceDocumentBlocks,
     focusFirst: () => {
       const first = visibleBlocks[0]
       if (first) focusBlock(first.id, 'start')

@@ -19,6 +19,7 @@ import {
   CheckSquare,
   Quote,
   Lightbulb,
+  SquareMousePointer,
   Underline,
 } from 'lucide-react'
 import type { BlockType, MarkName } from '@xproeditor/core'
@@ -49,6 +50,7 @@ const TURN_INTO: Array<{ type: BlockType; label: string; icon: typeof Type }> = 
   { type: 'to_do', label: 'To-do', icon: CheckSquare },
   { type: 'quote', label: 'Quote', icon: Quote },
   { type: 'callout', label: 'Callout', icon: Lightbulb },
+  { type: 'button', label: 'Button', icon: SquareMousePointer },
 ]
 
 type Panel = 'none' | 'link' | 'color' | 'turninto'

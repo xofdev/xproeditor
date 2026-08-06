@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Link2, SquareArrowOutUpRight } from 'lucide-vue-next'
-import { ref, computed } from 'vue'
-import type { Block, InlineSpan, MarkName } from '@xproeditor/core'
+import { AlignCenter, AlignLeft, AlignRight, Link2, SquareArrowOutUpRight } from 'lucide-vue-next'
+import { computed, onMounted, ref, watch } from 'vue'
+import { BUTTON_COLOR_PRESETS, type Block, type InlineSpan, type MarkName } from '@xproeditor/core'
 import { Button, Input, Popover, PopoverContent, PopoverTrigger } from '../ui'
 import EditorTextBlock from './EditorTextBlock.vue'
 
@@ -39,14 +39,69 @@ const ALIGN_TO_JUSTIFY: Record<string, string> = {
 }
 
 const open = ref(false)
+const urlDraft = ref(props.block.props.url ?? '')
+const labelDraft = ref(props.block.content.map(s => s.text).join('') || '')
+
 const variant = computed(() => STYLE_TO_VARIANT[props.block.props.buttonStyle ?? 'primary'] ?? 'default')
 const justify = computed(() => ALIGN_TO_JUSTIFY[props.block.props.align ?? 'left'] ?? 'justify-start')
+const accent = computed(() => props.block.props.color || undefined)
+const labelText = computed(() => props.block.content.map(s => s.text).join(''))
+
+watch(() => props.block.props.url, (v) => { urlDraft.value = v ?? '' })
+watch(labelText, (v) => { labelDraft.value = v })
+
+onMounted(() => {
+  if (!props.readonly && !(props.block.props.url ?? '') && !labelText.value.trim()) {
+    open.value = true
+  }
+})
+
+function contrastText(hex: string): string {
+  const raw = hex.replace('#', '')
+  if (raw.length !== 6) return '#ffffff'
+  const r = parseInt(raw.slice(0, 2), 16)
+  const g = parseInt(raw.slice(2, 4), 16)
+  const b = parseInt(raw.slice(4, 6), 16)
+  const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luma > 0.62 ? '#111827' : '#ffffff'
+}
+
+const previewStyle = computed(() => {
+  const color = accent.value
+  if (!color) return undefined
+  if (variant.value === 'default') {
+    return {
+      background: color,
+      borderColor: color,
+      color: contrastText(color),
+      '--xpe-btn-accent': color,
+    }
+  }
+  if (variant.value === 'outline') {
+    return { borderColor: color, color, '--xpe-btn-accent': color }
+  }
+  return { color, '--xpe-btn-accent': color }
+})
 
 const STYLES = ['primary', 'outline', 'ghost'] as const
 const ALIGNS = ['left', 'center', 'right'] as const
+const ALIGN_ICONS = { left: AlignLeft, center: AlignCenter, right: AlignRight }
 
 function capitalize(s: string) {
   return s[0].toUpperCase() + s.slice(1)
+}
+
+function commitUrl() {
+  const next = urlDraft.value.trim()
+  if (next !== (props.block.props.url ?? '')) {
+    emit('patch', { url: next })
+  }
+}
+
+function commitLabel() {
+  if (labelDraft.value !== labelText.value) {
+    emit('input', [{ text: labelDraft.value }], labelDraft.value.length)
+  }
 }
 
 defineExpose({
@@ -60,7 +115,7 @@ const textRef = ref<InstanceType<typeof EditorTextBlock> | null>(null)
 
 <template>
   <div class="my-1 flex items-center gap-1.5" :class="justify" @click="emit('select')">
-    <div class="ebtn-preview" :class="`ebtn-preview--${variant}`">
+    <div class="ebtn-preview" :class="`ebtn-preview--${variant}`" :style="previewStyle">
       <EditorTextBlock
         ref="textRef"
         :block="block"
@@ -86,21 +141,32 @@ const textRef = ref<InstanceType<typeof EditorTextBlock> | null>(null)
         <button
           type="button"
           class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)] hover:text-[var(--xpe-foreground)]"
-          title="Button link & style"
-          @click="open = !open"
+          title="Button settings"
+          aria-label="Button settings"
+          @click.stop="open = !open"
         >
           <Link2 class="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start">
-        <div class="flex flex-col gap-2.5 p-3 w-64">
+        <div class="flex flex-col gap-3 p-3 w-72">
+          <label class="flex flex-col gap-1">
+            <span class="text-[11px] font-medium text-[var(--xpe-muted-foreground)]">Label</span>
+            <Input
+              placeholder="Button"
+              v-model="labelDraft"
+              @blur="commitLabel"
+              @keydown.enter.prevent="commitLabel"
+            />
+          </label>
+
           <label class="flex flex-col gap-1">
             <span class="text-[11px] font-medium text-[var(--xpe-muted-foreground)]">Link URL</span>
             <Input
-              type="url"
               placeholder="https://..."
-              :model-value="block.props.url ?? ''"
-              @input="emit('patch', { url: ($event.target as HTMLInputElement).value })"
+              v-model="urlDraft"
+              @blur="commitUrl"
+              @keydown.enter.prevent="commitUrl"
             />
           </label>
 
@@ -114,6 +180,30 @@ const textRef = ref<InstanceType<typeof EditorTextBlock> | null>(null)
             Open in new tab
           </label>
 
+          <div class="flex flex-col gap-1.5">
+            <span class="text-[11px] font-medium text-[var(--xpe-muted-foreground)]">Color</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                title="Theme default"
+                class="h-6 w-6 rounded-full border border-[var(--xpe-border)]"
+                :class="!accent ? 'ring-2 ring-[var(--xpe-primary)] ring-offset-1' : ''"
+                style="background: var(--xpe-primary, #4f46e5)"
+                @click="emit('patch', { color: '' })"
+              />
+              <button
+                v-for="c in BUTTON_COLOR_PRESETS"
+                :key="c"
+                type="button"
+                :title="c"
+                class="h-6 w-6 rounded-full border border-[var(--xpe-border)]"
+                :class="accent === c ? 'ring-2 ring-[var(--xpe-primary)] ring-offset-1' : ''"
+                :style="{ background: c }"
+                @click="emit('patch', { color: c })"
+              />
+            </div>
+          </div>
+
           <div class="flex flex-col gap-1">
             <span class="text-[11px] font-medium text-[var(--xpe-muted-foreground)]">Style</span>
             <div class="flex gap-1">
@@ -121,7 +211,7 @@ const textRef = ref<InstanceType<typeof EditorTextBlock> | null>(null)
                 v-for="s in STYLES"
                 :key="s"
                 size="sm"
-                :variant="block.props.buttonStyle === s ? 'default' : 'outline'"
+                :variant="(block.props.buttonStyle ?? 'primary') === s ? 'default' : 'outline'"
                 @click="emit('patch', { buttonStyle: s })"
               >
                 {{ capitalize(s) }}
@@ -137,9 +227,10 @@ const textRef = ref<InstanceType<typeof EditorTextBlock> | null>(null)
                 :key="a"
                 size="sm"
                 :variant="(block.props.align ?? 'left') === a ? 'default' : 'outline'"
+                :aria-label="a"
                 @click="emit('patch', { align: a })"
               >
-                {{ capitalize(a) }}
+                <component :is="ALIGN_ICONS[a]" class="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
@@ -150,9 +241,6 @@ const textRef = ref<InstanceType<typeof EditorTextBlock> | null>(null)
 </template>
 
 <style scoped>
-/* Mirrors ui/Button.vue's look — can't reuse its scoped .xpe-btn classes
-   directly since this is a plain div, not a <Button>, and Vue scoped CSS
-   only applies to elements rendered by the component that declares it. */
 .ebtn-preview {
   display: inline-flex;
   align-items: center;
@@ -166,20 +254,18 @@ const textRef = ref<InstanceType<typeof EditorTextBlock> | null>(null)
   font-size: 13px;
 }
 .ebtn-preview--default {
-  background: var(--xpe-primary, #4f46e5);
+  background: var(--xpe-btn-accent, var(--xpe-primary, #4f46e5));
   color: var(--xpe-primary-foreground, #fff);
 }
 .ebtn-preview--outline {
   background: var(--xpe-surface, #fff);
-  border-color: var(--xpe-border, #e5e7eb);
-  color: var(--xpe-foreground, #374151);
+  border-color: var(--xpe-btn-accent, var(--xpe-border, #e5e7eb));
+  color: var(--xpe-btn-accent, var(--xpe-foreground, #374151));
 }
 .ebtn-preview--ghost {
   background: transparent;
-  color: var(--xpe-foreground, #374151);
+  color: var(--xpe-btn-accent, var(--xpe-foreground, #374151));
 }
-/* EditorTextBlock's .etb always sets its own color; force the label to
-   inherit the button variant's contrast-correct text color instead. */
 .ebtn-preview :deep(.etb) {
   color: inherit;
 }

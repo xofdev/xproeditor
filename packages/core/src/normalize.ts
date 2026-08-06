@@ -408,6 +408,37 @@ out.push(createBlock('table', { props: { table: normalizeTableData({ hasHeader, 
     case 'div':
     case 'section':
     case 'article': {
+      if (el.getAttribute('data-xpe-type') === 'button') {
+        const styleAttr = el.getAttribute('data-xpe-style')
+        const buttonStyle =
+          styleAttr === 'outline' || styleAttr === 'ghost' || styleAttr === 'primary'
+            ? styleAttr
+            : 'primary'
+        const alignAttr = el.getAttribute('data-xpe-align')
+        const align =
+          alignAttr === 'center' || alignAttr === 'right' || alignAttr === 'left'
+            ? alignAttr
+            : 'left'
+        const url =
+          el.getAttribute('data-xpe-url')
+          ?? el.querySelector('a')?.getAttribute('href')
+          ?? ''
+        const color = el.getAttribute('data-xpe-color') || undefined
+        const openInNewTab = el.getAttribute('data-xpe-newtab') === 'true'
+        const labelEl = el.querySelector('a, span') ?? el
+        out.push(createBlock('button', {
+          content: normalizeSpans(parseInlineNodes(labelEl.childNodes)),
+          props: {
+            url,
+            buttonStyle,
+            align,
+            openInNewTab,
+            ...(color ? { color } : {}),
+          },
+        }))
+        break
+      }
+
       const children = Array.from(el.children)
 
       if (children.length === 0) {

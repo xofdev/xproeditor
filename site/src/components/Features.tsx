@@ -1,63 +1,88 @@
 import {
   Blocks,
+  ClipboardPaste,
   Keyboard,
   Layers,
   Palette,
+  Sparkles,
   Table2,
-  Undo2,
   type LucideIcon,
 } from 'lucide-react'
 
-const FEATURES: { icon: LucideIcon; title: string; desc: string }[] = [
+const FEATURES: { icon: LucideIcon; title: string; desc: string; points: string[] }[] = [
   {
     icon: Layers,
-    title: 'Framework-agnostic core',
-    desc: '@xproeditor/core owns the block model, selection math, and clipboard logic — zero UI, zero framework dependency.',
-  },
-  {
-    icon: Blocks,
-    title: 'Every block you expect',
-    desc: 'Headings, lists, to-dos, toggles, quotes, callouts, code with syntax highlighting, dividers, buttons, images, video, audio, file attachments, and tables.',
+    title: 'One core, two adapters',
+    desc: 'Shared block model, selection, and clipboard in @xproeditor/core — Vue and React stay behavior-identical.',
+    points: ['@xproeditor/core', '@xproeditor/vue', '@xproeditor/react'],
   },
   {
     icon: Keyboard,
-    title: 'Two editing styles',
-    desc: 'A classic sticky toolbar, or a Notion-like floating bubble toolbar with a / slash menu — one prop switches between them.',
+    title: 'Two toolbar modes',
+    desc: 'Sticky format toolbar, Notion-like floating bubble, both, or none — switch with one prop.',
+    points: ['toolbar="floating"', 'toolbar="fixed"', '/ slash menu'],
+  },
+  {
+    icon: ClipboardPaste,
+    title: 'Clipboard & Markdown',
+    desc: 'Drag or shift-select across blocks — including images and tables — then copy, cut, delete, or paste Markdown.',
+    points: ['Multi-block copy/cut', 'Markdown paste', 'HTML + JSON clipboard'],
+  },
+  {
+    icon: Sparkles,
+    title: 'Ask AI (pluggable)',
+    desc: 'Host supplies any LLM transport. Users get /ai, toolbar entry, streaming drafts, and Accept / Reject.',
+    points: ['ai={{ transport }}', 'Improve / continue', 'No API keys in the package'],
   },
   {
     icon: Table2,
-    title: 'Real tables',
-    desc: 'Merge and unmerge cells, resize, per-cell backgrounds and borders — not just a placeholder block.',
-  },
-  {
-    icon: Undo2,
-    title: 'Undo/redo that just works',
-    desc: 'Debounced history, markdown shortcuts, rich multi-block clipboard, cross-block text selection.',
+    title: 'Tables & media that work',
+    desc: 'Merge cells, borders, fills — plus image, video, audio, file, and CTA buttons with real settings UX.',
+    points: ['Cell merge', 'Embeds', 'Button color & link'],
   },
   {
     icon: Palette,
-    title: 'Themeable, not opinionated',
-    desc: 'Ships a precompiled stylesheet themeable via CSS variables — no Tailwind or Radix required downstream.',
+    title: 'Themeable CSS vars',
+    desc: 'Precompiled stylesheet. Restyle with --xpe-* variables — no Tailwind or Radix lock-in for consumers.',
+    points: ['--xpe-primary', 'Dark via .xpe-dark', 'RTL ready'],
   },
 ]
 
 export function Features() {
   return (
-    <section>
+    <section id="features">
       <div className="container">
         <div className="section-head">
-          <span className="eyebrow">Why XProEditor</span>
-          <h2>Built for real documents</h2>
-          <p>Everything a content-heavy app needs, out of the box.</p>
+          <span className="eyebrow">Capabilities</span>
+          <h2>Built for product teams shipping docs</h2>
+          <p>Not a toy demo editor — selection, paste, AI, and theming are first-class.</p>
         </div>
-        <div className="feature-grid">
-          {FEATURES.map(({ icon: Icon, title, desc }) => (
-            <div className="feature-card" key={title}>
+
+        <div className="capability-strip" aria-label="Quick capabilities">
+          <span>17 blocks</span>
+          <span>Ask AI</span>
+          <span>Markdown paste</span>
+          <span>Multi-block select</span>
+          <span>Vue + React</span>
+          <span>MIT</span>
+        </div>
+
+        <div className="feature-grid feature-grid--rich">
+          {FEATURES.map(({ icon: Icon, title, desc, points }) => (
+            <div className="feature-card feature-card--rich" key={title}>
               <span className="feature-icon">
                 <Icon size={18} />
               </span>
               <h3>{title}</h3>
               <p>{desc}</p>
+              <ul className="feature-points">
+                {points.map((p) => (
+                  <li key={p}>
+                    <Blocks size={12} aria-hidden />
+                    <code>{p}</code>
+                  </li>
+                ))}
+              </ul>
             </div>
           ))}
         </div>

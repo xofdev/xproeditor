@@ -84,6 +84,19 @@ function inlineHtml(block: Block): string {
   return spansToHtml(block.content)
 }
 
+function buttonAccentStyle(block: Block): Record<string, string> | undefined {
+  const accent = block.props.color
+  if (!accent) return undefined
+  const variant = block.props.buttonStyle ?? 'primary'
+  if (variant === 'primary') {
+    return { background: accent, borderColor: accent, color: '#fff', '--xpe-btn-accent': accent }
+  }
+  if (variant === 'outline') {
+    return { borderColor: accent, color: accent, '--xpe-btn-accent': accent }
+  }
+  return { color: accent, '--xpe-btn-accent': accent }
+}
+
 function highlightCode(code: string, language?: string): string {
   try {
     if (language && language !== 'plaintext' && hljs.getLanguage(language)) {
@@ -309,12 +322,14 @@ function safeVideoEmbedUrl(block: Block): string {
           :rel="block.props.openInNewTab ? 'noopener noreferrer' : undefined"
           class="db-button"
           :class="`db-button--${block.props.buttonStyle ?? 'primary'}`"
+          :style="buttonAccentStyle(block)"
           v-html="inlineHtml(block) || 'Button'"
         />
         <span
           v-else
           class="db-button"
           :class="`db-button--${block.props.buttonStyle ?? 'primary'}`"
+          :style="buttonAccentStyle(block)"
           v-html="inlineHtml(block) || 'Button'"
         />
       </div>

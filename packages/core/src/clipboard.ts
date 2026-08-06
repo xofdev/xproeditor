@@ -113,12 +113,27 @@ return ''
     case 'button': {
       const url = block.props.url ?? ''
       const label = spansToHtml(block.content) || 'Button'
+      const style = block.props.buttonStyle ?? 'primary'
+      const align = block.props.align ?? 'left'
+      const color = block.props.color ?? ''
+      const newTab = block.props.openInNewTab ? 'true' : 'false'
+      const attrs = [
+        'data-xpe-type="button"',
+        `data-xpe-style="${escapeHtml(style)}"`,
+        `data-xpe-align="${escapeHtml(align)}"`,
+        `data-xpe-newtab="${newTab}"`,
+        url ? `data-xpe-url="${escapeHtml(url)}"` : '',
+        color ? `data-xpe-color="${escapeHtml(color)}"` : '',
+      ].filter(Boolean).join(' ')
+      const alignStyle = `text-align:${align};`
+      const colorStyle = color ? `--xpe-btn-accent:${escapeHtml(color)};` : ''
       const target = block.props.openInNewTab ? ' target="_blank" rel="noopener noreferrer"' : ''
-      const alignStyle = block.props.align ? `text-align:${block.props.align};` : ''
 
-      return url
-        ? `<p style="${alignStyle}"><a href="${escapeHtml(url)}"${target}>${label}</a></p>`
-        : `<p style="${alignStyle}">${label}</p>`
+      if (url) {
+        return `<div ${attrs} style="${alignStyle}${colorStyle}"><a href="${escapeHtml(url)}"${target} class="xpe-btn xpe-btn--${escapeHtml(style)}">${label}</a></div>`
+      }
+
+      return `<div ${attrs} style="${alignStyle}${colorStyle}"><span class="xpe-btn xpe-btn--${escapeHtml(style)}">${label}</span></div>`
     }
     case 'table': {
       const table = normalizeTableData(block.props.table)

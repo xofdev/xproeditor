@@ -52,6 +52,15 @@ export function Nav() {
         <a className="nav-link" href="#demo">
           Demo
         </a>
+        <a className="nav-link" href="#use-cases">
+          Use cases
+        </a>
+        <a className="nav-link" href="#blocks">
+          Blocks
+        </a>
+        <a className="nav-link" href="#features">
+          Features
+        </a>
         <a className="nav-link" href="#install">
           Install
         </a>
