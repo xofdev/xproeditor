@@ -1,5 +1,18 @@
 # @xproeditor/core
 
+## 0.4.0
+
+### Minor Changes
+
+- 77f7845: Polish code-block chrome (language control, soft-wrap via a `wrap` prop) and table editing UX (sizing, cell controls, style panel), with matching styles in both adapters.
+- 77f7845: Improve multi-block selection: a shared formatting popover when several blocks are selected, richer block context menus, and core helpers for cross-block text ranges, marks, staged Select All, and document-level undo/redo shortcuts.
+- 77f7845: Add collapsible **toggle headings** (`toggle_heading_1`–`3`) alongside toggle lists, with slash / turn-into support and helpers for subtree clone, remove, and collapsed visibility filtering.
+- 77f7845: Add a **web bookmark** block with link-preview cards (title, description, favicon, image). Hosts can optionally pass `fetchBookmarkMeta` to hydrate Open Graph metadata when a URL is pasted or edited.
+
+### Patch Changes
+
+- 77f7845: Fix undo/redo when focus is inside a contenteditable or field, Select All staging across blocks, applying marks over a multi-block selection, link editing edge cases, bookmark URL re-edit, table width persistence, and dark-mode token gaps in editor chrome.
+
 ## 0.3.0
 
 ### Minor Changes
