@@ -20,11 +20,16 @@ classes are just standard Tailwind utilities (`flex`, `rounded-xl`, `text-gray-6
 
 Because preflight is disabled, the stylesheet carries one narrow reset of its
 own: `<button>` elements *inside the editor's own roots* (`.xpe-pro-editor`,
-`.block-editor`, `.doc-blocks`, `.xpe-menu`, `.xpe-popover-content`) have their
-user-agent background and border cleared, so the browser's default button
-chrome doesn't show through on the editor's controls in dark mode. It is
-written with `:where(...)`, so it carries **zero specificity** — any rule of
-your own, however weak, still wins.
+`.block-editor`, `.doc-blocks`, `.xpe-menu`, `.xpe-popover-content`,
+`.xpe-ai-menu`, `.xpe-emoji-picker`) have their user-agent background, border,
+and `font-family` cleared/inherited, so the browser's default button chrome
+doesn't show through (and group titles don't pick a different face than menu
+rows). It is written with `:where(...)`, so it carries **zero specificity** —
+any rule of your own, however weak, still wins.
+
+Floating UI is portaled to `document.body`, so it also re-applies `--xpe-font`
+from the editor via `syncThemeVars`. Override `--xpe-font` on a theme ancestor
+if you want a custom UI typeface for menus and the canvas.
 
 ## CSS variables
 
@@ -49,8 +54,13 @@ any ancestor of the editor:
   --xpe-danger: #ef4444;             /* validation errors */
   --xpe-danger-muted: #fef2f2;       /* tint behind destructive hover states */
   --xpe-radius: 12px;                /* corner radius of cards, menus, media */
-  --xpe-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+  --xpe-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.18), 0 4px 12px -4px rgb(0 0 0 / 0.08);
+  --xpe-font: ui-sans-serif, system-ui, sans-serif; /* menus, popovers, toolbars */
   --xpe-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --xpe-code-bg: #f4f6f8;            /* code block body */
+  --xpe-code-fg: #1f2937;            /* code text */
+  --xpe-code-header-bg: #e8ecf1;     /* code toolbar / language row */
+  --xpe-code-muted: #6b7280;         /* code chrome labels */
 }
 ```
 

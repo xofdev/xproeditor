@@ -11,14 +11,19 @@ import { UseCases } from './components/UseCases'
 export default function App() {
   return (
     <div className="site">
+      <a className="skip-link" href="#demo">
+        Skip to live demo
+      </a>
       <Nav />
-      <Hero />
-      <LiveDemo />
-      <UseCases />
-      <BlocksShowcase />
-      <Features />
-      <InstallTabs />
-      <Packages />
+      <main>
+        <Hero />
+        <LiveDemo />
+        <UseCases />
+        <BlocksShowcase />
+        <Features />
+        <InstallTabs />
+        <Packages />
+      </main>
       <Footer />
     </div>
   )

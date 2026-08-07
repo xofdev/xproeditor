@@ -106,6 +106,9 @@ Both `<ProEditor>` and `<BlockEditor>` accept:
   an image or video file; return the hosted URL.
 - `pickMedia?: (opts: { accept: string[]; title?: string }) => Promise<{ url, alt?, caption? } | null>` —
   hook up your own media library / asset picker.
+- `fetchBookmarkMeta?: (url: string) => Promise<{ title?, description?, favicon?, image? } | null>` —
+  optional helper for `/bookmark` cards (OG/title/favicon). Without it, users
+  can still paste a URL; the card just won’t auto-fill metadata.
 
 ## Next
 

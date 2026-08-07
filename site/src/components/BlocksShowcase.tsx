@@ -1,4 +1,5 @@
 import {
+  Bookmark,
   CheckSquare,
   Code2,
   FileText,
@@ -34,13 +35,15 @@ const BLOCKS: BlockInfo[] = [
   { icon: List, name: 'Bulleted list', slash: '/bullet', tip: 'Or - then space', group: 'Lists' },
   { icon: ListOrdered, name: 'Numbered list', slash: '/number', tip: 'Or 1. then space', group: 'Lists' },
   { icon: CheckSquare, name: 'To-do', slash: '/todo', tip: 'Or [] then space', group: 'Lists' },
-  { icon: ChevronRight, name: 'Toggle', slash: '/toggle', tip: 'Collapsible section', group: 'Lists' },
+  { icon: ChevronRight, name: 'Toggle', slash: '/toggle', tip: 'Collapsible list item', group: 'Lists' },
+  { icon: Heading1, name: 'Toggle heading', slash: '/toggle heading', tip: 'H1–H3 collapsible sections', group: 'Lists' },
   { icon: ImageIcon, name: 'Image', slash: '/image', tip: 'Upload, library, or URL', group: 'Media' },
   { icon: Video, name: 'Video', slash: '/video', tip: 'File or YouTube / Vimeo', group: 'Media' },
   { icon: Music, name: 'Audio', slash: '/audio', tip: 'Upload or link', group: 'Media' },
   { icon: Paperclip, name: 'File', slash: '/file', tip: 'Downloadable attachment', group: 'Media' },
-  { icon: Code2, name: 'Code', slash: '/code', tip: 'Syntax highlight + language', group: 'Advanced' },
-  { icon: Table2, name: 'Table', slash: '/table', tip: 'Merge cells, borders, fills', group: 'Advanced' },
+  { icon: Bookmark, name: 'Web bookmark', slash: '/bookmark', tip: 'Link card with title & preview', group: 'Media' },
+  { icon: Code2, name: 'Code', slash: '/code', tip: 'Language, wrap, and copy', group: 'Advanced' },
+  { icon: Table2, name: 'Table', slash: '/table', tip: 'Width, drag-select cells, merge', group: 'Advanced' },
   { icon: SquareMousePointer, name: 'Button', slash: '/button', tip: 'Label, link, color, style', group: 'Advanced' },
   { icon: Minus, name: 'Divider', slash: '/divider', tip: 'Or type ---', group: 'Advanced' },
   { icon: FileText, name: 'Ask AI', slash: '/ai', tip: 'Generate or rewrite — Accept / Reject', group: 'Advanced' },
@@ -50,13 +53,13 @@ const GROUPS = ['Text', 'Lists', 'Media', 'Advanced'] as const
 
 export function BlocksShowcase() {
   return (
-    <section id="blocks">
+    <section id="blocks" aria-labelledby="blocks-heading">
       <div className="container">
         <div className="section-head">
           <span className="eyebrow">Block types</span>
-          <h2>Everything you can insert with /</h2>
+          <h2 id="blocks-heading">Everything you can insert with /</h2>
           <p>
-            Seventeen block types in the document model — plus Ask AI as an agent overlay, not a
+            Eighteen block types in the document model — plus Ask AI as an agent overlay, not a
             block. Open the demo and type <code>/</code> to try any of these.
           </p>
         </div>

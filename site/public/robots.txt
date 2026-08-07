@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://xofdev.github.io/xproeditor/sitemap.xml

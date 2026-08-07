@@ -5,7 +5,7 @@ const REPO_URL = 'https://github.com/xofdev/xproeditor'
 
 function SunIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
     </svg>
@@ -14,7 +14,7 @@ function SunIcon() {
 
 function MoonIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
     </svg>
   )
@@ -32,7 +32,7 @@ export function Nav() {
     function onScroll() {
       setScrolled(window.scrollY > 4)
     }
-    window.addEventListener('scroll', onScroll)
+    window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
@@ -45,10 +45,12 @@ export function Nav() {
   return (
     <header className={`nav${scrolled ? ' scrolled' : ''}`}>
       <a className="nav-brand" href="#top">
-        <span className="nav-brand-mark">X</span>
-        XProEditor
+        <span className="nav-brand-mark" aria-hidden>
+          X
+        </span>
+        <span>XProEditor</span>
       </a>
-      <nav className="nav-links">
+      <nav className="nav-links" aria-label="Primary">
         <a className="nav-link" href="#demo">
           Demo
         </a>
@@ -82,7 +84,7 @@ export function Nav() {
           type="button"
           className="theme-toggle"
           title={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
-          aria-label="Toggle theme"
+          aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
           onClick={toggleTheme}
         >
           {theme === 'light' ? <MoonIcon /> : <SunIcon />}

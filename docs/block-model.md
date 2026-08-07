@@ -32,8 +32,9 @@ interface Block {
 type BlockType =
   | 'paragraph' | 'heading_1' | 'heading_2' | 'heading_3'
   | 'bulleted_list_item' | 'numbered_list_item' | 'to_do' | 'toggle'
+  | 'toggle_heading_1' | 'toggle_heading_2' | 'toggle_heading_3'
   | 'quote' | 'callout' | 'code' | 'divider'
-  | 'image' | 'video' | 'audio' | 'file' | 'table' | 'button'
+  | 'image' | 'video' | 'audio' | 'file' | 'table' | 'button' | 'bookmark'
 ```
 
 ## `InlineSpan` (rich text)
@@ -62,10 +63,11 @@ interface InlineSpan {
 interface BlockProps {
   indent?: number          // list/to-do/toggle/quote/callout/paragraph nesting depth
   checked?: boolean         // to_do
-  collapsed?: boolean       // toggle
+  collapsed?: boolean       // toggle / toggle_heading_*
   language?: string         // code
   code?: string             // code
-  url?: string              // image/video/audio/file/button
+  wrap?: boolean            // code: soft-wrap long lines
+  url?: string              // image/video/audio/file/button/bookmark
   caption?: string          // image/video/audio
   name?: string              // audio/file: original file name
   size?: number              // audio/file: size in bytes
@@ -77,6 +79,10 @@ interface BlockProps {
   table?: TableData          // table
   buttonStyle?: 'primary' | 'outline' | 'ghost' // button
   openInNewTab?: boolean     // button: open url in a new tab
+  title?: string             // bookmark: page title
+  description?: string       // bookmark: page description
+  favicon?: string           // bookmark: favicon URL
+  image?: string             // bookmark: Open Graph / preview image
   dir?: 'auto' | 'ltr' | 'rtl'
   align?: 'left' | 'center' | 'right'
 }

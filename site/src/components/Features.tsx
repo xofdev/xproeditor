@@ -3,6 +3,7 @@ import {
   ClipboardPaste,
   Keyboard,
   Layers,
+  MousePointerClick,
   Palette,
   Sparkles,
   Table2,
@@ -23,10 +24,22 @@ const FEATURES: { icon: LucideIcon; title: string; desc: string; points: string[
     points: ['toolbar="floating"', 'toolbar="fixed"', '/ slash menu'],
   },
   {
+    icon: MousePointerClick,
+    title: 'Notion-like block chrome',
+    desc: 'Richer block context menu, multi-select with a floating edit popover, and two-stage Ctrl/⌘+A.',
+    points: ['Block ··· menu', 'Multi-select popover', 'Reliable undo'],
+  },
+  {
     icon: ClipboardPaste,
     title: 'Clipboard & Markdown',
     desc: 'Drag or shift-select across blocks — including images and tables — then copy, cut, delete, or paste Markdown.',
     points: ['Multi-block copy/cut', 'Markdown paste', 'HTML + JSON clipboard'],
+  },
+  {
+    icon: Table2,
+    title: 'Tables, code & media',
+    desc: 'Table width, drag cell select, merge and style — plus code language/wrap/copy chrome, buttons, and web bookmarks.',
+    points: ['Width + cell drag', 'Code wrap & copy', 'Bookmark links'],
   },
   {
     icon: Sparkles,
@@ -35,42 +48,44 @@ const FEATURES: { icon: LucideIcon; title: string; desc: string; points: string[
     points: ['ai={{ transport }}', 'Improve / continue', 'No API keys in the package'],
   },
   {
-    icon: Table2,
-    title: 'Tables & media that work',
-    desc: 'Merge cells, borders, fills — plus image, video, audio, file, and CTA buttons with real settings UX.',
-    points: ['Cell merge', 'Embeds', 'Button color & link'],
-  },
-  {
     icon: Palette,
     title: 'Themeable CSS vars',
     desc: 'Precompiled stylesheet. Restyle with --xpe-* variables — no Tailwind or Radix lock-in for consumers.',
     points: ['--xpe-primary', 'Dark via .xpe-dark', 'RTL ready'],
   },
+  {
+    icon: Blocks,
+    title: 'Toggles & structure',
+    desc: 'Collapsible toggles and toggle headings (H1–H3) nest content cleanly for docs, FAQs, and long posts.',
+    points: ['/toggle', '/toggle heading', 'Nested children'],
+  },
 ]
 
 export function Features() {
   return (
-    <section id="features">
+    <section id="features" aria-labelledby="features-heading">
       <div className="container">
         <div className="section-head">
           <span className="eyebrow">Capabilities</span>
-          <h2>Built for product teams shipping docs</h2>
-          <p>Not a toy demo editor — selection, paste, AI, and theming are first-class.</p>
+          <h2 id="features-heading">Built for product teams shipping docs</h2>
+          <p>
+            Selection, paste, tables, AI, and theming are first-class — not bolted-on demos.
+          </p>
         </div>
 
         <div className="capability-strip" aria-label="Quick capabilities">
-          <span>17 blocks</span>
+          <span>18 blocks</span>
+          <span>Context menu</span>
+          <span>Multi-select</span>
+          <span>Tables &amp; bookmarks</span>
           <span>Ask AI</span>
-          <span>Markdown paste</span>
-          <span>Multi-block select</span>
           <span>Vue + React</span>
-          <span>MIT</span>
         </div>
 
         <div className="feature-grid feature-grid--rich">
           {FEATURES.map(({ icon: Icon, title, desc, points }) => (
-            <div className="feature-card feature-card--rich" key={title}>
-              <span className="feature-icon">
+            <article className="feature-card feature-card--rich" key={title}>
+              <span className="feature-icon" aria-hidden>
                 <Icon size={18} />
               </span>
               <h3>{title}</h3>
@@ -83,7 +98,7 @@ export function Features() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </article>
           ))}
         </div>
       </div>

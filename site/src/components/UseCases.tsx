@@ -239,11 +239,11 @@ export function UseCases() {
   }
 
   return (
-    <section id="use-cases">
+    <section id="use-cases" aria-labelledby="use-cases-heading">
       <div className="container">
         <div className="section-head">
           <span className="eyebrow">Use cases</span>
-          <h2>Write once. Publish with DocRenderer.</h2>
+          <h2 id="use-cases-heading">Write once. Publish with DocRenderer.</h2>
           <p>
             Same <code>Block[]</code> document powers the editor and the public page. Pick a use case,
             edit, then switch to Published to see the read-only render.
