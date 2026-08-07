@@ -41,6 +41,14 @@ export interface TableCellProps {
   onArrowLeft: () => void
   onArrowRight: () => void
   onCellClick: (payload: { row: number; col: number; shiftKey: boolean }) => void
+  onCellPointerDown?: (payload: {
+    row: number
+    col: number
+    shiftKey: boolean
+    pointerId: number
+    clientX: number
+    clientY: number
+  }) => void
 }
 
 export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function TableCell(
@@ -61,6 +69,7 @@ export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function Ta
     onArrowLeft,
     onArrowRight,
     onCellClick,
+    onCellPointerDown,
   },
   ref,
 ) {
@@ -109,6 +118,14 @@ export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function Ta
 
   function onPointerDown(e: React.PointerEvent) {
     if (readonly || e.button !== 0) return
+    onCellPointerDown?.({
+      row: rowIdx,
+      col: colIdx,
+      shiftKey: e.shiftKey,
+      pointerId: e.pointerId,
+      clientX: e.clientX,
+      clientY: e.clientY,
+    })
     onCellClick({ row: rowIdx, col: colIdx, shiftKey: e.shiftKey })
   }
 
@@ -223,6 +240,8 @@ export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function Ta
     <Tag
       className={`etc-cell border border-[var(--xpe-border)] p-0 relative min-w-[100px] align-top ${isHeader ? 'bg-[var(--xpe-muted)]' : ''} ${selected ? 'ring-2 ring-[var(--xpe-ring)] ring-inset' : ''}`}
       style={cellStyle}
+      data-etable-row={rowIdx}
+      data-etable-col={colIdx}
       colSpan={cell.colspan && cell.colspan > 1 ? cell.colspan : undefined}
       rowSpan={cell.rowspan && cell.rowspan > 1 ? cell.rowspan : undefined}
       onClick={(e) => e.stopPropagation()}

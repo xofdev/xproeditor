@@ -33,12 +33,12 @@ const emit = defineEmits<{
             :align="align"
             :side="side"
             :side-offset="6"
-            :class="cn('w-auto rounded-xl border-[var(--xpe-border)] p-2 shadow-xl', contentClass)"
+            :class="cn('xpe-float--panel w-auto', contentClass)"
             @mousedown.stop
         >
             <p
                 v-if="title"
-                class="mb-2 px-1 text-[11px] font-semibold tracking-wide text-[var(--xpe-muted-foreground)] uppercase"
+                class="xpe-menu-heading mb-2 px-1"
             >
                 {{ title }}
             </p>

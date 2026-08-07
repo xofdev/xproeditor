@@ -1,16 +1,19 @@
-import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
-import { Columns2, Merge, Plus, SplitSquareHorizontal, Trash2 } from 'lucide-react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { Columns2, Merge, Plus, Rows3, SplitSquareHorizontal, Trash2 } from 'lucide-react'
 import {
   addTableColumn,
   addTableRow,
   canMergeCells,
   canUnmergeCell,
+  cellsInBounds,
   getResolvedTableWidth,
   mergeCells,
   normalizeTableData,
+  normalizeTableWidth,
   patchTableStyle,
   removeTableColumn,
   removeTableRow,
+  switchTableWidthMode,
   tableCellStyle,
   tableWrapperStyle,
   unmergeCell,
@@ -60,6 +63,7 @@ export interface TableBlockProps {
 }
 
 const WIDTH_PRESETS = [40, 60, 80, 100]
+const DRAG_THRESHOLD_PX = 4
 
 export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function TableBlock(
   {
@@ -76,10 +80,28 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
   ref,
 ) {
   const cellRefs = useRef(new Map<string, TableCellHandle>())
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const tableRef = useRef<TableData>(normalizeTableData(block.props.table))
+  const onSelectionChangeRef = useRef(onCellSelectionChange)
+  const onCellFocusRef = useRef(onCellFocus)
   const [selectedCells, setSelectedCellsState] = useState<TableCellCoord[]>([])
+  const [dragging, setDragging] = useState(false)
+  const dragRef = useRef<{
+    anchor: TableCellCoord
+    active: boolean
+    pointerId: number
+    startX: number
+    startY: number
+  } | null>(null)
 
   const table = normalizeTableData(block.props.table)
+  tableRef.current = table
+  onSelectionChangeRef.current = onCellSelectionChange
+  onCellFocusRef.current = onCellFocus
   const wrapperStyle = tableWrapperStyle(table.style, table.width)
+  const width = getResolvedTableWidth(table.width)
+  const focusCell = selectedCells[0] ?? null
+  const chromeActive = selectedCells.length > 0 || dragging
 
   function cellKey(row: number, col: number) {
     return `${row}:${col}`
@@ -95,45 +117,123 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
     onPatch({ table: next })
   }
 
+  function commitSelection(next: TableCellCoord[], focusPayload?: { row: number; col: number; shiftKey: boolean }) {
+    setSelectedCellsState(next)
+    onCellSelectionChange([...next])
+    if (focusPayload) onCellFocus(focusPayload)
+  }
+
   function toggleHeader() {
     updateTable({ ...table, hasHeader: !table.hasHeader })
   }
 
   function setWidthMode(mode: TableWidth['mode']) {
-    const current = getResolvedTableWidth(table.width)
-    updateTable({ ...table, width: { mode, value: current.value } })
+    updateTable({ ...table, width: switchTableWidthMode(table.width, mode) })
   }
 
   function setWidthValue(value: number) {
-    const current = getResolvedTableWidth(table.width)
-    updateTable({ ...table, width: { ...current, value } })
+    updateTable({
+      ...table,
+      width: normalizeTableWidth({ mode: width.mode, value }),
+    })
   }
 
   function onCellClick(payload: { row: number; col: number; shiftKey: boolean }) {
+    if (dragRef.current?.active) return
+
     let next: TableCellCoord[]
-
     if (payload.shiftKey && selectedCells.length > 0) {
-      const anchor = selectedCells[0]
-      const minRow = Math.min(anchor.row, payload.row)
-      const maxRow = Math.max(anchor.row, payload.row)
-      const minCol = Math.min(anchor.col, payload.col)
-      const maxCol = Math.max(anchor.col, payload.col)
-      next = []
-
-      for (let row = minRow; row <= maxRow; row += 1) {
-        for (let col = minCol; col <= maxCol; col += 1) {
-          const cell = table.rows[row]?.[col]
-          if (cell && !cell.hidden) next.push({ row, col })
-        }
-      }
+      next = cellsInBounds(table, selectedCells[0], payload)
     } else {
       next = [{ row: payload.row, col: payload.col }]
     }
 
-    setSelectedCellsState(next)
-    onCellSelectionChange([...next])
-    onCellFocus(payload)
+    commitSelection(next, payload)
   }
+
+  function coordFromPoint(clientX: number, clientY: number): TableCellCoord | null {
+    const el = document.elementFromPoint(clientX, clientY)
+    const cellEl = el?.closest?.('[data-etable-row][data-etable-col]') as HTMLElement | null
+    if (!cellEl || !rootRef.current?.contains(cellEl)) return null
+
+    const row = Number(cellEl.dataset.etableRow)
+    const col = Number(cellEl.dataset.etableCol)
+    if (!Number.isFinite(row) || !Number.isFinite(col)) return null
+
+    return { row, col }
+  }
+
+  function onCellPointerDown(payload: {
+    row: number
+    col: number
+    shiftKey: boolean
+    pointerId: number
+    clientX: number
+    clientY: number
+  }) {
+    if (readonly || payload.shiftKey) return
+
+    dragRef.current = {
+      anchor: { row: payload.row, col: payload.col },
+      active: false,
+      pointerId: payload.pointerId,
+      startX: payload.clientX,
+      startY: payload.clientY,
+    }
+  }
+
+  useEffect(() => {
+    function onMove(e: PointerEvent) {
+      const drag = dragRef.current
+      if (!drag || e.pointerId !== drag.pointerId) return
+
+      const dx = e.clientX - drag.startX
+      const dy = e.clientY - drag.startY
+      const over = coordFromPoint(e.clientX, e.clientY)
+
+      if (!drag.active) {
+        const movedFar = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX
+        const crossedCell = !!over && (over.row !== drag.anchor.row || over.col !== drag.anchor.col)
+        if (!movedFar && !crossedCell) return
+
+        drag.active = true
+        setDragging(true)
+        window.getSelection()?.removeAllRanges()
+      }
+
+      e.preventDefault()
+      const target = over ?? drag.anchor
+      const next = cellsInBounds(tableRef.current, drag.anchor, target)
+      setSelectedCellsState(next)
+      onSelectionChangeRef.current([...next])
+    }
+
+    function onUp(e: PointerEvent) {
+      const drag = dragRef.current
+      if (!drag || e.pointerId !== drag.pointerId) return
+
+      if (drag.active) {
+        e.preventDefault()
+        const target = coordFromPoint(e.clientX, e.clientY) ?? drag.anchor
+        const next = cellsInBounds(tableRef.current, drag.anchor, target)
+        setSelectedCellsState(next)
+        onSelectionChangeRef.current([...next])
+        onCellFocusRef.current({ row: drag.anchor.row, col: drag.anchor.col, shiftKey: false })
+      }
+
+      dragRef.current = null
+      setDragging(false)
+    }
+
+    window.addEventListener('pointermove', onMove, { passive: false })
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+  }, [])
 
   function isCellSelected(row: number, col: number): boolean {
     return selectedCells.some((cell) => cell.row === row && cell.col === col)
@@ -144,8 +244,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
 
     updateTable(mergeCells(table, selectedCells))
     const next = [selectedCells[0]]
-    setSelectedCellsState(next)
-    onCellSelectionChange([...next])
+    commitSelection(next)
   }
 
   function handleUnmerge() {
@@ -153,6 +252,23 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
     if (!focus || !canUnmergeCell(table, focus.row, focus.col)) return
 
     updateTable(unmergeCell(table, focus.row, focus.col))
+  }
+
+  function handleAddRow() {
+    const at = focusCell ? focusCell.row + (table.rows[focusCell.row]?.[focusCell.col]?.rowspan ?? 1) : undefined
+    updateTable(addTableRow(table, at))
+  }
+
+  function handleAddColumn() {
+    const at = focusCell
+      ? focusCell.col + (table.rows[focusCell.row]?.[focusCell.col]?.colspan ?? 1)
+      : undefined
+    updateTable(addTableColumn(table, at))
+  }
+
+  function handleRemoveColumn() {
+    const colIdx = focusCell?.col ?? (table.rows[0]?.length ?? 1) - 1
+    updateTable(removeTableColumn(table, colIdx))
   }
 
   const mergeEnabled = canMergeCells(table, selectedCells)
@@ -178,36 +294,48 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
   }))
 
   return (
-    <div className="group/table my-1">
+    <div
+      ref={rootRef}
+      className={`etable group/table my-1${chromeActive ? ' etable--active' : ''}${dragging ? ' etable--dragging' : ''}`}
+    >
       {!readonly && (
-        <div className="mb-1 flex flex-wrap items-center gap-2 opacity-0 transition-opacity group-hover/table:opacity-100">
-          <button className="etable-btn" onClick={toggleHeader}>
+        <div className="etable-toolbar">
+          <button type="button" className="etable-btn" onClick={toggleHeader}>
             {table.hasHeader ? 'Header: on' : 'Header: off'}
           </button>
-          <button className="etable-btn" disabled={!mergeEnabled} onClick={handleMerge}>
+          <button
+            type="button"
+            className="etable-btn"
+            disabled={!mergeEnabled}
+            title={mergeEnabled ? 'Merge selected cells' : 'Drag or Shift+click to select 2+ cells'}
+            onClick={handleMerge}
+          >
             <Merge className="inline h-3 w-3" /> Merge
           </button>
-          <button className="etable-btn" disabled={!unmergeEnabled} onClick={handleUnmerge}>
+          <button type="button" className="etable-btn" disabled={!unmergeEnabled} onClick={handleUnmerge}>
             <SplitSquareHorizontal className="inline h-3 w-3" /> Unmerge
           </button>
-          <div className="flex items-center gap-1 rounded-md border border-[var(--xpe-border)] bg-[var(--xpe-muted)] px-1 py-0.5">
+          <div className="etable-width">
             <button
-              className={`etable-btn${getResolvedTableWidth(table.width).mode === 'percent' ? ' etable-btn-active' : ''}`}
+              type="button"
+              className={`etable-btn${width.mode === 'percent' ? ' etable-btn-active' : ''}`}
               onClick={() => setWidthMode('percent')}
             >
               %
             </button>
             <button
-              className={`etable-btn${getResolvedTableWidth(table.width).mode === 'pixel' ? ' etable-btn-active' : ''}`}
+              type="button"
+              className={`etable-btn${width.mode === 'pixel' ? ' etable-btn-active' : ''}`}
               onClick={() => setWidthMode('pixel')}
             >
               px
             </button>
-            {getResolvedTableWidth(table.width).mode === 'percent' ? (
+            {width.mode === 'percent' ? (
               WIDTH_PRESETS.map((preset) => (
                 <button
                   key={preset}
-                  className={`etable-btn${getResolvedTableWidth(table.width).value === preset ? ' etable-btn-active' : ''}`}
+                  type="button"
+                  className={`etable-btn${width.value === preset ? ' etable-btn-active' : ''}`}
                   onClick={() => setWidthValue(preset)}
                 >
                   {preset}%
@@ -218,8 +346,8 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
                 type="number"
                 min={200}
                 max={2000}
-                className="w-16 rounded border border-[var(--xpe-border)] px-1 py-0.5 text-[11px]"
-                value={getResolvedTableWidth(table.width).value}
+                className="etable-width-input"
+                value={width.value}
                 onChange={(e) => setWidthValue(Number(e.target.value))}
               />
             )}
@@ -227,12 +355,9 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
         </div>
       )}
 
-      <div className="flex items-start">
-        <div
-          className="xpe-scroll flex-1 overflow-x-auto rounded-lg border border-[var(--xpe-border)]"
-          style={wrapperStyle}
-        >
-          <table className="w-full border-collapse">
+      <div className="etable-frame">
+        <div className="etable-wrap xpe-scroll" style={wrapperStyle}>
+          <table className="etable-table">
             <tbody>
               {table.rows.map((row, rowIdx) => (
                 <tr key={rowIdx} className="group/row">
@@ -249,6 +374,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
                         readonly={readonly}
                         cellStyle={tableCellStyle(cell, rowIdx, table.hasHeader, table.style)}
                         onCellClick={onCellClick}
+                        onCellPointerDown={onCellPointerDown}
                         onCellFocus={onCellFocus}
                         onInput={(content, caret) =>
                           onCellInput({ row: rowIdx, col: colIdx, content, caret })
@@ -270,10 +396,11 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
                       />
                     ),
                   )}
-                  <td className="w-6 border-0 align-middle">
+                  <td className="etable-row-gutter">
                     {!readonly && (
                       <button
-                        className="hidden h-5 w-5 items-center justify-center rounded text-[var(--xpe-muted-foreground)] hover:text-[var(--xpe-danger)] group-hover/row:flex"
+                        type="button"
+                        className="etable-icon-btn etable-icon-btn--danger"
                         title="Remove row"
                         onClick={() => updateTable(removeTableRow(table, rowIdx))}
                       >
@@ -286,35 +413,36 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
             </tbody>
           </table>
           {!readonly && (
-            <button
-              className="flex w-full items-center justify-center py-1 text-[var(--xpe-muted-foreground)] transition-colors hover:bg-[var(--xpe-primary-muted)] hover:text-[var(--xpe-primary)]"
-              title="Add row"
-              onClick={() => updateTable(addTableRow(table))}
-            >
-              <Plus className="h-3.5 w-3.5" />
+            <button type="button" className="etable-add-row" title="Add row below" onClick={handleAddRow}>
+              <Rows3 className="h-3.5 w-3.5" />
+              <span>Add row</span>
             </button>
           )}
         </div>
         {!readonly && (
-          <div className="ms-1 flex flex-col gap-1 self-stretch">
-            <button
-              className="flex items-center rounded px-1 text-[var(--xpe-muted-foreground)] transition-colors hover:bg-[var(--xpe-primary-muted)] hover:text-[var(--xpe-primary)]"
-              title="Add column"
-              onClick={() => updateTable(addTableColumn(table))}
-            >
+          <div className="etable-col-gutter">
+            <button type="button" className="etable-add-col" title="Add column" onClick={handleAddColumn}>
               <Columns2 className="h-3.5 w-3.5" />
+              <span>Col</span>
             </button>
             {table.rows[0]?.length ? (
               <button
-                className="flex items-center rounded px-1 text-[var(--xpe-muted-foreground)] transition-colors hover:bg-[var(--xpe-danger-muted)] hover:text-[var(--xpe-danger)]"
-                title="Remove last column"
-                onClick={() =>
-                  updateTable(removeTableColumn(table, (table.rows[0]?.length ?? 1) - 1))
-                }
+                type="button"
+                className="etable-icon-btn etable-icon-btn--danger"
+                title={focusCell ? 'Remove selected column' : 'Remove last column'}
+                onClick={handleRemoveColumn}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             ) : null}
+            <button
+              type="button"
+              className="etable-icon-btn"
+              title="Add row"
+              onClick={handleAddRow}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
       </div>

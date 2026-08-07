@@ -1,4 +1,6 @@
-import type { BlockType, MarkName, TableStyle } from '@xproeditor/core'
+import type { BlockType, FetchBookmarkMetaFn, MarkName, TableStyle } from '@xproeditor/core'
+
+export type { FetchBookmarkMetaFn }
 
 export type FormatToolbarAlign = 'left' | 'center' | 'right' | 'justify'
 
@@ -31,8 +33,8 @@ export interface SlashItem {
   group: SlashGroup
   /** After applying the block, open the icon picker on this tab. */
   pickIcon?: 'emoji' | 'icon'
-  /** Non-block action (e.g. open AI menu). */
-  action?: 'ai'
+  /** Non-block action (open AI menu, emoji picker, …). */
+  action?: 'ai' | 'emoji'
 }
 
 export interface BlockItemHandle {

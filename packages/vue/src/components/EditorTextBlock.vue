@@ -294,9 +294,12 @@ defineExpose({ focusAt, getSelection, setSelection, el })
   float: inline-start;
 }
 
-.etb-heading_1 { font-size: 28px; font-weight: 700; line-height: 1.3; color: var(--xpe-foreground, #111827); }
-.etb-heading_2 { font-size: 22px; font-weight: 650; line-height: 1.35; color: var(--xpe-foreground, #111827); }
-.etb-heading_3 { font-size: 18px; font-weight: 600; line-height: 1.4; color: var(--xpe-foreground, #111827); }
+.etb-heading_1,
+.etb-toggle_heading_1 { font-size: 28px; font-weight: 700; line-height: 1.3; color: var(--xpe-foreground, #111827); }
+.etb-heading_2,
+.etb-toggle_heading_2 { font-size: 22px; font-weight: 650; line-height: 1.35; color: var(--xpe-foreground, #111827); }
+.etb-heading_3,
+.etb-toggle_heading_3 { font-size: 18px; font-weight: 600; line-height: 1.4; color: var(--xpe-foreground, #111827); }
 .etb-quote { font-style: italic; color: var(--xpe-muted-foreground, #4b5563); }
 .etb-callout { font-size: 15px; }
 

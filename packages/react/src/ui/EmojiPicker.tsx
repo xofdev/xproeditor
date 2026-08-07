@@ -109,9 +109,7 @@ export function EmojiPicker({ onSelect, autoFocus, query: externalQuery }: Emoji
       )}
 
       <div ref={scrollRef} className="xpe-emoji-scroll">
-        {controlled && !filtered ? (
-          <p className="xpe-emoji-empty">Keep typing to search emoji…</p>
-        ) : filtered ? (
+        {filtered ? (
           filtered.length === 0 ? (
             <p className="xpe-emoji-empty">No emoji found</p>
           ) : (
@@ -132,7 +130,7 @@ export function EmojiPicker({ onSelect, autoFocus, query: externalQuery }: Emoji
         ) : (
           categoriesToRender.map((cat) => (
             <div key={cat.id} ref={(el) => { sectionRefs.current[cat.id] = el }}>
-              <p className="xpe-emoji-heading">{cat.label}</p>
+              <p className="xpe-menu-heading xpe-emoji-heading">{cat.label}</p>
               <div className="xpe-emoji-grid">
                 {cat.emojis.map((entry) => (
                   <button
@@ -151,7 +149,7 @@ export function EmojiPicker({ onSelect, autoFocus, query: externalQuery }: Emoji
         )}
       </div>
 
-      {!controlled && (
+      {!filtered && (
         <div className="xpe-emoji-catbar">
           <button type="button" title="Recently used" onClick={() => scrollToCategory('recents')}>
             <Clock className="h-4 w-4" />

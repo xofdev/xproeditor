@@ -25,6 +25,7 @@ import {
     Heading3,
     CheckSquare,
     Lightbulb,
+    Bookmark,
     SquareMousePointer,
     Sparkles,
     Underline,
@@ -59,7 +60,8 @@ export type FormatToolbarState = {
 
 const props = defineProps<{
     state: FormatToolbarState | null;
-    showAI?: boolean;
+    /** Prefer `aiEnabled` over `showAI` — Vue camelizes `show-ai` to `showAi`. */
+    aiEnabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -84,9 +86,13 @@ const TURN_INTO: Array<{ type: BlockType; label: string; icon: unknown }> = [
     { type: 'numbered_list_item', label: 'Numbered list', icon: ListOrdered },
     { type: 'to_do', label: 'To-do', icon: CheckSquare },
     { type: 'toggle', label: 'Toggle list', icon: ChevronRight },
+    { type: 'toggle_heading_1', label: 'Toggle heading 1', icon: Heading1 },
+    { type: 'toggle_heading_2', label: 'Toggle heading 2', icon: Heading2 },
+    { type: 'toggle_heading_3', label: 'Toggle heading 3', icon: Heading3 },
     { type: 'quote', label: 'Quote', icon: Quote },
     { type: 'callout', label: 'Callout', icon: Lightbulb },
     { type: 'button', label: 'Button', icon: SquareMousePointer },
+    { type: 'bookmark', label: 'Web bookmark', icon: Bookmark },
 ];
 
 const turnIntoOpen = ref(false);
@@ -166,7 +172,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
         <div class="mx-auto flex max-w-4xl flex-wrap items-center gap-0.5">
             <EditorToolbarPopover
                 v-model:open="turnIntoOpen"
-                content-class="w-48 py-1"
+                content-class="xpe-menu-list w-52 !p-1.5"
                 @update:open="onTurnIntoOpen"
             >
                 <template #trigger>
@@ -179,24 +185,22 @@ const tableActionsDisabled = () => disabled() || !isTable();
                     v-for="t in TURN_INTO"
                     :key="t.type"
                     type="button"
-                    class="flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] transition-colors"
-                    :class="
-                        t.type === state?.blockType
-                            ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]'
-                            : 'text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]'
-                    "
+                    class="xpe-menu-item"
+                    :class="{ 'xpe-menu-item--selected': t.type === state?.blockType }"
                     @click="emit('turnInto', t.type); turnIntoOpen = false"
                 >
-                    <component :is="t.icon" class="size-3.5 shrink-0 text-[var(--xpe-muted-foreground)]" />
-                    <span class="flex-1">{{ t.label }}</span>
+                    <span class="xpe-menu-item__icon">
+                      <component :is="t.icon" />
+                    </span>
+                    <span class="xpe-menu-item__label">{{ t.label }}</span>
                     <Check
                         v-if="t.type === state?.blockType"
-                        class="size-3.5 shrink-0 text-[var(--xpe-primary)]"
+                        class="xpe-menu-item__meta"
                     />
                 </button>
             </EditorToolbarPopover>
 
-            <EditorToolbarButton v-if="showAI" title="Ask AI" @click="emit('askAI')">
+            <EditorToolbarButton v-if="aiEnabled" title="Ask AI" @click="emit('askAI')">
                 <Sparkles class="size-3.5" />
             </EditorToolbarButton>
 

@@ -1,6 +1,7 @@
 import { parseInlineNodes } from './html'
 import { createBlock, generateBlockId, normalizeSpans } from './ops'
 import { normalizeTableData, tableCellFromText } from './table'
+import { isToggleBlockType } from './toggle'
 import type { Block, BlockType, InlineMarks, InlineSpan, TableCell } from './types'
 import { isBlocksContent } from './types'
 
@@ -363,6 +364,46 @@ convertHtmlElement(nested, indent + 1, out)
     case 'hr':
       out.push(createBlock('divider'))
       break
+    case 'details': {
+      const typeAttr = el.getAttribute('data-xpe-type') ?? ''
+      const summary = el.querySelector(':scope > summary')
+      let toggleType: BlockType = 'toggle'
+      let summaryContent: InlineSpan[] = []
+
+      if (summary) {
+        const heading = summary.querySelector('h1, h2, h3, h4, h5, h6')
+        if (heading) {
+          const level = Math.min(Number(heading.tagName[1]), 3) as 1 | 2 | 3
+          toggleType = `toggle_heading_${level}` as BlockType
+          summaryContent = normalizeSpans(parseInlineNodes(heading.childNodes))
+        } else {
+          const p = summary.querySelector('p')
+          summaryContent = normalizeSpans(
+            parseInlineNodes((p ?? summary).childNodes),
+          )
+        }
+      }
+
+      if (isToggleBlockType(typeAttr)) {
+        toggleType = typeAttr
+      }
+
+      out.push(createBlock(toggleType, {
+        content: summaryContent,
+        props: {
+          ...(indent ? { indent } : {}),
+          collapsed: !el.hasAttribute('open'),
+          ...propsWithDir(el),
+        },
+      }))
+
+      const childIndent = indent + 1
+      for (const child of Array.from(el.children)) {
+        if (child.tagName.toLowerCase() === 'summary') continue
+        convertHtmlElement(child, childIndent, out)
+      }
+      break
+    }
     case 'img': {
       const src = el.getAttribute('src')
 
@@ -439,6 +480,27 @@ out.push(createBlock('table', { props: { table: normalizeTableData({ hasHeader, 
         break
       }
 
+      if (el.getAttribute('data-xpe-type') === 'bookmark') {
+        const url =
+          el.getAttribute('data-xpe-url')
+          ?? el.querySelector('a')?.getAttribute('href')
+          ?? ''
+        const title = el.getAttribute('data-xpe-title') || undefined
+        const description = el.getAttribute('data-xpe-description') || undefined
+        const favicon = el.getAttribute('data-xpe-favicon') || undefined
+        const image = el.getAttribute('data-xpe-image') || undefined
+        out.push(createBlock('bookmark', {
+          props: {
+            url,
+            ...(title ? { title } : {}),
+            ...(description ? { description } : {}),
+            ...(favicon ? { favicon } : {}),
+            ...(image ? { image } : {}),
+          },
+        }))
+        break
+      }
+
       const children = Array.from(el.children)
 
       if (children.length === 0) {
@@ -463,7 +525,7 @@ out.push(createBlock('paragraph', { content: spans }))
 
           inlineBuffer = []
         }
-        const blockTags = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'blockquote', 'pre', 'ul', 'ol', 'hr', 'img', 'table', 'div', 'section', 'article'])
+        const blockTags = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'blockquote', 'pre', 'ul', 'ol', 'hr', 'img', 'table', 'div', 'section', 'article', 'details'])
 
         for (const child of Array.from(el.childNodes)) {
           if (child.nodeType === Node.ELEMENT_NODE && blockTags.has((child as Element).tagName.toLowerCase())) {

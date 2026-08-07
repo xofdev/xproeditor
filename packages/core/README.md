@@ -44,7 +44,7 @@ See [`docs/block-model.md`](../../docs/block-model.md) for the full shape.
 
 | Module | Purpose |
 | --- | --- |
-| `types` | `Block`, `InlineSpan`, `TableData`, and the rest of the model |
+| `types` | `Block`, `InlineSpan`, `TableData`, bookmarks, toggles, and the rest of the model |
 | `ops` | Span/mark operations: split, slice, apply/toggle marks, `createBlock`, `detectDir` |
 | `dom` | contentEditable caret & selection helpers (`getSelectionOffsets`, `setSelectionOffsets`, `focusStart`/`focusEnd`, `getRangeClientRects`, ...) |
 | `selection` | Cross-block text-range selection (multi-block selecting, deleting, extracting) |
@@ -52,7 +52,10 @@ See [`docs/block-model.md`](../../docs/block-model.md) for the full shape.
 | `normalize` | HTML → `Block[]` (paste from other apps), Tiptap JSON → `Block[]` |
 | `html` | `Block[]`/spans ↔ HTML conversion |
 | `serialize` | Plain-text export, heading anchors, list numbering, word count |
-| `table` | Table cell/row/column operations: merge, unmerge, resize, style |
+| `table` | Table cell/row/column operations: merge, unmerge, resize, style, width |
+| `toggle` | Toggle / toggle-heading subtree helpers in the flat block model |
+| `bookmark` | URL normalize + display helpers for web bookmark blocks |
+| `markdown` | Markdown ↔ blocks (paste / export) |
 | `video-embed` | YouTube/Vimeo URL parsing + an allow-list for safe iframe embeds |
 | `doc-heading-id` | Heading-to-slug helper used for anchor links |
 

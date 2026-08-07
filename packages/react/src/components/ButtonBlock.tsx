@@ -1,7 +1,31 @@
-import { forwardRef, useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { AlignCenter, AlignLeft, AlignRight, Link2, SquareArrowOutUpRight } from 'lucide-react'
-import { BUTTON_COLOR_PRESETS, type Block, type InlineSpan, type MarkName } from '@xproeditor/core'
-import { Button, Input, Popover, PopoverContent, PopoverTrigger } from '../ui'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Check,
+  Link2,
+  Settings2,
+  SquareArrowOutUpRight,
+} from 'lucide-react'
+import {
+  BUTTON_ALIGN_OPTIONS,
+  BUTTON_COLOR_PRESETS,
+  BUTTON_STYLE_OPTIONS,
+  buttonContrastForeground,
+  type Block,
+  type InlineSpan,
+  type MarkName,
+} from '@xproeditor/core'
+import { Popover, PopoverContent, PopoverTrigger } from '../ui'
 import { TextBlock, type TextBlockHandle } from './TextBlock'
 
 export interface ButtonBlockProps {
@@ -45,20 +69,16 @@ const ALIGN_ICONS = {
   right: AlignRight,
 } as const
 
-function contrastText(hex: string): string {
-  const raw = hex.replace('#', '')
-  if (raw.length !== 6) return '#ffffff'
-  const r = parseInt(raw.slice(0, 2), 16)
-  const g = parseInt(raw.slice(2, 4), 16)
-  const b = parseInt(raw.slice(4, 6), 16)
-  const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-  return luma > 0.62 ? '#111827' : '#ffffff'
+function isLightSwatch(hex: string): boolean {
+  return buttonContrastForeground(hex) === '#111827'
 }
 
 export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(function ButtonBlock(
   { block, readonly, onPatch, onSelect, ...textEvents },
   ref,
 ) {
+  const textRef = useRef<TextBlockHandle>(null)
+  const urlInputRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
   const [urlDraft, setUrlDraft] = useState(block.props.url ?? '')
   const [labelDraft, setLabelDraft] = useState(
@@ -69,6 +89,18 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
   const justify = ALIGN_TO_JUSTIFY[block.props.align ?? 'left'] ?? 'justify-start'
   const accent = block.props.color
   const labelText = useMemo(() => block.content.map((s) => s.text).join(''), [block.content])
+  const openInNewTab = !!block.props.openInNewTab
+  const activeStyle = block.props.buttonStyle ?? 'primary'
+  const activeAlign = block.props.align ?? 'left'
+
+  useImperativeHandle(ref, () => ({
+    focusAt: (pos) => textRef.current?.focusAt(pos),
+    getSelection: () => textRef.current?.getSelection() ?? null,
+    setSelection: (start, end) => textRef.current?.setSelection(start, end),
+    get el() {
+      return textRef.current?.el ?? null
+    },
+  }))
 
   useEffect(() => {
     setUrlDraft(block.props.url ?? '')
@@ -85,13 +117,19 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!open) return
+    const id = window.setTimeout(() => urlInputRef.current?.focus(), 0)
+    return () => window.clearTimeout(id)
+  }, [open])
+
   const previewStyle = useMemo(() => {
     if (!accent) return undefined
     if (variant === 'default') {
       return {
         background: accent,
         borderColor: accent,
-        color: contrastText(accent),
+        color: buttonContrastForeground(accent),
         ['--xpe-btn-accent' as string]: accent,
       } as CSSProperties
     }
@@ -119,14 +157,33 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
     }
   }
 
+  /** Clicking the label must edit text — never chrome-select (that clears the caret). */
+  function handlePreviewClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (readonly) return
+    const target = e.target as HTMLElement
+    if (!target.closest('[contenteditable="true"]')) {
+      textRef.current?.focusAt(labelText.length > 0 ? 'end' : 'start')
+    }
+  }
+
+  function handleRowClick(e: React.MouseEvent) {
+    const target = e.target as HTMLElement
+    if (target.closest('[contenteditable="true"], .xpe-editor-btn, button, input, textarea, label')) {
+      return
+    }
+    onSelect()
+  }
+
   return (
-    <div className={`my-1 flex items-center gap-1.5 ${justify}`} onClick={onSelect}>
+    <div className={`my-1 flex items-center gap-1.5 ${justify}`} onClick={handleRowClick}>
       <div
         className={`xpe-btn xpe-btn--${variant} xpe-btn--md min-w-[64px] xpe-editor-btn`}
         style={previewStyle}
+        onClick={handlePreviewClick}
       >
         <TextBlock
-          ref={ref}
+          ref={textRef}
           block={block}
           readonly={readonly}
           placeholder="Button"
@@ -140,119 +197,142 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
           <PopoverTrigger>
             <button
               type="button"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)] hover:text-[var(--xpe-foreground)]"
+              className={`xpe-btn-settings-trigger${open ? ' xpe-btn-settings-trigger--open' : ''}`}
               title="Button settings"
               aria-label="Button settings"
-              onClick={(e) => {
-                e.stopPropagation()
-                setOpen((o) => !o)
-              }}
+              aria-expanded={open}
             >
-              <Link2 className="h-3.5 w-3.5" />
+              <Settings2 className="h-3.5 w-3.5" />
             </button>
           </PopoverTrigger>
           <PopoverContent align="start" className="xpe-button-settings">
-            <div className="flex flex-col gap-3 p-3 w-72">
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-[var(--xpe-muted-foreground)]">Label</span>
-                <Input
-                  type="text"
-                  placeholder="Button"
-                  value={labelDraft}
-                  onChange={(e) => setLabelDraft(e.target.value)}
-                  onBlur={commitLabel}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      commitLabel()
-                    }
-                  }}
-                />
-              </label>
+            <div className="xpe-button-settings__head">
+              <span className="xpe-menu-brand" aria-hidden>
+                <Settings2 />
+              </span>
+              <span className="xpe-button-settings__title">Button</span>
+            </div>
 
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-[var(--xpe-muted-foreground)]">Link URL</span>
-                <Input
-                  type="url"
-                  placeholder="https://..."
-                  value={urlDraft}
-                  onChange={(e) => setUrlDraft(e.target.value)}
-                  onBlur={commitUrl}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      commitUrl()
-                    }
-                  }}
-                />
-              </label>
+            <div className="xpe-button-settings__body">
+              <div className="xpe-button-settings__field">
+                <span className="xpe-button-settings__label">Link</span>
+                <div className="xpe-button-settings__input-wrap">
+                  <Link2 className="xpe-button-settings__input-icon" />
+                  <input
+                    ref={urlInputRef}
+                    type="url"
+                    className="xpe-button-settings__input"
+                    placeholder="https://…"
+                    value={urlDraft}
+                    onChange={(e) => setUrlDraft(e.target.value)}
+                    onBlur={commitUrl}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        commitUrl()
+                      }
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="xpe-button-settings__toggle"
+                  onClick={() => onPatch({ openInNewTab: !openInNewTab })}
+                >
+                  <span className="xpe-button-settings__toggle-meta">
+                    <SquareArrowOutUpRight />
+                    Open in new tab
+                  </span>
+                  <span
+                    className={`xpe-button-settings__switch${openInNewTab ? ' xpe-button-settings__switch--on' : ''}`}
+                    aria-hidden
+                  />
+                </button>
+              </div>
 
-              <label className="flex items-center gap-2 text-[12px] text-[var(--xpe-foreground)]">
-                <input
-                  type="checkbox"
-                  checked={!!block.props.openInNewTab}
-                  onChange={(e) => onPatch({ openInNewTab: e.target.checked })}
-                />
-                <SquareArrowOutUpRight className="h-3.5 w-3.5 text-[var(--xpe-muted-foreground)]" />
-                Open in new tab
-              </label>
+              <div className="xpe-button-settings__field">
+                <span className="xpe-button-settings__label">Label</span>
+                <div className="xpe-button-settings__input-wrap">
+                  <input
+                    type="text"
+                    className="xpe-button-settings__input"
+                    style={{ paddingInlineStart: 10 }}
+                    placeholder="Button"
+                    value={labelDraft}
+                    onChange={(e) => setLabelDraft(e.target.value)}
+                    onBlur={commitLabel}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        commitLabel()
+                      }
+                    }}
+                  />
+                </div>
+              </div>
 
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium text-[var(--xpe-muted-foreground)]">Color</span>
-                <div className="flex flex-wrap gap-1.5">
+              <div className="xpe-button-settings__field">
+                <span className="xpe-button-settings__label">Style</span>
+                <div className="xpe-button-settings__seg" role="group" aria-label="Style">
+                  {BUTTON_STYLE_OPTIONS.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`xpe-button-settings__seg-item${activeStyle === s.id ? ' xpe-button-settings__seg-item--active' : ''}`}
+                      onClick={() => onPatch({ buttonStyle: s.id })}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="xpe-button-settings__field">
+                <span className="xpe-button-settings__label">Align</span>
+                <div className="xpe-button-settings__seg" role="group" aria-label="Align">
+                  {BUTTON_ALIGN_OPTIONS.map((a) => {
+                    const Icon = ALIGN_ICONS[a]
+                    return (
+                      <button
+                        key={a}
+                        type="button"
+                        className={`xpe-button-settings__seg-item${activeAlign === a ? ' xpe-button-settings__seg-item--active' : ''}`}
+                        onClick={() => onPatch({ align: a })}
+                        aria-label={a}
+                      >
+                        <Icon />
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="xpe-button-settings__field">
+                <span className="xpe-button-settings__label">Color</span>
+                <div className="xpe-button-settings__swatches">
                   <button
                     type="button"
                     title="Theme default"
-                    className={`h-6 w-6 rounded-full border border-[var(--xpe-border)] ${!accent ? 'ring-2 ring-[var(--xpe-primary)] ring-offset-1' : ''}`}
+                    aria-label="Theme default"
+                    className={`xpe-button-settings__swatch${!accent ? ' xpe-button-settings__swatch--active' : ''}`}
                     style={{ background: 'var(--xpe-primary, #4f46e5)' }}
                     onClick={() => onPatch({ color: undefined })}
-                  />
+                  >
+                    {!accent && <Check />}
+                  </button>
                   {BUTTON_COLOR_PRESETS.map((c) => (
                     <button
                       key={c}
                       type="button"
                       title={c}
-                      className={`h-6 w-6 rounded-full border border-[var(--xpe-border)] ${accent === c ? 'ring-2 ring-[var(--xpe-primary)] ring-offset-1' : ''}`}
+                      aria-label={c}
+                      className={`xpe-button-settings__swatch${accent === c ? ' xpe-button-settings__swatch--active' : ''}${isLightSwatch(c) ? ' xpe-button-settings__swatch--light' : ''}`}
                       style={{ background: c }}
                       onClick={() => onPatch({ color: c })}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-[var(--xpe-muted-foreground)]">Style</span>
-                <div className="flex gap-1">
-                  {(['primary', 'outline', 'ghost'] as const).map((s) => (
-                    <Button
-                      key={s}
-                      size="sm"
-                      variant={(block.props.buttonStyle ?? 'primary') === s ? 'default' : 'outline'}
-                      onClick={() => onPatch({ buttonStyle: s })}
                     >
-                      {s === 'primary' ? 'Primary' : s === 'outline' ? 'Outline' : 'Ghost'}
-                    </Button>
+                      {accent === c && <Check />}
+                    </button>
                   ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-[var(--xpe-muted-foreground)]">Alignment</span>
-                <div className="flex gap-1">
-                  {(['left', 'center', 'right'] as const).map((a) => {
-                    const Icon = ALIGN_ICONS[a]
-                    return (
-                      <Button
-                        key={a}
-                        size="sm"
-                        variant={(block.props.align ?? 'left') === a ? 'default' : 'outline'}
-                        onClick={() => onPatch({ align: a })}
-                        aria-label={a}
-                      >
-                        <Icon className="h-3.5 w-3.5" />
-                      </Button>
-                    )
-                  })}
                 </div>
               </div>
             </div>

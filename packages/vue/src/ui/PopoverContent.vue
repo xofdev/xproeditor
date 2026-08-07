@@ -119,13 +119,9 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* Surface tokens come from components.css (.xpe-popover-content / .xpe-float). */
 .xpe-popover-content {
   z-index: 80;
-  border-radius: var(--xpe-radius, 12px);
-  border: 1px solid var(--xpe-muted, #f3f4f6);
-  background: var(--xpe-surface, #fff);
-  box-shadow:
-    0 10px 15px -3px rgb(0 0 0 / 0.1),
-    0 4px 6px -4px rgb(0 0 0 / 0.1);
+  overflow: hidden;
 }
 </style>

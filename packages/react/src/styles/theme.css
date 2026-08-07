@@ -23,9 +23,17 @@
   --xpe-danger-muted: #fef2f2;
   --xpe-radius: 12px;
   --xpe-shadow:
-    0 10px 15px -3px rgb(0 0 0 / 0.1),
-    0 4px 6px -4px rgb(0 0 0 / 0.05);
+    0 16px 40px -12px rgb(0 0 0 / 0.18),
+    0 4px 12px -4px rgb(0 0 0 / 0.08);
+  /* UI chrome typeface; portaled menus sync the editor's resolved face here */
+  --xpe-font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   --xpe-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* code block surfaces (editor + DocRenderer) */
+  --xpe-code-bg: #f4f6f8;
+  --xpe-code-fg: #1f2937;
+  --xpe-code-header-bg: #e8ecf1;
+  --xpe-code-muted: #6b7280;
 }
 
 /**
@@ -50,8 +58,12 @@
   --xpe-danger: #f87171;
   --xpe-danger-muted: rgb(248 113 113 / 0.15);
   --xpe-shadow:
-    0 10px 15px -3px rgb(0 0 0 / 0.5),
-    0 4px 6px -4px rgb(0 0 0 / 0.4);
+    0 16px 40px -12px rgb(0 0 0 / 0.55),
+    0 4px 12px -4px rgb(0 0 0 / 0.35);
+  --xpe-code-bg: #1e1e2e;
+  --xpe-code-fg: #cdd6f4;
+  --xpe-code-header-bg: #16182a;
+  --xpe-code-muted: #8b8fa3;
 }
 
 /**
@@ -62,10 +74,35 @@
  * Reset it scoped to the editor's own roots and at zero specificity
  * (`:where`), so any utility class or consumer stylesheet still wins.
  */
-:where(.xpe-pro-editor, .block-editor, .doc-blocks, .xpe-popover-content, .xpe-menu) :where(button) {
+:where(
+  .xpe-pro-editor,
+  .block-editor,
+  .doc-blocks,
+  .xpe-popover-content,
+  .xpe-menu,
+  .xpe-ai-menu,
+  .xpe-emoji-picker,
+  .xpe-button-settings,
+  .xpe-bookmark-popover
+) :where(button) {
   background-color: transparent;
   border: 0;
   color: inherit;
+  /* UA buttons otherwise keep a different face than <p> group titles */
+  font-family: inherit;
+}
+:where(
+  .xpe-pro-editor,
+  .block-editor,
+  .doc-blocks,
+  .xpe-popover-content,
+  .xpe-menu,
+  .xpe-ai-menu,
+  .xpe-emoji-picker,
+  .xpe-button-settings,
+  .xpe-bookmark-popover
+) :where(input, textarea, select) {
+  font-family: inherit;
 }
 
 /**
@@ -79,7 +116,8 @@
 .xpe-popover-content,
 .xpe-emoji-scroll,
 .db-table-wrap,
-.db-code pre {
+.db-code pre,
+.ecb-input {
   scrollbar-width: thin;
   scrollbar-color: var(--xpe-border) transparent;
 }
@@ -89,7 +127,8 @@
 .xpe-popover-content::-webkit-scrollbar,
 .xpe-emoji-scroll::-webkit-scrollbar,
 .db-table-wrap::-webkit-scrollbar,
-.db-code pre::-webkit-scrollbar {
+.db-code pre::-webkit-scrollbar,
+.ecb-input::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
@@ -99,7 +138,8 @@
 .xpe-popover-content::-webkit-scrollbar-track,
 .xpe-emoji-scroll::-webkit-scrollbar-track,
 .db-table-wrap::-webkit-scrollbar-track,
-.db-code pre::-webkit-scrollbar-track {
+.db-code pre::-webkit-scrollbar-track,
+.ecb-input::-webkit-scrollbar-track {
   background: transparent;
 }
 .xpe-scroll::-webkit-scrollbar-thumb,
@@ -108,7 +148,8 @@
 .xpe-popover-content::-webkit-scrollbar-thumb,
 .xpe-emoji-scroll::-webkit-scrollbar-thumb,
 .db-table-wrap::-webkit-scrollbar-thumb,
-.db-code pre::-webkit-scrollbar-thumb {
+.db-code pre::-webkit-scrollbar-thumb,
+.ecb-input::-webkit-scrollbar-thumb {
   background-color: var(--xpe-border);
   border-radius: 999px;
   border: 2px solid transparent;
@@ -120,6 +161,7 @@
 .xpe-popover-content::-webkit-scrollbar-thumb:hover,
 .xpe-emoji-scroll::-webkit-scrollbar-thumb:hover,
 .db-table-wrap::-webkit-scrollbar-thumb:hover,
-.db-code pre::-webkit-scrollbar-thumb:hover {
+.db-code pre::-webkit-scrollbar-thumb:hover,
+.ecb-input::-webkit-scrollbar-thumb:hover {
   background-color: var(--xpe-muted-foreground);
 }

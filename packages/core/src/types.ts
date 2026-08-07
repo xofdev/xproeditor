@@ -13,6 +13,9 @@ export type BlockType =
   | 'numbered_list_item'
   | 'to_do'
   | 'toggle'
+  | 'toggle_heading_1'
+  | 'toggle_heading_2'
+  | 'toggle_heading_3'
   | 'quote'
   | 'callout'
   | 'code'
@@ -23,6 +26,7 @@ export type BlockType =
   | 'file'
   | 'table'
   | 'button'
+  | 'bookmark'
 
 export interface InlineMarks {
   bold?: boolean
@@ -92,12 +96,14 @@ export interface BlockProps {
   indent?: number
   /** to_do */
   checked?: boolean
-  /** toggle */
+  /** toggle / toggle_heading_* */
   collapsed?: boolean
   /** code */
   language?: string
   code?: string
-  /** image / video / audio / file / button */
+  /** code: soft-wrap long lines */
+  wrap?: boolean
+  /** image / video / audio / file / button / bookmark */
   url?: string
   caption?: string
   /** audio / file: original file name */
@@ -120,6 +126,14 @@ export interface BlockProps {
   buttonStyle?: 'primary' | 'outline' | 'ghost'
   /** button: open url in a new tab */
   openInNewTab?: boolean
+  /** bookmark: page title (OG / meta) */
+  title?: string
+  /** bookmark: page description (OG / meta) */
+  description?: string
+  /** bookmark: favicon URL */
+  favicon?: string
+  /** bookmark: Open Graph / preview image URL */
+  image?: string
   /** text direction */
   dir?: 'auto' | 'ltr' | 'rtl'
   align?: 'left' | 'center' | 'right'
@@ -138,6 +152,31 @@ export const BUTTON_COLOR_PRESETS = [
   '#9333ea',
   '#111827',
 ] as const
+
+/** Visual style options for button blocks (adapters render as segmented controls). */
+export const BUTTON_STYLE_OPTIONS = [
+  { id: 'primary', label: 'Fill' },
+  { id: 'outline', label: 'Outline' },
+  { id: 'ghost', label: 'Ghost' },
+] as const
+
+export type ButtonStyleId = (typeof BUTTON_STYLE_OPTIONS)[number]['id']
+
+/** Horizontal alignment options for button blocks. */
+export const BUTTON_ALIGN_OPTIONS = ['left', 'center', 'right'] as const
+
+export type ButtonAlignId = (typeof BUTTON_ALIGN_OPTIONS)[number]
+
+/** Readable foreground color for a solid button fill (hex `#rrggbb`). */
+export function buttonContrastForeground(hex: string): string {
+  const raw = hex.replace('#', '')
+  if (raw.length !== 6) return '#ffffff'
+  const r = parseInt(raw.slice(0, 2), 16)
+  const g = parseInt(raw.slice(2, 4), 16)
+  const b = parseInt(raw.slice(4, 6), 16)
+  const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luma > 0.62 ? '#111827' : '#ffffff'
+}
 
 export interface Block {
   id: string
@@ -164,9 +203,20 @@ export const TEXT_BLOCK_TYPES: BlockType[] = [
   'numbered_list_item',
   'to_do',
   'toggle',
+  'toggle_heading_1',
+  'toggle_heading_2',
+  'toggle_heading_3',
   'quote',
   'callout',
   'button',
+]
+
+/** Collapsible toggle list + toggle headings (Notion / BlockNote family). */
+export const TOGGLE_BLOCK_TYPES: BlockType[] = [
+  'toggle',
+  'toggle_heading_1',
+  'toggle_heading_2',
+  'toggle_heading_3',
 ]
 
 /** Block types that participate in flat indent nesting. */
@@ -176,12 +226,33 @@ export const INDENTABLE_TYPES: BlockType[] = [
   'numbered_list_item',
   'to_do',
   'toggle',
+  'toggle_heading_1',
+  'toggle_heading_2',
+  'toggle_heading_3',
   'quote',
   'callout',
 ]
 
 export function isTextBlock(type: BlockType): boolean {
   return TEXT_BLOCK_TYPES.includes(type)
+}
+
+export function isToggleBlock(type: BlockType): boolean {
+  return TOGGLE_BLOCK_TYPES.includes(type)
+}
+
+/** Heading level for `toggle_heading_*`, otherwise null. */
+export function toggleHeadingLevel(type: BlockType): 1 | 2 | 3 | null {
+  if (type === 'toggle_heading_1') return 1
+  if (type === 'toggle_heading_2') return 2
+  if (type === 'toggle_heading_3') return 3
+  return null
+}
+
+/** Plain heading type paired with a toggle heading, or null. */
+export function plainHeadingFromToggle(type: BlockType): BlockType | null {
+  const level = toggleHeadingLevel(type)
+  return level ? (`heading_${level}` as BlockType) : null
 }
 
 export function isBlocksContent(content: unknown): content is BlocksContent {

@@ -2,7 +2,7 @@
 import {
   Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
   ChevronRight, Quote, Lightbulb, Code2, Minus, Image as ImageIcon, Video, Table2,
-  Smile, Blocks, Music, Paperclip, SearchX, SquareMousePointer, Sparkles,
+  Smile, Music, Paperclip, SearchX, SquareMousePointer, Bookmark, Sparkles,
 } from 'lucide-vue-next'
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { lockPageScroll, syncThemeVars } from '@xproeditor/core'
@@ -20,7 +20,8 @@ export interface SlashItem {
   group: SlashGroup
   /** After applying the block, open the icon picker on this tab. */
   pickIcon?: 'emoji' | 'icon'
-  action?: 'ai'
+  /** Non-block action (open AI menu, emoji picker, …). */
+  action?: 'ai' | 'emoji'
 }
 
 const GROUP_LABELS: Record<SlashGroup, string> = {
@@ -32,6 +33,8 @@ const GROUP_LABELS: Record<SlashGroup, string> = {
 }
 
 const ITEMS: SlashItem[] = [
+  // AI first when enabled — max-height menu otherwise hides it at the bottom.
+  { id: 'ai', type: 'paragraph', label: 'Ask AI', description: 'Generate or edit with AI', keywords: ['ai', 'ask', 'gpt', 'write', 'generate'], icon: Sparkles, group: 'ai', action: 'ai' },
   { id: 'paragraph', type: 'paragraph', label: 'Text', description: 'Plain paragraph', keywords: ['text', 'paragraph', 'p'], icon: Type, group: 'basic' },
   { id: 'heading_1', type: 'heading_1', label: 'Heading 1', description: 'Large section heading', keywords: ['h1', 'heading', 'title'], icon: Heading1, group: 'basic' },
   { id: 'heading_2', type: 'heading_2', label: 'Heading 2', description: 'Medium section heading', keywords: ['h2', 'heading', 'subtitle'], icon: Heading2, group: 'basic' },
@@ -39,20 +42,22 @@ const ITEMS: SlashItem[] = [
   { id: 'bulleted_list_item', type: 'bulleted_list_item', label: 'Bulleted list', description: 'Simple bullet list', keywords: ['bullet', 'list', 'ul'], icon: List, group: 'lists' },
   { id: 'numbered_list_item', type: 'numbered_list_item', label: 'Numbered list', description: 'Ordered list', keywords: ['number', 'ordered', 'ol'], icon: ListOrdered, group: 'lists' },
   { id: 'to_do', type: 'to_do', label: 'To-do', description: 'Checkbox task', keywords: ['todo', 'check', 'task'], icon: CheckSquare, group: 'lists' },
-  { id: 'toggle', type: 'toggle', label: 'Toggle', description: 'Collapsible content', keywords: ['toggle', 'collapse', 'accordion'], icon: ChevronRight, group: 'lists' },
+  { id: 'toggle', type: 'toggle', label: 'Toggle list', description: 'Collapsible list item', keywords: ['toggle', 'collapse', 'accordion', 'list'], icon: ChevronRight, group: 'lists' },
+  { id: 'toggle_heading_1', type: 'toggle_heading_1', label: 'Toggle heading 1', description: 'Large collapsible heading', keywords: ['toggle', 'heading', 'h1', 'collapse'], icon: Heading1, group: 'lists' },
+  { id: 'toggle_heading_2', type: 'toggle_heading_2', label: 'Toggle heading 2', description: 'Medium collapsible heading', keywords: ['toggle', 'heading', 'h2', 'collapse'], icon: Heading2, group: 'lists' },
+  { id: 'toggle_heading_3', type: 'toggle_heading_3', label: 'Toggle heading 3', description: 'Small collapsible heading', keywords: ['toggle', 'heading', 'h3', 'collapse'], icon: Heading3, group: 'lists' },
   { id: 'image', type: 'image', label: 'Image', description: 'Upload an image', keywords: ['image', 'photo', 'picture', 'upload'], icon: ImageIcon, group: 'media' },
   { id: 'video', type: 'video', label: 'Video', description: 'Upload or embed a video', keywords: ['video', 'youtube', 'vimeo', 'movie'], icon: Video, group: 'media' },
   { id: 'audio', type: 'audio', label: 'Audio', description: 'Upload or link audio', keywords: ['audio', 'music', 'song', 'sound', 'mp3'], icon: Music, group: 'media' },
   { id: 'file', type: 'file', label: 'File', description: 'Attach a downloadable file', keywords: ['file', 'attachment', 'pdf', 'document', 'download'], icon: Paperclip, group: 'media' },
+  { id: 'bookmark', type: 'bookmark', label: 'Web bookmark', description: 'Visual bookmark from a link', keywords: ['bookmark', 'link', 'url', 'web', 'embed', 'og'], icon: Bookmark, group: 'media' },
   { id: 'quote', type: 'quote', label: 'Quote', description: 'Capture a quote', keywords: ['quote', 'blockquote'], icon: Quote, group: 'advanced' },
-  { id: 'callout', type: 'callout', label: 'Callout', description: 'Highlighted note', keywords: ['callout', 'note', 'info', 'warning'], icon: Lightbulb, group: 'advanced' },
-  { id: 'emoji', type: 'callout', label: 'Emoji', description: 'Callout with emoji icon', keywords: ['emoji', 'emoticon', 'smile'], icon: Smile, group: 'advanced', pickIcon: 'emoji' },
-  { id: 'icon', type: 'callout', label: 'Icon', description: 'Callout with vector icon', keywords: ['icon', 'symbol', 'lucide'], icon: Blocks, group: 'advanced', pickIcon: 'icon' },
+  { id: 'callout', type: 'callout', label: 'Callout', description: 'Highlighted note with emoji or icon', keywords: ['callout', 'note', 'info', 'warning', 'icon'], icon: Lightbulb, group: 'advanced', pickIcon: 'emoji' },
+  { id: 'emoji', type: 'paragraph', label: 'Emoji', description: 'Insert an emoji', keywords: ['emoji', 'emoticon', 'smile'], icon: Smile, group: 'advanced', action: 'emoji' },
   { id: 'code', type: 'code', label: 'Code', description: 'Code block with syntax', keywords: ['code', 'snippet', 'pre'], icon: Code2, group: 'advanced' },
   { id: 'divider', type: 'divider', label: 'Divider', description: 'Horizontal line', keywords: ['divider', 'hr', 'separator', 'line'], icon: Minus, group: 'advanced' },
   { id: 'table', type: 'table', label: 'Table', description: 'Simple table', keywords: ['table', 'grid'], icon: Table2, group: 'advanced' },
   { id: 'button', type: 'button', label: 'Button', description: 'A clickable link styled as a button', keywords: ['button', 'link', 'cta', 'action'], icon: SquareMousePointer, group: 'advanced' },
-  { id: 'ai', type: 'paragraph', label: 'Ask AI', description: 'Generate or edit with AI', keywords: ['ai', 'ask', 'gpt', 'write', 'generate'], icon: Sparkles, group: 'ai', action: 'ai' },
 ]
 
 const props = defineProps<{
@@ -63,7 +68,11 @@ const props = defineProps<{
   /** Element still inside the editor's themed DOM scope — used to resync
    * `--xpe-*` variables onto this menu once it's teleported to `<body>`. */
   themeSource?: HTMLElement | null
-  showAI?: boolean
+  /**
+   * Named `aiEnabled` (not `showAI`) so the Vue kebab form `ai-enabled`
+   * camelizes correctly — `show-ai` becomes `showAi`, which never matches `showAI`.
+   */
+  aiEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -77,15 +86,15 @@ const menuEl = ref<HTMLElement | null>(null)
 const placed = ref<{ left: number; top: number }>({ left: props.position.x, top: props.position.y })
 
 const filtered = computed(() => {
-  const base = props.showAI ? ITEMS : ITEMS.filter(item => item.action !== 'ai')
+  const base = props.aiEnabled ? ITEMS : ITEMS.filter(item => item.action !== 'ai')
   const q = props.query.toLowerCase().trim()
 
-  if (!q) {
-return base
-}
+  if (!q) return base
 
   return base.filter(item =>
-    item.label.toLowerCase().includes(q) || item.keywords.some(k => k.startsWith(q)),
+    item.label.toLowerCase().includes(q)
+    || item.description.toLowerCase().includes(q)
+    || item.keywords.some(k => k.includes(q)),
   )
 })
 
@@ -187,39 +196,37 @@ defineExpose({ move, confirm })
   <Teleport to="body">
     <div
       ref="menuEl"
-      class="xpe-menu xpe-scroll fixed z-[80] w-72 max-h-80 overflow-y-auto border py-1.5 bg-[var(--xpe-surface)] border-[var(--xpe-border)] rounded-[var(--xpe-radius)] [box-shadow:var(--xpe-shadow)]"
+      class="xpe-menu xpe-float xpe-scroll fixed z-[80] w-72 max-h-80 overflow-y-auto py-1.5"
       :style="{ left: `${placed.left}px`, top: `${placed.top}px` }"
       :dir="dir"
       @mousedown.prevent
     >
-      <div v-if="filtered.length === 0" class="flex items-center gap-2 px-3 py-4 text-[13px] text-[var(--xpe-muted-foreground)]">
+      <p v-if="filtered.length === 0" class="xpe-menu-empty">
         <SearchX class="w-4 h-4" />
         No results for “{{ query }}”
-      </div>
-      <div ref="listEl">
+      </p>
+      <div ref="listEl" class="xpe-menu-list">
         <template v-for="entry in grouped" :key="entry.item.id">
           <p
             v-if="entry.headerLabel"
-            class="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--xpe-muted-foreground)] first:pt-1"
+            class="xpe-menu-heading px-2 pt-2.5 pb-1 first:pt-1"
           >
             {{ entry.headerLabel }}
           </p>
           <button
-            class="flex items-center gap-3 w-full px-3 py-1.5 text-start transition-colors"
-            :class="entry.idx === activeIndex ? 'bg-[var(--xpe-primary-muted)]' : 'hover:bg-[var(--xpe-surface-hover)]'"
+            type="button"
+            class="xpe-menu-item"
+            :class="{ 'xpe-menu-item--active': entry.idx === activeIndex }"
             :data-active="entry.idx === activeIndex"
             @mouseenter="activeIndex = entry.idx"
             @click="emit('select', entry.item)"
           >
-            <span
-              class="flex items-center justify-center w-8 h-8 rounded-lg border shrink-0"
-              :class="entry.idx === activeIndex ? 'border-[var(--xpe-border)] bg-[var(--xpe-surface)] text-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] bg-[var(--xpe-muted)] text-[var(--xpe-muted-foreground)]'"
-            >
-              <component :is="entry.item.icon" class="w-4 h-4" />
+            <span class="xpe-menu-item__icon">
+              <component :is="entry.item.icon" />
             </span>
-            <span class="min-w-0">
-              <span class="block text-[13px] font-medium text-[var(--xpe-foreground)]">{{ entry.item.label }}</span>
-              <span class="block text-[11px] text-[var(--xpe-muted-foreground)] truncate">{{ entry.item.description }}</span>
+            <span class="xpe-menu-item__text">
+              <span class="xpe-menu-item__label">{{ entry.item.label }}</span>
+              <span class="xpe-menu-item__desc">{{ entry.item.description }}</span>
             </span>
           </button>
         </template>

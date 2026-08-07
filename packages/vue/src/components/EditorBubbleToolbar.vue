@@ -3,11 +3,17 @@ import {
     Bold,
     Check,
     ChevronDown,
+    ChevronRight,
     Code,
+    Copy,
+    Files,
     Italic,
     Link2,
     Paintbrush,
+    RemoveFormatting,
+    Sparkles,
     Strikethrough,
+    Trash2,
     Type,
     Heading1,
     Heading2,
@@ -17,45 +23,52 @@ import {
     CheckSquare,
     Quote,
     Lightbulb,
+    Bookmark,
     SquareMousePointer,
     Underline,
 } from 'lucide-vue-next';
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { syncThemeVars } from '@xproeditor/core';
 import type { BlockType, MarkName } from '@xproeditor/core';
 import { Button, Input } from '../ui';
 import EditorToolbarColorPanel from './toolbar/EditorToolbarColorPanel.vue';
 
-const props = defineProps<{
-    position: { x: number; y: number };
-    activeMarks: Partial<Record<MarkName, boolean>>;
-    currentLink: string | null;
-    currentColor?: string | null;
-    currentHighlight?: string | null;
-    blockType: BlockType;
-    /** Element still inside the editor's themed DOM scope — used to resync
-     * `--xpe-*` variables onto this toolbar once it's teleported to `<body>`. */
-    themeSource?: HTMLElement | null;
-}>();
-
-const toolbarEl = ref<HTMLElement | null>(null);
-
-watch(
-    [() => props.position, () => props.themeSource],
-    async () => {
-        await nextTick();
-
-        if (props.themeSource && toolbarEl.value) {
-            syncThemeVars(props.themeSource, toolbarEl.value);
-        }
+const props = withDefaults(
+    defineProps<{
+        position: { x: number; y: number };
+        placement?: 'above' | 'beside';
+        activeMarks: Partial<Record<MarkName, boolean>>;
+        currentLink: string | null;
+        currentColor?: string | null;
+        currentHighlight?: string | null;
+        blockType: BlockType;
+        multiBlock?: boolean;
+        mixedTypes?: boolean;
+        aiEnabled?: boolean;
+        /** Element still inside the editor's themed DOM scope — used to resync
+         * `--xpe-*` variables onto this toolbar once it's teleported to `<body>`. */
+        themeSource?: HTMLElement | null;
+    }>(),
+    {
+        placement: 'above',
+        multiBlock: false,
+        mixedTypes: false,
+        aiEnabled: false,
     },
-    { immediate: true },
 );
 
 const emit = defineEmits<{
     mark: [mark: MarkName, value: boolean | string | null];
     turnInto: [type: BlockType];
+    clearFormatting: [];
+    askAi: [];
+    copy: [];
+    duplicate: [];
+    delete: [];
 }>();
+
+const toolbarEl = ref<HTMLElement | null>(null);
+const coords = ref({ left: props.position.x, top: props.position.y });
 
 const TURN_INTO: Array<{ type: BlockType; label: string; icon: unknown }> = [
     { type: 'paragraph', label: 'Text', icon: Type },
@@ -65,24 +78,83 @@ const TURN_INTO: Array<{ type: BlockType; label: string; icon: unknown }> = [
     { type: 'bulleted_list_item', label: 'Bulleted list', icon: List },
     { type: 'numbered_list_item', label: 'Numbered list', icon: ListOrdered },
     { type: 'to_do', label: 'To-do', icon: CheckSquare },
+    { type: 'toggle', label: 'Toggle list', icon: ChevronRight },
+    { type: 'toggle_heading_1', label: 'Toggle heading 1', icon: Heading1 },
+    { type: 'toggle_heading_2', label: 'Toggle heading 2', icon: Heading2 },
+    { type: 'toggle_heading_3', label: 'Toggle heading 3', icon: Heading3 },
     { type: 'quote', label: 'Quote', icon: Quote },
     { type: 'callout', label: 'Callout', icon: Lightbulb },
     { type: 'button', label: 'Button', icon: SquareMousePointer },
+    { type: 'bookmark', label: 'Web bookmark', icon: Bookmark },
 ];
 
 const panel = ref<'none' | 'link' | 'color' | 'turninto'>('none');
 const linkInput = ref('');
 let lastPositionKey: string | null = null;
 
+const turnIntoEntry = computed(() => TURN_INTO.find((t) => t.type === props.blockType));
+const turnIntoLabel = computed(() =>
+    props.mixedTypes ? 'Turn into' : (turnIntoEntry.value?.label ?? 'Text'),
+);
+const turnIntoIcon = computed(() => turnIntoEntry.value?.icon ?? Type);
+
+function clampPosition(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    placement: 'above' | 'beside',
+) {
+    const pad = 8;
+    if (placement === 'above') {
+        return {
+            left: Math.min(Math.max(pad + width / 2, x), window.innerWidth - pad - width / 2),
+            top: Math.min(Math.max(height + pad + 8, y), window.innerHeight - pad),
+        };
+    }
+
+    return {
+        left: Math.min(Math.max(pad, x), Math.max(pad, window.innerWidth - width - pad)),
+        top: Math.min(Math.max(pad, y), Math.max(pad, window.innerHeight - height - pad)),
+    };
+}
+
+async function syncPosition(): Promise<void> {
+    await nextTick();
+    const el = toolbarEl.value;
+    if (!el) {
+        coords.value = { left: props.position.x, top: props.position.y };
+        return;
+    }
+
+    const rect = el.getBoundingClientRect();
+    coords.value = clampPosition(
+        props.position.x,
+        props.position.y,
+        rect.width,
+        rect.height,
+        props.placement,
+    );
+}
+
+watch(
+    [() => props.position, () => props.themeSource, () => props.placement, panel, () => props.multiBlock],
+    async () => {
+        await nextTick();
+
+        if (props.themeSource && toolbarEl.value) {
+            syncThemeVars(props.themeSource, toolbarEl.value);
+        }
+
+        await syncPosition();
+    },
+    { immediate: true },
+);
+
 watch(
     () => props.position,
     (position) => {
-        // `position` is a fresh object on every parent update (e.g. a
-        // same-range selectionchange), so only close an open panel when the
-        // selection actually moved — Vue's default watch compares by
-        // reference, which would close the color/link panel the instant a
-        // swatch inside it is clicked.
-        const key = `${position.x},${position.y}`;
+        const key = `${position.x},${position.y},${props.placement}`;
 
         if (lastPositionKey !== null && lastPositionKey !== key) {
             panel.value = 'none';
@@ -107,8 +179,13 @@ function applyLink(): void {
     panel.value = 'none';
 }
 
-function turnIntoLabel(): string {
-    return TURN_INTO.find((t) => t.type === props.blockType)?.label ?? 'Text';
+function onToolbarMouseDown(e: MouseEvent): void {
+    // Keep selection for mark buttons; allow focusing inputs (link URL).
+    e.stopPropagation();
+    const target = e.target as HTMLElement;
+    if (!target.closest('input, textarea, select')) {
+        e.preventDefault();
+    }
 }
 </script>
 
@@ -116,25 +193,165 @@ function turnIntoLabel(): string {
     <Teleport to="body">
         <div
             ref="toolbarEl"
-            class="fixed z-[70] flex flex-col items-stretch"
-            :style="{
-                left: `${position.x}px`,
-                top: `${position.y}px`,
-                transform: 'translate(-50%, calc(-100% - 8px))',
-            }"
-            @mousedown.prevent
+            data-pro-editor-toolbar
+            class="xpe-menu fixed z-[70] flex flex-col items-stretch"
+            :style="
+                multiBlock
+                    ? { left: `${coords.left}px`, top: `${coords.top}px` }
+                    : {
+                          left: `${coords.left}px`,
+                          top: `${coords.top}px`,
+                          transform: 'translate(-50%, calc(-100% - 8px))',
+                      }
+            "
+            @mousedown="onToolbarMouseDown"
         >
-            <div
-                class="flex items-center gap-0.5 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-1 py-1 shadow-xl"
-            >
+            <!-- Multi-block Notion-like panel -->
+            <div v-if="multiBlock" class="xpe-float xpe-bubble-panel">
+                <button
+                    type="button"
+                    class="xpe-menu-item"
+                    @click="panel = panel === 'turninto' ? 'none' : 'turninto'"
+                >
+                    <span class="xpe-menu-item__icon">
+                        <component :is="turnIntoIcon" />
+                    </span>
+                    <span class="xpe-menu-item__label">{{ turnIntoLabel }}</span>
+                    <ChevronRight class="xpe-menu-item__meta" />
+                </button>
+
+                <div class="xpe-menu-sep" />
+
+                <div class="xpe-bubble-panel__row">
+                    <button
+                        type="button"
+                        class="ebt-btn"
+                        :class="{
+                            'ebt-active': panel === 'color' || !!currentColor || !!currentHighlight,
+                        }"
+                        title="Color"
+                        @click="openColorPanel"
+                    >
+                        <Paintbrush class="size-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        class="ebt-btn"
+                        :class="{ 'ebt-active': activeMarks.bold }"
+                        title="Bold (Ctrl+B)"
+                        @click="emit('mark', 'bold', !activeMarks.bold)"
+                    >
+                        <Bold class="size-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        class="ebt-btn"
+                        :class="{ 'ebt-active': activeMarks.italic }"
+                        title="Italic (Ctrl+I)"
+                        @click="emit('mark', 'italic', !activeMarks.italic)"
+                    >
+                        <Italic class="size-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        class="ebt-btn"
+                        :class="{ 'ebt-active': activeMarks.underline }"
+                        title="Underline (Ctrl+U)"
+                        @click="emit('mark', 'underline', !activeMarks.underline)"
+                    >
+                        <Underline class="size-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        class="ebt-btn"
+                        title="Clear formatting"
+                        @click="emit('clearFormatting')"
+                    >
+                        <RemoveFormatting class="size-3.5" />
+                    </button>
+                </div>
+
+                <div class="xpe-bubble-panel__row">
+                    <button
+                        type="button"
+                        class="ebt-btn"
+                        :class="{ 'ebt-active': panel === 'link' || !!currentLink }"
+                        title="Link"
+                        @click="openLinkPanel"
+                    >
+                        <Link2 class="size-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        class="ebt-btn"
+                        :class="{ 'ebt-active': activeMarks.strikethrough }"
+                        title="Strikethrough"
+                        @click="emit('mark', 'strikethrough', !activeMarks.strikethrough)"
+                    >
+                        <Strikethrough class="size-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        class="ebt-btn"
+                        :class="{ 'ebt-active': activeMarks.code }"
+                        title="Inline code (Ctrl+E)"
+                        @click="emit('mark', 'code', !activeMarks.code)"
+                    >
+                        <Code class="size-3.5" />
+                    </button>
+                </div>
+
+                <div class="xpe-menu-sep" />
+
+                <div class="xpe-bubble-panel__actions">
+                    <button type="button" class="xpe-menu-item" @click="emit('copy')">
+                        <span class="xpe-menu-item__icon">
+                            <Copy />
+                        </span>
+                        <span class="xpe-menu-item__label">Copy</span>
+                        <span class="xpe-menu-item__kbd">⌘C</span>
+                    </button>
+                    <button type="button" class="xpe-menu-item" @click="emit('duplicate')">
+                        <span class="xpe-menu-item__icon">
+                            <Files />
+                        </span>
+                        <span class="xpe-menu-item__label">Duplicate</span>
+                        <span class="xpe-menu-item__kbd">⌘D</span>
+                    </button>
+                    <button
+                        type="button"
+                        class="xpe-menu-item xpe-menu-item--danger"
+                        @click="emit('delete')"
+                    >
+                        <span class="xpe-menu-item__icon">
+                            <Trash2 />
+                        </span>
+                        <span class="xpe-menu-item__label">Delete</span>
+                        <span class="xpe-menu-item__kbd">⌫</span>
+                    </button>
+                </div>
+
+                <template v-if="aiEnabled">
+                    <div class="xpe-menu-sep" />
+                    <button type="button" class="xpe-menu-item" @click="emit('askAi')">
+                        <span class="xpe-menu-item__icon">
+                            <Sparkles />
+                        </span>
+                        <span class="xpe-menu-item__label">Ask AI</span>
+                    </button>
+                </template>
+            </div>
+
+            <!-- Compact single-selection toolbar -->
+            <div v-else class="xpe-float xpe-float--compact">
                 <button
                     class="ebt-btn !w-auto gap-1 px-2 text-[12px] font-medium text-[var(--xpe-muted-foreground)]"
                     @click="panel = panel === 'turninto' ? 'none' : 'turninto'"
                 >
-                    {{ turnIntoLabel() }}
+                    {{ turnIntoLabel }}
                     <ChevronDown class="size-3" />
                 </button>
-                <div class="mx-0.5 h-5 w-px bg-[var(--xpe-muted)]" />
+                <div class="mx-0.5 h-5 w-px bg-[var(--xpe-border)]" />
 
                 <button
                     class="ebt-btn"
@@ -177,7 +394,7 @@ function turnIntoLabel(): string {
                     <Code class="size-3.5" />
                 </button>
 
-                <div class="mx-0.5 h-5 w-px bg-[var(--xpe-muted)]" />
+                <div class="mx-0.5 h-5 w-px bg-[var(--xpe-border)]" />
 
                 <button
                     class="ebt-btn"
@@ -198,11 +415,25 @@ function turnIntoLabel(): string {
                 >
                     <Paintbrush class="size-3.5" />
                 </button>
+                <button
+                    class="ebt-btn"
+                    title="Clear formatting"
+                    @click="emit('clearFormatting')"
+                >
+                    <RemoveFormatting class="size-3.5" />
+                </button>
+
+                <template v-if="aiEnabled">
+                    <div class="mx-0.5 h-5 w-px bg-[var(--xpe-border)]" />
+                    <button class="ebt-btn" title="Ask AI" @click="emit('askAi')">
+                        <Sparkles class="size-3.5" />
+                    </button>
+                </template>
             </div>
 
             <div
                 v-if="panel === 'link'"
-                class="mt-1.5 flex items-center gap-1.5 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl"
+                class="xpe-float xpe-float--panel mt-1.5 flex items-center gap-1.5"
             >
                 <Input
                     v-model="linkInput"
@@ -229,7 +460,7 @@ function turnIntoLabel(): string {
 
             <div
                 v-if="panel === 'color'"
-                class="mt-1.5 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] p-2 shadow-xl"
+                class="xpe-float xpe-float--panel mt-1.5"
                 @mousedown.stop
             >
                 <EditorToolbarColorPanel
@@ -241,25 +472,23 @@ function turnIntoLabel(): string {
 
             <div
                 v-if="panel === 'turninto'"
-                class="mt-1.5 w-48 rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] py-1 shadow-xl"
+                class="xpe-float xpe-menu-list mt-1.5 w-52 py-1.5"
             >
                 <button
                     v-for="t in TURN_INTO"
                     :key="t.type"
                     type="button"
-                    class="flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] transition-colors"
-                    :class="
-                        t.type === blockType
-                            ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]'
-                            : 'text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]'
-                    "
+                    class="xpe-menu-item"
+                    :class="{ 'xpe-menu-item--selected': !mixedTypes && t.type === blockType }"
                     @click="emit('turnInto', t.type); panel = 'none'"
                 >
-                    <component :is="t.icon" class="size-3.5 shrink-0 text-[var(--xpe-muted-foreground)]" />
-                    <span class="flex-1">{{ t.label }}</span>
+                    <span class="xpe-menu-item__icon">
+                        <component :is="t.icon" />
+                    </span>
+                    <span class="xpe-menu-item__label">{{ t.label }}</span>
                     <Check
-                        v-if="t.type === blockType"
-                        class="size-3.5 shrink-0 text-[var(--xpe-primary)]"
+                        v-if="!mixedTypes && t.type === blockType"
+                        class="xpe-menu-item__meta"
                     />
                 </button>
             </div>

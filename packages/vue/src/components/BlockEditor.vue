@@ -1,23 +1,32 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
+  blocksToClipboardPayload,
   parseBlocksFromClipboardData,
   writeBlocksToClipboardData,
   caretPointFromClient,
   getCaretClientRect,
+  getRangeClientRects,
   getSelectionClientRect,
   htmlToBlocks,
-  createBlock, cloneBlock, spansToText, splitSpansAt, normalizeSpans,
-  deleteRangeInSpans, applyMarkToRange, rangeHasMark, rangeMarkValue, sliceSpans,
+  normalizeTextRange,
+  createBlock, cloneBlock, cloneToggleSubtree, spansToText, splitSpansAt, normalizeSpans,
+  deleteRangeInSpans, applyMarkToRange, rangeHasMark, rangeMarkValue,
   applyMarkToTextRange,
   deleteTextRange,
   extractTextRangeAsBlocks,
   fullBlockTextRange,
   getTextRangeSegments,
+  getToggleSubtreeLength,
   isBlockCoveredByTextRange,
-  isBlockFullySelected,
   isCrossBlockTextRange,
+  isFullDocumentRange,
+  isManagedMultiBlockRange,
   isTextRangeCollapsed,
+  isToggleBlock,
+  resolveHistoryShortcut,
+  resolveSelectAllShortcut,
+  selectionEndOffset,
   rangeHasMarkAcrossSegments,
   rangeMarkValueAcrossSegments,
   computeListNumbering,
@@ -26,13 +35,15 @@ import {
   patchTableCell,
   patchTableCellsBackground,
   patchTableStyle,
+  plainHeadingFromToggle,
+  removeToggleSubtree,
   isTextBlock,
   blockTypeForFile,
   fileToObjectUrl,
   mediaPropsFromFile,
   tryParseMarkdownToBlocks,
 } from '@xproeditor/core'
-import type { TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, TableCellCoord, TableCellAlign, TableStyle, AICommand, AITransport } from '@xproeditor/core'
+import type { TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, SelectAllStage, TableCellCoord, TableCellAlign, TableStyle, AICommand, AITransport } from '@xproeditor/core'
 import EditorBlockItem from './EditorBlockItem.vue'
 import EditorBubbleToolbar from './EditorBubbleToolbar.vue'
 import EditorEmojiTriggerMenu from './EditorEmojiTriggerMenu.vue'
@@ -51,6 +62,12 @@ const props = defineProps<{
     accept: string[]
     title?: string
   }) => Promise<{ url: string; alt?: string; caption?: string } | null>
+  fetchBookmarkMeta?: (url: string) => Promise<{
+    title?: string
+    description?: string
+    favicon?: string
+    image?: string
+  } | null | undefined>
   /** Default text direction for new blocks (from active content language). */
   editorDir?: 'ltr' | 'rtl'
   readonly?: boolean
@@ -90,6 +107,18 @@ const managedTextSelection = ref(false)
 const contentRevision = ref(0)
 let dragSelectAnchor: TextPoint | null = null
 let isDragSelecting = false
+/** Ignore the click that follows a multi-block drag (media blocks emit select on click). */
+let suppressNextBlockSelect = false
+/** Ctrl/Cmd+A stage: none → current block → whole document. */
+let selectAllStage: SelectAllStage = 'none'
+/**
+ * Keep the bubble (and its range snapshot) while the user focuses toolbar
+ * inputs such as the link URL field — focusing those collapses the native
+ * selection and would otherwise dismiss the bubble before Set/Enter applies.
+ */
+let suppressBubbleClear = false
+/** Last non-collapsed inline selection — fallback when native selection was stolen by a toolbar input. */
+let savedInlineSelection: { blockId: string; start: number; end: number } | null = null
 
 // ─── Item refs ────────────────────────────────────────────────────────────────
 
@@ -136,10 +165,6 @@ return
   nextTick(() => itemRefs.get(id)?.focusAt(pos))
 }
 
-function blockLength(block: Block): number {
-  return isTextBlock(block.type) ? spansToText(block.content).length : 0
-}
-
 function hasActiveManagedSelection(): boolean {
   return managedTextSelection.value
     && textRangeSelection.value !== null
@@ -184,8 +209,8 @@ function setManagedTextRange(anchor: TextPoint, focus: TextPoint) {
   selectedBlockId.value = null
   focusedBlockId.value = null
   closeSlash()
-  bubble.value = null
   window.getSelection()?.removeAllRanges()
+  nextTick(() => rootEl.value?.focus())
 }
 
 function selectAllBlocks() {
@@ -222,15 +247,15 @@ function deleteManagedTextRange() {
 }
 
 function isAllTextBlocksSelected(): boolean {
-  const textBlocks = visibleBlocks.value.filter(b => isTextBlock(b.type))
-
-  if (textBlocks.length === 0 || !hasActiveManagedSelection() || !textRangeSelection.value) {
+  if (!hasActiveManagedSelection() || !textRangeSelection.value) {
     return false
   }
 
-  return textBlocks.every(b =>
-    isBlockFullySelected(b.id, textRangeSelection.value!, blocks.value, visibleBlocks.value),
-  )
+  return isFullDocumentRange(textRangeSelection.value, visibleBlocks.value)
+}
+
+function resetSelectAllStage() {
+  selectAllStage = 'none'
 }
 
 function resolveSelectionAnchor(): TextPoint | null {
@@ -256,15 +281,18 @@ function finalizeTextRangeSelection() {
     return
   }
 
-  if (isCrossBlockTextRange(textRangeSelection.value, visibleBlocks.value)) {
+  if (isManagedMultiBlockRange(textRangeSelection.value, visibleBlocks.value)) {
     managedTextSelection.value = true
-    window.getSelection()?.removeAllRanges()
+    selectedBlockId.value = null
     focusedBlockId.value = null
+    window.getSelection()?.removeAllRanges()
+    nextTick(() => rootEl.value?.focus())
 
     return
   }
 
   const { anchor, focus } = textRangeSelection.value
+  const block = byId(anchor.blockId)
   const start = Math.min(anchor.offset, focus.offset)
   const end = Math.max(anchor.offset, focus.offset)
   const blockId = anchor.blockId
@@ -272,7 +300,7 @@ function finalizeTextRangeSelection() {
   textRangeSelection.value = null
   managedTextSelection.value = false
 
-  if (start !== end) {
+  if (start !== end && block && isTextBlock(block.type)) {
     itemRefs.get(blockId)?.setSelection(start, end)
     focusedBlockId.value = blockId
   }
@@ -282,20 +310,17 @@ function onSelectionPointerDown(
   block: Block,
   payload: { shiftKey: boolean; clientX: number; clientY: number },
 ) {
-  if (props.readonly || !isTextBlock(block.type) || !rootEl.value) {
+  if (props.readonly || !rootEl.value) {
     return
   }
 
   const point = caretPointFromClient(rootEl.value, payload.clientX, payload.clientY)
-
-  if (!point) {
-    return
-  }
+    ?? { blockId: block.id, offset: 0 }
 
   if (payload.shiftKey) {
     const anchor = resolveSelectionAnchor() ?? point
 
-    if (point.blockId === anchor.blockId) {
+    if (point.blockId === anchor.blockId && isTextBlock(block.type)) {
       const start = Math.min(anchor.offset, point.offset)
       const end = Math.max(anchor.offset, point.offset)
       clearTextRangeSelection()
@@ -330,6 +355,14 @@ function isFormatToolbarTarget(target: HTMLElement): boolean {
   return !!target.closest('[data-pro-editor-toolbar]')
 }
 
+function isToolbarOrOverlayTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  return isFormatToolbarTarget(target) || isEditorOverlayTarget(target)
+}
+
 function isNativeInputTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false
@@ -353,6 +386,12 @@ function shouldKeepNativeFocus(): boolean {
 }
 
 function selectBlock(id: string) {
+  if (suppressNextBlockSelect) {
+    suppressNextBlockSelect = false
+
+    return
+  }
+
   clearTextRangeSelection()
   selectedBlockId.value = id
   focusedBlockId.value = null
@@ -387,7 +426,7 @@ continue
 
     out.push(b)
 
-    if (b.type === 'toggle' && b.props.collapsed) {
+    if (isToggleBlock(b.type) && b.props.collapsed) {
 hideDeeperThan = ind
 }
   }
@@ -525,6 +564,7 @@ onMounted(() => {
   ensureNotEmpty()
   resetHistory()
   document.addEventListener('selectionchange', onSelectionChange)
+  document.addEventListener('mousedown', onDocMouseDownCapture, true)
   document.addEventListener('mousedown', onDocMouseDown)
   document.addEventListener('pointermove', onDocPointerMove)
   document.addEventListener('pointerup', onDocPointerUp)
@@ -532,6 +572,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('selectionchange', onSelectionChange)
+  document.removeEventListener('mousedown', onDocMouseDownCapture, true)
   document.removeEventListener('mousedown', onDocMouseDown)
   document.removeEventListener('pointermove', onDocPointerMove)
   document.removeEventListener('pointerup', onDocPointerUp)
@@ -609,6 +650,8 @@ function openAIMenu(position?: { x: number; y: number }) {
 
 function closeAIMenu() {
   aiMenu.value = null
+  // Restore multi-select popover if the range is still active.
+  refreshManagedBubble()
 }
 
 function getAISelectionBlocks(): Block[] {
@@ -649,6 +692,30 @@ return
     const pos = state.position
     closeSlash()
     openAIMenu({ x: pos.x, y: pos.y })
+    return
+  }
+
+  if (item.action === 'emoji') {
+    const block = byId(state.blockId)
+    const pos = state.position
+    const index = state.index
+    const removeEnd = state.index + 1 + state.query.length
+    closeSlash()
+
+    if (!block) {
+return
+}
+
+    block.content = deleteRangeInSpans(block.content, index, removeEnd)
+    pushHistory(true)
+    focusBlock(block.id, index)
+    emojiTriggerState.value = {
+      blockId: block.id,
+      index,
+      query: '',
+      position: pos,
+      prefixLen: 0,
+    }
     return
   }
 
@@ -705,6 +772,8 @@ interface EmojiTriggerState {
   index: number
   query: string
   position: { x: number; y: number; top?: number }
+  /** Chars before the query to strip on select (`:` = 1; slash-opened = 0). */
+  prefixLen: number
 }
 
 const emojiTriggerState = ref<EmojiTriggerState | null>(null)
@@ -718,13 +787,21 @@ function updateEmojiTrigger(block: Block, spans: InlineSpan[], caret: number | n
   const state = emojiTriggerState.value
 
   if (state && state.blockId === block.id) {
-    if (caret === null || caret <= state.index || text[state.index] !== ':') {
+    const { prefixLen } = state
+
+    if (caret === null || caret < state.index + prefixLen) {
       closeEmojiTrigger()
 
       return
     }
 
-    const query = text.slice(state.index + 1, caret)
+    if (prefixLen > 0 && text[state.index] !== ':') {
+      closeEmojiTrigger()
+
+      return
+    }
+
+    const query = text.slice(state.index + prefixLen, caret)
 
     if (/\s/.test(query) || query.length > 20) {
       closeEmojiTrigger()
@@ -741,7 +818,13 @@ function updateEmojiTrigger(block: Block, spans: InlineSpan[], caret: number | n
     const before = caret >= 2 ? text[caret - 2] : ''
 
     if (before === '' || /\s/.test(before)) {
-      emojiTriggerState.value = { blockId: block.id, index: caret - 1, query: '', position: slashPosition() }
+      emojiTriggerState.value = {
+        blockId: block.id,
+        index: caret - 1,
+        query: '',
+        position: slashPosition(),
+        prefixLen: 1,
+      }
     }
   }
 }
@@ -760,7 +843,7 @@ return
 return
 }
 
-  const removeEnd = state.index + 1 + state.query.length
+  const removeEnd = state.index + state.prefixLen + state.query.length
   const withoutTrigger = deleteRangeInSpans(block.content, state.index, removeEnd)
   block.content = insertSpansAt(withoutTrigger, state.index, [{ text: emoji }])
   pushHistory(true)
@@ -866,16 +949,28 @@ return
 }
 
   const text = spansToText(block.content)
-  const listLike = ['bulleted_list_item', 'numbered_list_item', 'to_do', 'toggle', 'quote', 'callout']
+  const listLike = [
+    'bulleted_list_item',
+    'numbered_list_item',
+    'to_do',
+    'toggle',
+    'toggle_heading_1',
+    'toggle_heading_2',
+    'toggle_heading_3',
+    'quote',
+    'callout',
+  ]
 
-  // Enter on an empty list-like block: outdent or exit to paragraph
+  // Enter on an empty list-like block: outdent or exit to paragraph / plain heading
   if (listLike.includes(block.type) && text === '') {
     const ind = block.props.indent ?? 0
 
     if (ind > 0) {
 block.props.indent = ind - 1
 } else {
-block.type = 'paragraph'
+      const plainHeading = plainHeadingFromToggle(block.type)
+      block.type = plainHeading ?? 'paragraph'
+      delete block.props.collapsed
 }
 
     pushHistory(true)
@@ -893,8 +988,13 @@ block.type = 'paragraph'
 
   if (keepType.includes(block.type)) {
 newType = block.type
-} else if (block.type.startsWith('heading') && spansToText(after).length > 0) {
-newType = block.type
+} else if (
+    (block.type.startsWith('heading') || block.type.startsWith('toggle_heading')) &&
+    spansToText(after).length > 0
+  ) {
+    newType = block.type.startsWith('toggle_heading')
+      ? (plainHeadingFromToggle(block.type) ?? 'paragraph')
+      : block.type
 }
 
   const newProps: Block['props'] = {}
@@ -907,9 +1007,11 @@ newProps.indent = block.props.indent
 newProps.dir = block.props.dir
 }
 
-  if (block.type === 'toggle') {
+  if (isToggleBlock(block.type)) {
     newProps.indent = (block.props.indent ?? 0) + 1
     block.props.collapsed = false
+    // Notion/BlockNote: Enter in a toggle creates a child paragraph inside it.
+    newType = 'paragraph'
   }
 
   const nb = makeBlock(newType, { content: after, props: newProps })
@@ -1183,8 +1285,14 @@ function getBlocksForClipboard(): Block[] | null {
 
   if (selectedBlockId.value) {
     const block = byId(selectedBlockId.value)
-
-    return block ? [block] : null
+    if (!block) return null
+    if (isToggleBlock(block.type)) {
+      const idx = blocks.value.indexOf(block)
+      if (idx === -1) return [block]
+      const len = getToggleSubtreeLength(blocks.value, idx)
+      return blocks.value.slice(idx, idx + len).map((b) => cloneBlock(b, true))
+    }
+    return [block]
   }
 
   return null
@@ -1270,6 +1378,16 @@ return
 
         return
       }
+
+      const idx = blocks.value.findIndex(b => b.id === deleteResult.focusBlockId)
+
+      if (idx !== -1) {
+        blocks.value.splice(idx, 0, ...pasted)
+        pushHistory(true)
+        focusAfterPaste(pasted)
+
+        return
+      }
     }
   }
 
@@ -1339,40 +1457,60 @@ removeBlock(block)
 }
 
 function onCopy(e: ClipboardEvent) {
-  if (props.readonly || isNativeInputTarget(e.target)) {
-return
-}
+  if (props.readonly) {
+    return
+  }
+
+  const managed = hasActiveManagedSelection() || !!selectedBlockId.value
+
+  if (!managed && isNativeInputTarget(e.target)) {
+    return
+  }
 
   const toCopy = getBlocksForClipboard()
 
   if (!toCopy?.length || !e.clipboardData) {
-return
-}
+    return
+  }
 
   e.preventDefault()
+  e.stopPropagation()
   writeBlocksToClipboardData(e.clipboardData, toCopy)
 }
 
 function onCut(e: ClipboardEvent) {
-  if (props.readonly || isNativeInputTarget(e.target)) {
-return
-}
+  if (props.readonly) {
+    return
+  }
+
+  const managed = hasActiveManagedSelection() || !!selectedBlockId.value
+
+  if (!managed && isNativeInputTarget(e.target)) {
+    return
+  }
 
   const toCopy = getBlocksForClipboard()
 
   if (!toCopy?.length || !e.clipboardData) {
-return
-}
+    return
+  }
 
   e.preventDefault()
+  e.stopPropagation()
   writeBlocksToClipboardData(e.clipboardData, toCopy)
   removeBlocksForCut()
 }
 
 function onPaste(e: ClipboardEvent) {
-  if (props.readonly || !e.clipboardData || isNativeInputTarget(e.target)) {
-return
-}
+  if (props.readonly || !e.clipboardData) {
+    return
+  }
+
+  const managed = hasActiveManagedSelection() || !!selectedBlockId.value
+
+  if (!managed && isNativeInputTarget(e.target)) {
+    return
+  }
 
   const nativeBlocks = parseBlocksFromClipboardData(e.clipboardData)
 
@@ -1438,14 +1576,58 @@ return
   focusBlock(nb.id, 'start')
 }
 
+function blocksForToggleAction(block: Block): Block[] {
+  if (!isToggleBlock(block.type)) return [block]
+  const idx = blocks.value.indexOf(block)
+  if (idx === -1) return [block]
+  return cloneToggleSubtree(blocks.value, idx)
+}
+
 function duplicateBlock(block: Block) {
   if (props.readonly) {
 return
 }
 
   const idx = blocks.value.indexOf(block)
-  blocks.value.splice(idx + 1, 0, cloneBlock(block))
+  if (idx === -1) return
+  const copies = blocksForToggleAction(block)
+  blocks.value.splice(idx + getToggleSubtreeLength(blocks.value, idx), 0, ...copies)
   pushHistory(true)
+}
+
+async function copyBlock(block: Block) {
+  if (props.readonly) return
+  selectBlock(block.id)
+  const { plain, html } = blocksToClipboardPayload(blocksForToggleAction(block))
+  try {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'text/plain': new Blob([plain], { type: 'text/plain' }),
+        'text/html': new Blob([html], { type: 'text/html' }),
+      }),
+    ])
+  } catch {
+    try {
+      await navigator.clipboard.writeText(plain)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+}
+
+async function cutBlock(block: Block) {
+  if (props.readonly) return
+  await copyBlock(block)
+  removeBlock(block)
+}
+
+function turnBlockInto(block: Block, type: BlockType) {
+  if (props.readonly || !isTextBlock(block.type)) return
+  const defaults = makeBlock(type)
+  block.type = type
+  block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+  pushHistory(true)
+  selectBlock(block.id)
 }
 
 function removeBlock(block: Block) {
@@ -1460,8 +1642,15 @@ return
 }
 
   const prev = neighborBlock(block.id, -1)
-  const next = neighborBlock(block.id, 1)
-  blocks.value.splice(idx, 1)
+  const subtreeLen = isToggleBlock(block.type)
+    ? getToggleSubtreeLength(blocks.value, idx)
+    : 1
+  const afterIdx = idx + subtreeLen
+  const next = afterIdx < blocks.value.length ? blocks.value[afterIdx] : null
+
+  if (isToggleBlock(block.type)) removeToggleSubtree(blocks.value, idx)
+  else blocks.value.splice(idx, 1)
+
   ensureNotEmpty()
   pushHistory(true)
   const target = prev ?? next ?? blocks.value[0]
@@ -1708,14 +1897,94 @@ interface BubbleState {
   blockId: string
   range: { start: number; end: number }
   position: { x: number; y: number }
+  placement: 'above' | 'beside'
   activeMarks: Partial<Record<MarkName, boolean>>
   currentLink: string | null
   currentColor: string | null
   currentHighlight: string | null
   blockType: BlockType
+  multiBlock: boolean
+  mixedTypes: boolean
+  /** Snapshot of the managed multi-block range (survives toolbar mousedown races). */
+  textRange?: TextRangeSelection
 }
 
+const CLEARABLE_MARKS: MarkName[] = [
+  'bold',
+  'italic',
+  'underline',
+  'strikethrough',
+  'code',
+  'link',
+  'color',
+  'highlight',
+]
+
 const bubble = ref<BubbleState | null>(null)
+
+function getManagedSelectionBounds(range: TextRangeSelection): DOMRect | null {
+  const root = rootEl.value
+  if (!root) return null
+
+  const normalized = normalizeTextRange(range, visibleBlocks.value)
+  if (!normalized) return null
+
+  const startIdx = visibleBlocks.value.findIndex(b => b.id === normalized.startBlockId)
+  const endIdx = visibleBlocks.value.findIndex(b => b.id === normalized.endBlockId)
+  if (startIdx === -1 || endIdx === -1) return null
+
+  const segments = getTextRangeSegments(range, blocks.value, visibleBlocks.value)
+  let minL = Infinity
+  let minT = Infinity
+  let maxR = -Infinity
+  let maxB = -Infinity
+  let found = false
+
+  const expand = (r: DOMRect) => {
+    if (!r.width && !r.height) return
+    found = true
+    minL = Math.min(minL, r.left)
+    minT = Math.min(minT, r.top)
+    maxR = Math.max(maxR, r.right)
+    maxB = Math.max(maxB, r.bottom)
+  }
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const block = visibleBlocks.value[i]
+    const blockEl = root.querySelector(`[data-block-id="${block.id}"]`) as HTMLElement | null
+    if (!blockEl) continue
+
+    if (isTextBlock(block.type)) {
+      const segment = segments.find(s => s.blockId === block.id)
+      if (!segment) continue
+
+      const editable = blockEl.querySelector('.etb') as HTMLElement | null
+      if (editable && !segment.fullBlock) {
+        for (const r of getRangeClientRects(editable, segment.start, segment.end)) expand(r)
+        continue
+      }
+    } else if (!isBlockCoveredByTextRange(block.id, range, blocks.value, visibleBlocks.value)) {
+      continue
+    }
+
+    const body = blockEl.querySelector('.ebi-body') as HTMLElement | null
+    expand((body ?? blockEl).getBoundingClientRect())
+  }
+
+  if (!found) return null
+  return new DOMRect(minL, minT, maxR - minL, maxB - minT)
+}
+
+function positionBesideSelection(rect: DOMRect): { x: number; y: number } {
+  const panelW = 268
+  const pad = 8
+  let x = rect.right + pad
+  if (x + panelW > window.innerWidth - pad) {
+    x = rect.left - panelW - pad
+    if (x < pad) x = Math.max(pad, Math.min(rect.left + rect.width / 2, window.innerWidth - pad))
+  }
+  return { x, y: Math.max(pad, rect.top) }
+}
 
 function computeBubble(block: Block, range: { start: number; end: number }, rect: DOMRect): BubbleState {
   const marks: Partial<Record<MarkName, boolean>> = {}
@@ -1724,9 +1993,7 @@ function computeBubble(block: Block, range: { start: number; end: number }, rect
     marks[m] = rangeHasMark(block.content, range.start, range.end, m)
   }
 
-  const slice = sliceSpans(block.content, range.start, range.end)
-  const allLinked = slice.length > 0 && slice.every(s => s.marks?.link)
-  const currentLink = allLinked ? (slice[0].marks?.link ?? null) : null
+  const currentLink = rangeMarkValue(block.content, range.start, range.end, 'link')
   const currentColor = rangeMarkValue(block.content, range.start, range.end, 'color')
   const currentHighlight = rangeMarkValue(block.content, range.start, range.end, 'highlight')
   const x = Math.max(160, Math.min(rect.left + rect.width / 2, window.innerWidth - 180))
@@ -1736,26 +2003,93 @@ function computeBubble(block: Block, range: { start: number; end: number }, rect
     blockId: block.id,
     range,
     position: { x, y },
+    placement: 'above',
     activeMarks: marks,
     currentLink,
     currentColor,
     currentHighlight,
     blockType: block.type,
+    multiBlock: false,
+    mixedTypes: false,
   }
 }
 
-function onSelectionChange() {
-  if (props.readonly || hasActiveManagedSelection()) {
-    bubble.value = null
+function computeManagedBubble(range: TextRangeSelection): BubbleState | null {
+  const segments = getTextRangeSegments(range, blocks.value, visibleBlocks.value)
+  const bounds = getManagedSelectionBounds(range)
+  if (!bounds) return null
 
+  const first = segments[0]
+  const fallbackBlock = byId(range.anchor.blockId) ?? visibleBlocks.value[0]
+  if (!first && !fallbackBlock) return null
+
+  const marks: Partial<Record<MarkName, boolean>> = {}
+  for (const m of ['bold', 'italic', 'underline', 'strikethrough', 'code'] as MarkName[]) {
+    marks[m] =
+      segments.length > 0 &&
+      rangeHasMarkAcrossSegments(range, blocks.value, visibleBlocks.value, m)
+  }
+
+  const currentLink =
+    segments.length > 0
+      ? rangeMarkValueAcrossSegments(range, blocks.value, visibleBlocks.value, 'link')
+      : null
+  const currentColor =
+    segments.length > 0
+      ? rangeMarkValueAcrossSegments(range, blocks.value, visibleBlocks.value, 'color')
+      : null
+  const currentHighlight =
+    segments.length > 0
+      ? rangeMarkValueAcrossSegments(range, blocks.value, visibleBlocks.value, 'highlight')
+      : null
+
+  const types = new Set(segments.map(s => s.block.type))
+  const mixedTypes = types.size > 1
+  const blockType = first?.block.type ?? fallbackBlock!.type
+  const position = positionBesideSelection(bounds)
+
+  return {
+    blockId: first?.blockId ?? fallbackBlock!.id,
+    range: first ? { start: first.start, end: first.end } : { start: 0, end: 0 },
+    position,
+    placement: 'beside',
+    activeMarks: marks,
+    currentLink,
+    currentColor,
+    currentHighlight,
+    blockType,
+    multiBlock: true,
+    mixedTypes,
+    textRange: range,
+  }
+}
+
+function refreshManagedBubble() {
+  if (!props.showBubbleToolbar || props.readonly || !hasActiveManagedSelection()) return
+  if (!textRangeSelection.value) return
+  bubble.value = computeManagedBubble(textRangeSelection.value)
+}
+
+function onSelectionChange() {
+  if (props.readonly) {
+    bubble.value = null
+    savedInlineSelection = null
     return
   }
+
+  // Managed multi-block selection owns the bubble via the watch below.
+  if (hasActiveManagedSelection()) return
 
   const sel = window.getSelection()
 
   if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    // Link/color inputs steal focus and collapse the native selection; keep
+    // the bubble range so Set/Enter/Remove still apply to the snapshot.
+    if (suppressBubbleClear || isToolbarOrOverlayTarget(document.activeElement)) {
+      return
+    }
     bubble.value = null
-
+    savedInlineSelection = null
     return
   }
 
@@ -1764,8 +2098,11 @@ function onSelectionChange() {
   const blockEl = el?.closest('[data-block-id]')
 
   if (!blockEl || !rootEl.value?.contains(blockEl)) {
+    if (suppressBubbleClear || isToolbarOrOverlayTarget(document.activeElement)) {
+      return
+    }
     bubble.value = null
-
+    savedInlineSelection = null
     return
   }
 
@@ -1773,8 +2110,11 @@ function onSelectionChange() {
   const block = id ? byId(id) : undefined
 
   if (!block || !isTextBlock(block.type)) {
+    if (suppressBubbleClear || isToolbarOrOverlayTarget(document.activeElement)) {
+      return
+    }
     bubble.value = null
-
+    savedInlineSelection = null
     return
   }
 
@@ -1782,32 +2122,182 @@ function onSelectionChange() {
   const rect = getSelectionClientRect()
 
   if (!range || range.start === range.end || !rect) {
+    if (suppressBubbleClear || isToolbarOrOverlayTarget(document.activeElement)) {
+      return
+    }
     bubble.value = null
-
+    savedInlineSelection = null
     return
   }
 
+  savedInlineSelection = {
+    blockId: block.id,
+    start: range.start,
+    end: range.end,
+  }
   bubble.value = computeBubble(block, range, rect)
+}
+
+function resolveBubbleTextRange(state: BubbleState): TextRangeSelection | null {
+  if (state.textRange) return state.textRange
+  if (state.multiBlock) return textRangeSelection.value
+  return null
 }
 
 function onBubbleMark(mark: MarkName, value: boolean | string | null) {
   const state = bubble.value
+  if (!state) return
 
-  if (!state) {
-return
-}
+  const multiRange = resolveBubbleTextRange(state)
+  if (state.multiBlock && multiRange) {
+    const booleanMarks = ['bold', 'italic', 'underline', 'strikethrough', 'code'] as MarkName[]
+    let markValue: boolean | string | null = value === false ? null : value
+
+    if (booleanMarks.includes(mark) && typeof value === 'boolean') {
+      const applied = rangeHasMarkAcrossSegments(
+        multiRange,
+        blocks.value,
+        visibleBlocks.value,
+        mark,
+      )
+      markValue = applied ? null : true
+    }
+
+    applyMarkToTextRange(blocks.value, multiRange, visibleBlocks.value, mark, markValue)
+
+    // Restore managed selection if a toolbar mousedown cleared it mid-gesture.
+    if (!hasActiveManagedSelection()) {
+      setManagedTextRange(multiRange.anchor, multiRange.focus)
+    }
+
+    pushHistory(true)
+    contentRevision.value++
+    refreshManagedBubble()
+    return
+  }
 
   const block = byId(state.blockId)
+  if (!block) return
 
-  if (!block) {
-return
+  block.content = applyMarkToRange(
+    block.content,
+    state.range.start,
+    state.range.end,
+    mark,
+    value === false ? null : value,
+  )
+
+  // Refresh bubble mark state immediately so link Remove/active UI updates
+  // even while focus is still in the URL input.
+  const nextMarks: Partial<Record<MarkName, boolean>> = {}
+  for (const m of ['bold', 'italic', 'underline', 'strikethrough', 'code'] as MarkName[]) {
+    nextMarks[m] = rangeHasMark(block.content, state.range.start, state.range.end, m)
+  }
+  bubble.value = {
+    ...state,
+    activeMarks: nextMarks,
+    currentLink: rangeMarkValue(block.content, state.range.start, state.range.end, 'link'),
+    currentColor: rangeMarkValue(block.content, state.range.start, state.range.end, 'color'),
+    currentHighlight: rangeMarkValue(block.content, state.range.start, state.range.end, 'highlight'),
+  }
+  savedInlineSelection = {
+    blockId: block.id,
+    start: state.range.start,
+    end: state.range.end,
+  }
+
+  pushHistory(true)
+  contentRevision.value++
+  nextTick(() => {
+    itemRefs.get(block.id)?.setSelection(state.range.start, state.range.end)
+  })
 }
 
-  block.content = applyMarkToRange(block.content, state.range.start, state.range.end, mark, value === false ? null : value)
+function onBubbleClearFormatting() {
+  const state = bubble.value
+  if (!state) return
+
+  const multiRange = resolveBubbleTextRange(state)
+  if (state.multiBlock && multiRange) {
+    for (const mark of CLEARABLE_MARKS) {
+      applyMarkToTextRange(blocks.value, multiRange, visibleBlocks.value, mark, null)
+    }
+
+    if (!hasActiveManagedSelection()) {
+      setManagedTextRange(multiRange.anchor, multiRange.focus)
+    }
+
+    pushHistory(true)
+    contentRevision.value++
+    refreshManagedBubble()
+    return
+  }
+
+  const block = byId(state.blockId)
+  if (!block || !isTextBlock(block.type)) return
+
+  let content = block.content
+  for (const mark of CLEARABLE_MARKS) {
+    content = applyMarkToRange(content, state.range.start, state.range.end, mark, null)
+  }
+  block.content = content
   pushHistory(true)
   nextTick(() => {
     itemRefs.get(block.id)?.setSelection(state.range.start, state.range.end)
   })
+}
+
+async function onBubbleCopy() {
+  const toCopy = getBlocksForClipboard()
+  if (!toCopy?.length) return
+
+  const { plain, html } = blocksToClipboardPayload(toCopy)
+  try {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'text/plain': new Blob([plain], { type: 'text/plain' }),
+        'text/html': new Blob([html], { type: 'text/html' }),
+      }),
+    ])
+  } catch {
+    try {
+      await navigator.clipboard.writeText(plain)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+}
+
+function onBubbleDuplicate() {
+  if (!hasActiveManagedSelection() || !textRangeSelection.value) return
+
+  const extracted = extractTextRangeAsBlocks(
+    textRangeSelection.value,
+    blocks.value,
+    visibleBlocks.value,
+  )
+  if (!extracted.length) return
+
+  const normalized = normalizeTextRange(textRangeSelection.value, visibleBlocks.value)
+  if (!normalized) return
+
+  const endIdx = blocks.value.findIndex(b => b.id === normalized.endBlockId)
+  if (endIdx === -1) return
+
+  blocks.value.splice(endIdx + 1, 0, ...extracted)
+  pushHistory(true)
+}
+
+function onBubbleDelete() {
+  if (hasActiveManagedSelection()) {
+    deleteManagedTextRange()
+    bubble.value = null
+  }
+}
+
+function onBubbleAskAI() {
+  const pos = bubble.value?.position
+  openAIMenu(pos ? { x: pos.x, y: pos.y } : undefined)
 }
 
 function onBubbleTurnInto(type: BlockType) {
@@ -1816,17 +2306,37 @@ function onBubbleTurnInto(type: BlockType) {
 
 function turnIntoBlock(type: BlockType) {
   const state = bubble.value
-  const blockId = state?.blockId ?? focusedBlockId.value
+  const multiRange = state ? resolveBubbleTextRange(state) : textRangeSelection.value
 
-  if (!blockId) {
-return
-}
+  if ((state?.multiBlock || hasActiveManagedSelection()) && multiRange) {
+    const segments = getTextRangeSegments(multiRange, blocks.value, visibleBlocks.value)
+    let changed = false
+
+    for (const segment of segments) {
+      const block = byId(segment.blockId)
+      if (!block || !isTextBlock(block.type)) continue
+      const defaults = makeBlock(type)
+      block.type = type
+      block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+      changed = true
+    }
+
+    if (changed) {
+      if (!hasActiveManagedSelection()) {
+        setManagedTextRange(multiRange.anchor, multiRange.focus)
+      }
+      pushHistory(true)
+      contentRevision.value++
+      refreshManagedBubble()
+    }
+    return
+  }
+
+  const blockId = state?.blockId ?? focusedBlockId.value
+  if (!blockId) return
 
   const block = byId(blockId)
-
-  if (!block || !isTextBlock(block.type)) {
-return
-}
+  if (!block || !isTextBlock(block.type)) return
 
   const range = state?.range ?? itemRefs.get(block.id)?.getSelection() ?? { start: 0, end: 0 }
   const defaults = makeBlock(type)
@@ -1835,6 +2345,23 @@ return
   pushHistory(true)
   nextTick(() => itemRefs.get(block.id)?.setSelection(range.start, range.end))
 }
+
+watch(
+  [() => props.showBubbleToolbar, () => props.readonly, textRangeSelection, managedTextSelection, contentRevision, visibleBlocks],
+  () => {
+    if (!props.showBubbleToolbar || props.readonly) {
+      if (bubble.value?.multiBlock) bubble.value = null
+      return
+    }
+
+    if (!hasActiveManagedSelection() || !textRangeSelection.value) {
+      if (bubble.value?.multiBlock) bubble.value = null
+      return
+    }
+
+    bubble.value = computeManagedBubble(textRangeSelection.value)
+  },
+)
 
 function applyToolbarMark(mark: MarkName, value: boolean | string | null) {
   if (bubble.value) {
@@ -1888,13 +2415,25 @@ return
 return
 }
 
-  const sel = itemRefs.get(block.id)?.getSelection()
+  const live = itemRefs.get(block.id)?.getSelection()
+  const saved = savedInlineSelection
+  const sel =
+    live && live.start !== live.end
+      ? live
+      : saved && saved.blockId === block.id && saved.start !== saved.end
+        ? { start: saved.start, end: saved.end }
+        : null
 
-  if (!sel || sel.start === sel.end) {
-return
-}
+  if (!sel) {
+    return
+  }
 
   block.content = applyMarkToRange(block.content, sel.start, sel.end, mark, value === false ? null : value)
+  savedInlineSelection = {
+    blockId: block.id,
+    start: sel.start,
+    end: sel.end,
+  }
   pushHistory(true)
   contentRevision.value++
 
@@ -2036,7 +2575,7 @@ const formatToolbarState = computed(() => {
         currentColor: bubble.value.currentColor,
         currentHighlight: bubble.value.currentHighlight,
         hasSelection: true,
-        multiBlock: false,
+        multiBlock: bubble.value.multiBlock,
         align: block?.props.align ?? 'left',
         indent: block?.props.indent ?? 0,
         dir: block?.props.dir ?? 'auto',
@@ -2069,28 +2608,30 @@ const formatToolbarState = computed(() => {
       )
     }
 
-    const currentColor = multiBlock
-      ? null
-      : rangeMarkValueAcrossSegments(
-          textRangeSelection.value,
-          blocks.value,
-          visibleBlocks.value,
-          'color',
-        )
-    const currentHighlight = multiBlock
-      ? null
-      : rangeMarkValueAcrossSegments(
-          textRangeSelection.value,
-          blocks.value,
-          visibleBlocks.value,
-          'highlight',
-        )
+    const currentLink = rangeMarkValueAcrossSegments(
+      textRangeSelection.value,
+      blocks.value,
+      visibleBlocks.value,
+      'link',
+    )
+    const currentColor = rangeMarkValueAcrossSegments(
+      textRangeSelection.value,
+      blocks.value,
+      visibleBlocks.value,
+      'color',
+    )
+    const currentHighlight = rangeMarkValueAcrossSegments(
+      textRangeSelection.value,
+      blocks.value,
+      visibleBlocks.value,
+      'highlight',
+    )
 
     return {
       blockId: first.blockId,
       blockType: block.type,
       activeMarks: marks,
-      currentLink: null,
+      currentLink,
       currentColor,
       currentHighlight,
       hasSelection: true,
@@ -2148,7 +2689,14 @@ const formatToolbarState = computed(() => {
     }
 
     if (block && isTextBlock(block.type)) {
-      const sel = itemRefs.get(block.id)?.getSelection()
+      const live = itemRefs.get(block.id)?.getSelection()
+      const saved = savedInlineSelection
+      const sel =
+        live && live.start !== live.end
+          ? live
+          : saved && saved.blockId === block.id && saved.start !== saved.end
+            ? { start: saved.start, end: saved.end }
+            : null
       const hasSelection = !!sel && sel.start !== sel.end
       const marks: Partial<Record<MarkName, boolean>> = {}
 
@@ -2158,6 +2706,9 @@ const formatToolbarState = computed(() => {
         }
       }
 
+      const currentLink = hasSelection && sel
+        ? rangeMarkValue(block.content, sel.start, sel.end, 'link')
+        : null
       const currentColor = hasSelection && sel
         ? rangeMarkValue(block.content, sel.start, sel.end, 'color')
         : null
@@ -2169,7 +2720,7 @@ const formatToolbarState = computed(() => {
         blockId: block.id,
         blockType: block.type,
         activeMarks: marks,
-        currentLink: null,
+        currentLink,
         currentColor,
         currentHighlight,
         hasSelection,
@@ -2320,20 +2871,38 @@ return
 return
 }
 
-  const [moved] = blocks.value.splice(fromIdx, 1)
+  const fromBlock = blocks.value[fromIdx]
+  const moveLen = isToggleBlock(fromBlock.type)
+    ? getToggleSubtreeLength(blocks.value, fromIdx)
+    : 1
+
+  // Don't drop a toggle onto one of its own children.
+  const targetIdxBefore = blocks.value.findIndex(b => b.id === target.id)
+  if (
+    targetIdxBefore !== -1 &&
+    targetIdxBefore >= fromIdx &&
+    targetIdxBefore < fromIdx + moveLen
+  ) {
+    return
+  }
+
+  const moved = blocks.value.splice(fromIdx, moveLen)
   let toIdx = blocks.value.findIndex(b => b.id === target.id)
 
   if (toIdx === -1) {
- blocks.value.splice(fromIdx, 0, moved);
-
- return 
-}
+    blocks.value.splice(fromIdx, 0, ...moved)
+    return
+  }
 
   if (target.position === 'after') {
-toIdx += 1
-}
+    const targetBlock = blocks.value[toIdx]
+    const targetSpan = isToggleBlock(targetBlock.type)
+      ? getToggleSubtreeLength(blocks.value, toIdx)
+      : 1
+    toIdx += targetSpan
+  }
 
-  blocks.value.splice(toIdx, 0, moved)
+  blocks.value.splice(toIdx, 0, ...moved)
   pushHistory(true)
 }
 
@@ -2367,14 +2936,16 @@ return byId(focusedBlockId.value)
 
 function isFullTextBlockContentSelected(block: Block): boolean {
   if (!isTextBlock(block.type)) {
-return false
-}
+    return false
+  }
 
   const len = spansToText(block.content).length
 
+  // Empty blocks have nowhere to "select"; treat as not fully selected so the
+  // first Ctrl+A advances the stage without jumping to the whole document.
   if (len === 0) {
-return true
-}
+    return false
+  }
 
   const sel = itemRefs.get(block.id)?.getSelection()
 
@@ -2385,14 +2956,14 @@ function isFullCodeBlockSelected(blockEl: HTMLElement | null): boolean {
   const textarea = blockEl?.querySelector('textarea')
 
   if (!textarea) {
-return false
-}
+    return false
+  }
 
   const len = textarea.value.length
 
   if (len === 0) {
-return true
-}
+    return false
+  }
 
   return textarea.selectionStart === 0 && textarea.selectionEnd >= len
 }
@@ -2402,6 +2973,7 @@ function selectAllTextInBlock(block: Block) {
     const len = spansToText(block.content).length
     itemRefs.get(block.id)?.setSelection(0, len)
     focusedBlockId.value = block.id
+    selectedBlockId.value = null
 
     return
   }
@@ -2414,55 +2986,68 @@ function selectAllTextInBlock(block: Block) {
       textarea.focus()
       textarea.setSelectionRange(0, textarea.value.length)
       focusedBlockId.value = block.id
+      selectedBlockId.value = null
     }
   }
 }
 
-function handleSelectAllShortcut(target: HTMLElement) {
-  const block = resolveActiveBlock(target)
-  const blockEl = target.closest('[data-block-id]') ?? (block
-    ? rootEl.value?.querySelector(`[data-block-id="${block.id}"]`)
-    : null)
+function isActiveBlockFullySelected(block: Block, blockEl: Element | null): boolean {
+  if (isTextBlock(block.type)) {
+    return isFullTextBlockContentSelected(block)
+  }
 
-  if (isAllTextBlocksSelected()) {
+  if (block.type === 'code') {
+    return isFullCodeBlockSelected(blockEl as HTMLElement | null)
+  }
+
+  return selectedBlockId.value === block.id
+}
+
+function selectActiveBlockForSelectAll(block: Block) {
+  if (isTextBlock(block.type) || block.type === 'code') {
+    selectAllTextInBlock(block)
+
     return
   }
 
-  const partialRange = hasActiveManagedSelection() && !isAllTextBlocksSelected()
-  const singleNonTextSelected = block && !isTextBlock(block.type) && block.type !== 'code'
-    && selectedBlockId.value === block.id
+  // Media / button / divider / table: select block chrome first.
+  selectBlock(block.id)
+}
 
-  if (partialRange || singleNonTextSelected) {
+function handleSelectAllShortcut(target: HTMLElement) {
+  const block = resolveActiveBlock(target)
+  const foundBlockEl =
+    target.closest('[data-block-id]')
+    ?? (block ? rootEl.value?.querySelector(`[data-block-id="${block.id}"]`) : null)
+  const blockEl: Element | null = foundBlockEl ?? null
+
+  const documentAlreadySelected = isAllTextBlocksSelected()
+  // Partial managed ranges (shift-drag etc.) escalate straight to the document.
+  const blockAlreadySelected =
+    (!!block && isActiveBlockFullySelected(block, blockEl))
+    || (hasActiveManagedSelection() && !documentAlreadySelected)
+  const decision = resolveSelectAllShortcut({
+    stage: selectAllStage,
+    documentAlreadySelected,
+    blockAlreadySelected,
+    hasActiveBlock: !!block,
+  })
+
+  selectAllStage = decision.stage
+
+  if (decision.action === 'noop') {
+    return
+  }
+
+  if (decision.action === 'select-document') {
     selectAllBlocks()
 
     return
   }
 
-  if (block && isTextBlock(block.type)) {
-    if (isFullTextBlockContentSelected(block)) {
-      selectAllBlocks()
-
-      return
-    }
-
-    selectAllTextInBlock(block)
-
-    return
+  if (block) {
+    selectActiveBlockForSelectAll(block)
   }
-
-  if (block?.type === 'code') {
-    if (isFullCodeBlockSelected(blockEl as HTMLElement | null)) {
-      selectAllBlocks()
-
-      return
-    }
-
-    selectAllTextInBlock(block)
-
-    return
-  }
-
-  selectAllBlocks()
 }
 
 function onKeydownCapture(e: KeyboardEvent) {
@@ -2503,7 +3088,13 @@ return
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault(); e.stopPropagation()
       const q = emojiTriggerState.value.query.toLowerCase()
-      const match = q ? ALL_EMOJIS.find(en => en.name.includes(q) || en.keywords.some(k => k.includes(q))) : null
+
+      // Empty query shows the full grid — keep it open; user clicks an emoji.
+      if (!q) {
+return
+}
+
+      const match = ALL_EMOJIS.find(en => en.name.includes(q) || en.keywords.some(k => k.includes(q)))
 
       if (match) {
 onEmojiTriggerSelect(match.char)
@@ -2521,11 +3112,56 @@ closeEmojiTrigger()
 }
   }
 
-  if (isNativeInputTarget(e.target)) {
-return
-}
-
   const mod = e.ctrlKey || e.metaKey
+  const isSelectAllShortcut = mod && e.key.toLowerCase() === 'a'
+
+  // Select-all must run even when focus is inside contenteditable/textarea —
+  // otherwise the browser handles the first Ctrl+A and the second never escalates.
+  if (isSelectAllShortcut) {
+    const target = e.target as HTMLElement
+
+    if (rootEl.value?.contains(target)) {
+      e.preventDefault()
+      e.stopPropagation()
+      handleSelectAllShortcut(target)
+
+      return
+    }
+  }
+
+  // Modifier-only keydowns (Cmd/Ctrl before 'A') must not clear the stage.
+  const isModifierOnly =
+    e.key === 'Meta' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift'
+  if (!isModifierOnly) {
+    resetSelectAllStage()
+  }
+
+  // Undo/redo must run even when focus is inside contenteditable/textarea —
+  // otherwise the browser's field-local undo steals the shortcut and document
+  // history never runs (same class of bug as select-all).
+  const historyAction = resolveHistoryShortcut({
+    key: e.key,
+    ctrlKey: e.ctrlKey,
+    metaKey: e.metaKey,
+    shiftKey: e.shiftKey,
+  })
+
+  if (historyAction) {
+    const target = e.target as HTMLElement
+
+    if (rootEl.value?.contains(target)) {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (historyAction === 'redo') {
+        redo()
+      } else {
+        undo()
+      }
+
+      return
+    }
+  }
 
   if (hasActiveManagedSelection()) {
     if (e.key === 'Backspace' || e.key === 'Delete') {
@@ -2543,18 +3179,16 @@ return
 
       return
     }
+
+    // Keep focus on the editor root for clipboard shortcuts while a
+    // multi-block range is active (even if a contenteditable still has focus).
+    if (mod && (e.key.toLowerCase() === 'c' || e.key.toLowerCase() === 'x' || e.key.toLowerCase() === 'v')) {
+      nextTick(() => rootEl.value?.focus())
+    }
   }
 
-  if (mod && e.key.toLowerCase() === 'a') {
-    const target = e.target as HTMLElement
-
-    if (rootEl.value?.contains(target)) {
-      e.preventDefault()
-      e.stopPropagation()
-      handleSelectAllShortcut(target)
-
-      return
-    }
+  if (isNativeInputTarget(e.target) && !hasActiveManagedSelection()) {
+    return
   }
 
   if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
@@ -2568,42 +3202,19 @@ return
 
     const neighbor = neighborBlock(baseBlockId, e.key === 'ArrowDown' ? 1 : -1)
 
-    if (neighbor && isTextBlock(neighbor.type)) {
+    if (neighbor) {
       e.preventDefault()
       e.stopPropagation()
 
       const anchor = resolveSelectionAnchor() ?? { blockId: baseBlockId, offset: 0 }
-      const focusOffset = textRangeSelection.value?.focus.offset
-        ?? itemRefs.get(baseBlockId)?.getSelection()?.end
-        ?? 0
-      const clampedOffset = Math.min(focusOffset, blockLength(neighbor))
+      const focusOffset = e.key === 'ArrowDown'
+        ? selectionEndOffset(neighbor)
+        : 0
 
-      setManagedTextRange(anchor, { blockId: neighbor.id, offset: clampedOffset })
-      nextTick(() => rootEl.value?.focus())
+      setManagedTextRange(anchor, { blockId: neighbor.id, offset: focusOffset })
 
       return
     }
-  }
-
-  if (mod && e.key.toLowerCase() === 'z') {
-    e.preventDefault()
-    e.stopPropagation()
-
-    if (e.shiftKey) {
-redo()
-} else {
-undo()
-}
-
-    return
-  }
-
-  if (mod && e.key.toLowerCase() === 'y') {
-    e.preventDefault()
-    e.stopPropagation()
-    redo()
-
-    return
   }
 
   if (e.key === 'Escape' && bubble.value) {
@@ -2613,34 +3224,52 @@ undo()
 
 function onBlockPointerDown(block: Block, e: PointerEvent) {
   if (props.readonly) {
-return
-}
+    return
+  }
 
   const target = e.target as HTMLElement
 
   if (target.closest('.ebi-reorder-handle, .ebi-gutter')) {
-return
-}
+    return
+  }
 
-  if (e.shiftKey && !isTextBlock(block.type)) {
+  resetSelectAllStage()
+
+  // Text blocks handle shift-extend via selection-pointer-down on `.etb`.
+  if (e.shiftKey && !target.closest('.etb')) {
+    const point = rootEl.value
+      ? caretPointFromClient(rootEl.value, e.clientX, e.clientY)
+      : null
+    const focus = point ?? { blockId: block.id, offset: selectionEndOffset(block) }
     const anchor = resolveSelectionAnchor() ?? { blockId: block.id, offset: 0 }
 
-    setManagedTextRange(anchor, { blockId: block.id, offset: blockLength(block) })
+    setManagedTextRange(anchor, focus)
     e.preventDefault()
-    nextTick(() => rootEl.value?.focus())
 
     return
   }
 
-  if (!e.shiftKey && hasActiveManagedSelection() && !isTextBlock(block.type)) {
-    clearTextRangeSelection()
+  if (!isTextBlock(block.type) && e.button === 0) {
+    if (hasActiveManagedSelection()) {
+      clearTextRangeSelection()
+    }
+
+    const point = rootEl.value
+      ? caretPointFromClient(rootEl.value, e.clientX, e.clientY)
+      : null
+    const start = point ?? { blockId: block.id, offset: 0 }
+
+    isDragSelecting = true
+    dragSelectAnchor = start
+    textRangeSelection.value = { anchor: start, focus: start }
+    managedTextSelection.value = false
   }
 }
 
 function onDocPointerMove(e: PointerEvent) {
   if (draggingId.value || !isDragSelecting || !dragSelectAnchor || e.buttons === 0 || !rootEl.value) {
-return
-}
+    return
+  }
 
   const point = caretPointFromClient(rootEl.value, e.clientX, e.clientY)
 
@@ -2650,16 +3279,24 @@ return
 
   textRangeSelection.value = { anchor: dragSelectAnchor, focus: point }
 
-  if (point.blockId !== dragSelectAnchor.blockId || hasActiveManagedSelection()) {
+  if (
+    point.blockId !== dragSelectAnchor.blockId
+    || isManagedMultiBlockRange({ anchor: dragSelectAnchor, focus: point }, visibleBlocks.value)
+  ) {
     managedTextSelection.value = true
-    window.getSelection()?.removeAllRanges()
+    selectedBlockId.value = null
     focusedBlockId.value = null
+    window.getSelection()?.removeAllRanges()
   }
 }
 
 function onDocPointerUp() {
   if (isDragSelecting) {
     finalizeTextRangeSelection()
+
+    if (hasActiveManagedSelection()) {
+      suppressNextBlockSelect = true
+    }
   }
 
   isDragSelecting = false
@@ -2717,11 +3354,27 @@ return
   }
 }
 
+function onDocMouseDownCapture(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  // Capture phase so toolbar stopPropagation still lets us see the gesture.
+  suppressBubbleClear = isToolbarOrOverlayTarget(target)
+}
+
 function onDocMouseDown(e: MouseEvent) {
   const target = e.target as HTMLElement
 
-  if (isEditorOverlayTarget(target)) {
+  if (isToolbarOrOverlayTarget(target)) {
     return
+  }
+
+  // Clicking away with a collapsed selection dismisses a single-block bubble
+  // that was kept alive for the link/color inputs.
+  if (bubble.value && !bubble.value.multiBlock && !hasActiveManagedSelection()) {
+    const sel = window.getSelection()
+    if (!sel || sel.isCollapsed) {
+      bubble.value = null
+      savedInlineSelection = null
+    }
   }
 
   if (slashState.value && !target.closest('.fixed')) {
@@ -2855,6 +3508,7 @@ focusBlock(last.id, 'end')
       :drop-position="dropTarget && dropTarget.id === block.id ? dropTarget.position : null"
       :upload="upload"
       :pick-media="pickMedia"
+      :fetch-bookmark-meta="fetchBookmarkMeta"
       :editor-dir="editorDir"
       :readonly="readonly"
       :theme-source="rootEl"
@@ -2873,9 +3527,14 @@ focusBlock(last.id, 'end')
       @patch="p => patchProps(block, p)"
       @icon-picker-opened="iconPickerRequest = null"
       @select="selectBlock(block.id)"
+      :ai-enabled="typeof props.ai?.transport === 'function'"
       @add-below="addBelow(block)"
       @duplicate="duplicateBlock(block)"
+      @copy="() => void copyBlock(block)"
+      @cut="() => void cutBlock(block)"
       @remove="removeBlock(block)"
+      @turn-into="t => turnBlockInto(block, t)"
+      @ask-ai="openAIMenu()"
       @drag-handle-start="e => onDragHandleStart(block, e)"
       @pointerdown="e => onBlockPointerDown(block, e)"
       @selection-pointer-down="p => onSelectionPointerDown(block, p)"
@@ -2897,7 +3556,7 @@ focusBlock(last.id, 'end')
       :position="slashState.position"
       :dir="editorDir ?? 'ltr'"
       :theme-source="rootEl"
-      :show-ai="!!ai?.transport"
+      :ai-enabled="typeof props.ai?.transport === 'function'"
       @select="onSlashSelect"
       @close="closeSlash"
     />
@@ -2914,22 +3573,31 @@ focusBlock(last.id, 'end')
     <EditorBubbleToolbar
       v-if="showBubbleToolbar && bubble && !readonly"
       :position="bubble.position"
+      :placement="bubble.placement"
       :active-marks="bubble.activeMarks"
       :current-link="bubble.currentLink"
       :current-color="bubble.currentColor"
       :current-highlight="bubble.currentHighlight"
       :block-type="bubble.blockType"
+      :multi-block="bubble.multiBlock"
+      :mixed-types="bubble.mixedTypes"
+      :ai-enabled="typeof props.ai?.transport === 'function'"
       :theme-source="rootEl"
       @mark="onBubbleMark"
       @turn-into="onBubbleTurnInto"
+      @clear-formatting="onBubbleClearFormatting"
+      @ask-ai="onBubbleAskAI"
+      @copy="onBubbleCopy"
+      @duplicate="onBubbleDuplicate"
+      @delete="onBubbleDelete"
     />
 
     <EditorAIMenu
-      v-if="aiMenu && ai?.transport && !readonly"
+      v-if="aiMenu && props.ai?.transport && !readonly"
       :open="true"
       :position="aiMenu.position"
-      :transport="ai.transport"
-      :commands="ai.commands"
+      :transport="props.ai.transport"
+      :commands="props.ai.commands"
       :blocks="blocks"
       :selection-blocks="getAISelectionBlocks()"
       :focus-block-id="focusedBlockId ?? selectedBlockId"

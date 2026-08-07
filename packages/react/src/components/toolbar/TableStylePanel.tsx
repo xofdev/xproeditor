@@ -115,7 +115,7 @@ export function TableStylePanel({
       </TabsList>
 
       <TabsContent value="text" className="mt-0 space-y-3">
-        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
+        <p className="xpe-menu-heading">
           Text color
         </p>
         <div className="grid grid-cols-5 gap-1.5">
@@ -135,7 +135,7 @@ export function TableStylePanel({
           ))}
         </div>
 
-        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
+        <p className="xpe-menu-heading">
           Highlight
         </p>
         <div className="grid grid-cols-4 gap-1.5">
@@ -216,7 +216,7 @@ export function TableStylePanel({
       </TabsContent>
 
       <TabsContent value="table" className="mt-0 space-y-3">
-        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
+        <p className="xpe-menu-heading">
           Table background
         </p>
         <div className="grid grid-cols-5 gap-1.5">
@@ -231,7 +231,7 @@ export function TableStylePanel({
           ))}
         </div>
 
-        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
+        <p className="xpe-menu-heading">
           Header background
         </p>
         <div className="grid grid-cols-5 gap-1.5">
@@ -286,7 +286,7 @@ export function TableStylePanel({
           ))}
         </div>
 
-        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Width</p>
+        <p className="xpe-menu-heading">Width</p>
         <div className="flex flex-wrap gap-1">
           {TABLE_BORDER_WIDTHS.map((width: TableBorderWidth) => (
             <button
@@ -300,7 +300,7 @@ export function TableStylePanel({
           ))}
         </div>
 
-        <p className="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Style</p>
+        <p className="xpe-menu-heading">Style</p>
         <div className="flex flex-wrap gap-1">
           {TABLE_BORDER_STYLES.map((style: TableBorderStyleKind) => (
             <button

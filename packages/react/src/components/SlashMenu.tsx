@@ -26,11 +26,11 @@ import {
   Video,
   Table2,
   Smile,
-  Blocks,
   Music,
   Paperclip,
   SearchX,
   SquareMousePointer,
+  Bookmark,
   Sparkles,
 } from 'lucide-react'
 import type { SlashGroup, SlashItem } from '../types'
@@ -44,6 +44,17 @@ const GROUP_LABELS: Record<SlashGroup, string> = {
 }
 
 const ITEMS: SlashItem[] = [
+  // AI first when enabled — max-height menu otherwise hides it at the bottom.
+  {
+    id: 'ai',
+    type: 'paragraph',
+    label: 'Ask AI',
+    description: 'Generate or edit with AI',
+    keywords: ['ai', 'ask', 'gpt', 'write', 'generate'],
+    icon: Sparkles,
+    group: 'ai',
+    action: 'ai',
+  },
   {
     id: 'paragraph',
     type: 'paragraph',
@@ -110,10 +121,37 @@ const ITEMS: SlashItem[] = [
   {
     id: 'toggle',
     type: 'toggle',
-    label: 'Toggle',
-    description: 'Collapsible content',
-    keywords: ['toggle', 'collapse', 'accordion'],
+    label: 'Toggle list',
+    description: 'Collapsible list item',
+    keywords: ['toggle', 'collapse', 'accordion', 'list'],
     icon: ChevronRight,
+    group: 'lists',
+  },
+  {
+    id: 'toggle_heading_1',
+    type: 'toggle_heading_1',
+    label: 'Toggle heading 1',
+    description: 'Large collapsible heading',
+    keywords: ['toggle', 'heading', 'h1', 'collapse'],
+    icon: Heading1,
+    group: 'lists',
+  },
+  {
+    id: 'toggle_heading_2',
+    type: 'toggle_heading_2',
+    label: 'Toggle heading 2',
+    description: 'Medium collapsible heading',
+    keywords: ['toggle', 'heading', 'h2', 'collapse'],
+    icon: Heading2,
+    group: 'lists',
+  },
+  {
+    id: 'toggle_heading_3',
+    type: 'toggle_heading_3',
+    label: 'Toggle heading 3',
+    description: 'Small collapsible heading',
+    keywords: ['toggle', 'heading', 'h3', 'collapse'],
+    icon: Heading3,
     group: 'lists',
   },
   {
@@ -153,6 +191,15 @@ const ITEMS: SlashItem[] = [
     group: 'media',
   },
   {
+    id: 'bookmark',
+    type: 'bookmark',
+    label: 'Web bookmark',
+    description: 'Visual bookmark from a link',
+    keywords: ['bookmark', 'link', 'url', 'web', 'embed', 'og'],
+    icon: Bookmark,
+    group: 'media',
+  },
+  {
     id: 'quote',
     type: 'quote',
     label: 'Quote',
@@ -165,30 +212,21 @@ const ITEMS: SlashItem[] = [
     id: 'callout',
     type: 'callout',
     label: 'Callout',
-    description: 'Highlighted note',
-    keywords: ['callout', 'note', 'info', 'warning'],
+    description: 'Highlighted note with emoji or icon',
+    keywords: ['callout', 'note', 'info', 'warning', 'icon'],
     icon: Lightbulb,
-    group: 'advanced',
-  },
-  {
-    id: 'emoji',
-    type: 'callout',
-    label: 'Emoji',
-    description: 'Callout with emoji icon',
-    keywords: ['emoji', 'emoticon', 'smile'],
-    icon: Smile,
     group: 'advanced',
     pickIcon: 'emoji',
   },
   {
-    id: 'icon',
-    type: 'callout',
-    label: 'Icon',
-    description: 'Callout with vector icon',
-    keywords: ['icon', 'symbol', 'lucide'],
-    icon: Blocks,
+    id: 'emoji',
+    type: 'paragraph',
+    label: 'Emoji',
+    description: 'Insert an emoji',
+    keywords: ['emoji', 'emoticon', 'smile'],
+    icon: Smile,
     group: 'advanced',
-    pickIcon: 'icon',
+    action: 'emoji',
   },
   {
     id: 'code',
@@ -226,16 +264,6 @@ const ITEMS: SlashItem[] = [
     icon: SquareMousePointer,
     group: 'advanced',
   },
-  {
-    id: 'ai',
-    type: 'paragraph',
-    label: 'Ask AI',
-    description: 'Generate or edit with AI',
-    keywords: ['ai', 'ask', 'gpt', 'write', 'generate'],
-    icon: Sparkles,
-    group: 'ai',
-    action: 'ai',
-  },
 ]
 
 export interface SlashMenuHandle {
@@ -252,13 +280,13 @@ export interface SlashMenuProps {
    * `--xpe-*` variables onto this menu once it's portaled to `<body>`. */
   themeSource?: HTMLElement | null
   /** Show Ask AI slash item (requires host AI transport). */
-  showAI?: boolean
+  aiEnabled?: boolean
   onSelect: (item: SlashItem) => void
   onClose: () => void
 }
 
 export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function SlashMenu(
-  { query, position, dir, themeSource, showAI = false, onSelect },
+  { query, position, dir, themeSource, aiEnabled = false, onSelect },
   ref,
 ) {
   const [activeIndex, setActiveIndex] = useState(0)
@@ -270,13 +298,16 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
   const menuRef = useRef<HTMLDivElement | null>(null)
 
   const filtered = useMemo(() => {
-    const base = showAI ? ITEMS : ITEMS.filter((item) => item.action !== 'ai')
+    const base = aiEnabled ? ITEMS : ITEMS.filter((item) => item.action !== 'ai')
     const q = query.toLowerCase().trim()
     if (!q) return base
     return base.filter(
-      (item) => item.label.toLowerCase().includes(q) || item.keywords.some((k) => k.startsWith(q)),
+      (item) =>
+        item.label.toLowerCase().includes(q)
+        || item.description.toLowerCase().includes(q)
+        || item.keywords.some((k) => k.includes(q)),
     )
-  }, [query, showAI])
+  }, [query, aiEnabled])
 
   useEffect(() => setActiveIndex(0), [query])
 
@@ -349,46 +380,42 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
   return createPortal(
     <div
       ref={menuRef}
-      className="xpe-menu xpe-scroll fixed z-[80] w-72 max-h-80 overflow-y-auto border py-1.5 bg-[var(--xpe-surface)] border-[var(--xpe-border)] rounded-[var(--xpe-radius)] [box-shadow:var(--xpe-shadow)]"
+      className="xpe-menu xpe-float xpe-scroll fixed z-[80] w-72 max-h-80 overflow-y-auto py-1.5"
       style={{ left: placed.left, top: placed.top }}
       dir={dir}
       onMouseDown={(e) => e.preventDefault()}
     >
       {filtered.length === 0 && (
-        <div className="flex items-center gap-2 px-3 py-4 text-[13px] text-[var(--xpe-muted-foreground)]">
+        <p className="xpe-menu-empty">
           <SearchX className="w-4 h-4" />
           No results for “{query}”
-        </div>
+        </p>
       )}
-      <div ref={listRef}>
+      <div ref={listRef} className="xpe-menu-list">
         {filtered.map((item, idx) => {
           const Icon = item.icon
           const showHeader = idx === 0 || filtered[idx - 1].group !== item.group
+          const active = idx === activeIndex
           return (
             <div key={item.id}>
               {showHeader && (
-                <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--xpe-muted-foreground)] first:pt-1">
+                <p className="xpe-menu-heading px-2 pt-2.5 pb-1 first:pt-1">
                   {GROUP_LABELS[item.group]}
                 </p>
               )}
               <button
-                className={`flex items-center gap-3 w-full px-3 py-1.5 text-start transition-colors ${idx === activeIndex ? 'bg-[var(--xpe-primary-muted)]' : 'hover:bg-[var(--xpe-surface-hover)]'}`}
-                data-active={idx === activeIndex}
+                type="button"
+                className={`xpe-menu-item${active ? ' xpe-menu-item--active' : ''}`}
+                data-active={active}
                 onMouseEnter={() => setActiveIndex(idx)}
                 onClick={() => onSelect(item)}
               >
-                <span
-                  className={`flex items-center justify-center w-8 h-8 rounded-lg border shrink-0 ${idx === activeIndex ? 'border-[var(--xpe-border)] bg-[var(--xpe-surface)] text-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] bg-[var(--xpe-muted)] text-[var(--xpe-muted-foreground)]'}`}
-                >
-                  <Icon className="w-4 h-4" />
+                <span className="xpe-menu-item__icon">
+                  <Icon />
                 </span>
-                <span className="min-w-0">
-                  <span className="block text-[13px] font-medium text-[var(--xpe-foreground)]">
-                    {item.label}
-                  </span>
-                  <span className="block text-[11px] text-[var(--xpe-muted-foreground)] truncate">
-                    {item.description}
-                  </span>
+                <span className="xpe-menu-item__text">
+                  <span className="xpe-menu-item__label">{item.label}</span>
+                  <span className="xpe-menu-item__desc">{item.description}</span>
                 </span>
               </button>
             </div>

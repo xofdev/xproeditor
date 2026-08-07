@@ -3,7 +3,7 @@ import type { AICommand, AITransport, Block } from '@xproeditor/core'
 import { BlockEditor, type BlockEditorHandle } from './BlockEditor'
 import { FormatToolbar } from './FormatToolbar'
 import type { FormatToolbarState } from '../types'
-import type { PickMediaFn, UploadFn } from '../types'
+import type { FetchBookmarkMetaFn, PickMediaFn, UploadFn } from '../types'
 
 export interface ProEditorProps {
   defaultValue: Block[]
@@ -16,6 +16,8 @@ export interface ProEditorProps {
   toolbar?: 'fixed' | 'floating' | 'both' | 'none'
   upload?: UploadFn
   pickMedia?: PickMediaFn
+  /** Optional OG/favicon metadata fetcher for bookmark blocks. */
+  fetchBookmarkMeta?: FetchBookmarkMetaFn
   editorDir?: 'ltr' | 'rtl'
   readonly?: boolean
   /** Pluggable AI agent — host supplies transport (OpenAI/Anthropic/custom). */
@@ -35,7 +37,17 @@ export interface ProEditorHandle {
 }
 
 export const ProEditor = forwardRef<ProEditorHandle, ProEditorProps>(function ProEditor(
-  { defaultValue, toolbar = 'floating', upload, pickMedia, editorDir, readonly, ai, onChange },
+  {
+    defaultValue,
+    toolbar = 'floating',
+    upload,
+    pickMedia,
+    fetchBookmarkMeta,
+    editorDir,
+    readonly,
+    ai,
+    onChange,
+  },
   ref,
 ) {
   const editorRef = useRef<BlockEditorHandle | null>(null)
@@ -57,7 +69,7 @@ export const ProEditor = forwardRef<ProEditorHandle, ProEditorProps>(function Pr
       {showFixedToolbar && (
         <FormatToolbar
           state={formatState}
-          showAI={!!ai?.transport}
+          aiEnabled={typeof ai?.transport === 'function'}
           onMark={(mark, value) => editorRef.current?.applyToolbarMark(mark, value)}
           onTurnInto={(type) => editorRef.current?.turnIntoBlock(type)}
           onIndent={() => editorRef.current?.indentFocusedBlock()}
@@ -76,6 +88,7 @@ export const ProEditor = forwardRef<ProEditorHandle, ProEditorProps>(function Pr
         defaultValue={defaultValue}
         upload={upload}
         pickMedia={pickMedia}
+        fetchBookmarkMeta={fetchBookmarkMeta}
         editorDir={editorDir}
         readonly={readonly}
         showBubbleToolbar={showBubbleToolbar}

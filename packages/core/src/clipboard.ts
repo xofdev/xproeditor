@@ -7,8 +7,9 @@ import {
   tableCellStyle,
   tableWrapperStyle,
 } from './table'
+import { getToggleSubtreeLength } from './toggle'
 import type { Block, TableCell } from './types'
-import { isBlocksContent, isTextBlock } from './types'
+import { isBlocksContent, isTextBlock, isToggleBlock, toggleHeadingLevel } from './types'
 
 /** Custom MIME for lossless round-trip paste inside xlog. */
 export const BLOCKS_CLIPBOARD_MIME = 'application/x-xlog-blocks+json'
@@ -63,7 +64,7 @@ function renderTableCellHtml(
 
 function blockToHtmlFragment(block: Block): string {
   const indent = block.props.indent ?? 0
-  const indentAttr = indent ? ` style="margin-inline-start:${indent * 28}px"` : ''
+  const indentAttr = indent ? ` style="margin-inline-start:${indent * 24}px"` : ''
   const direction = dirAttr(block)
 
   switch (block.type) {
@@ -135,6 +136,29 @@ return ''
 
       return `<div ${attrs} style="${alignStyle}${colorStyle}"><span class="xpe-btn xpe-btn--${escapeHtml(style)}">${label}</span></div>`
     }
+    case 'bookmark': {
+      const url = block.props.url ?? ''
+      if (!url) return ''
+
+      const title = escapeHtml(block.props.title || blockToPlainText(block) || url)
+      const description = block.props.description
+        ? `<p data-xpe-bookmark-desc>${escapeHtml(block.props.description)}</p>`
+        : ''
+      const favicon = block.props.favicon
+        ? ` data-xpe-favicon="${escapeHtml(block.props.favicon)}"`
+        : ''
+      const image = block.props.image
+        ? ` data-xpe-image="${escapeHtml(block.props.image)}"`
+        : ''
+      const titleAttr = block.props.title
+        ? ` data-xpe-title="${escapeHtml(block.props.title)}"`
+        : ''
+      const descAttr = block.props.description
+        ? ` data-xpe-description="${escapeHtml(block.props.description)}"`
+        : ''
+
+      return `<div data-xpe-type="bookmark" data-xpe-url="${escapeHtml(url)}"${titleAttr}${descAttr}${favicon}${image}><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><strong>${title}</strong>${description}<span>${escapeHtml(url)}</span></a></div>`
+    }
     case 'table': {
       const table = normalizeTableData(block.props.table)
 
@@ -159,6 +183,11 @@ return ''
 
       return `<table style="${tableStyle}">${rows}</table>`
     }
+    case 'toggle':
+    case 'toggle_heading_1':
+    case 'toggle_heading_2':
+    case 'toggle_heading_3':
+      return toggleToHtmlFragment(block, '')
     default:
       if (isTextBlock(block.type)) {
         return `<p${direction}${indentAttr}>${spansToHtml(block.content)}</p>`
@@ -168,7 +197,29 @@ return ''
   }
 }
 
-/** HTML body for external apps; lists are grouped into ul/ol. */
+function toggleToHtmlFragment(block: Block, childrenHtml: string): string {
+  const direction = dirAttr(block)
+  const open = block.props.collapsed ? '' : ' open'
+  const level = toggleHeadingLevel(block.type)
+  const summaryInner = level
+    ? `<h${level}${direction}>${spansToHtml(block.content)}</h${level}>`
+    : `<p${direction}>${spansToHtml(block.content)}</p>`
+
+  return `<details data-xpe-type="${block.type}"${open}><summary>${summaryInner}</summary>${childrenHtml}</details>`
+}
+
+/** Relative-indent clone of toggle children for nested HTML serialization. */
+function relativeIndentChildren(blocks: Block[], parentIndent: number): Block[] {
+  return blocks.map((b) => {
+    const copy = cloneBlock(b, false)
+    const rel = (copy.props.indent ?? 0) - parentIndent - 1
+    if (rel <= 0) delete copy.props.indent
+    else copy.props.indent = rel
+    return copy
+  })
+}
+
+/** HTML body for external apps; lists are grouped into ul/ol; toggles use details. */
 export function blocksToHtmlContent(blocks: Block[]): string {
   const parts: string[] = []
   let i = 0
@@ -197,6 +248,16 @@ export function blocksToHtmlContent(blocks: Block[]): string {
       }
 
       parts.push(`<ol>${items.join('')}</ol>`)
+      continue
+    }
+
+    if (isToggleBlock(b.type)) {
+      const len = getToggleSubtreeLength(blocks, i)
+      const parentIndent = b.props.indent ?? 0
+      const childBlocks = relativeIndentChildren(blocks.slice(i + 1, i + len), parentIndent)
+      const childrenHtml = childBlocks.length ? blocksToHtmlContent(childBlocks) : ''
+      parts.push(toggleToHtmlFragment(b, childrenHtml))
+      i += len
       continue
     }
 

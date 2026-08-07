@@ -138,7 +138,7 @@ export function ToolbarColorPanel({
         </div>
 
         <div className="border-t border-[var(--xpe-border)] pt-3">
-          <p className="mb-2 text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
+          <p className="xpe-menu-heading mb-2">
             Custom
           </p>
           <div onFocus={() => (isEditingPicker.current = true)}>
@@ -183,7 +183,7 @@ export function ToolbarColorPanel({
         </div>
 
         <div className="border-t border-[var(--xpe-border)] pt-3">
-          <p className="mb-2 text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
+          <p className="xpe-menu-heading mb-2">
             Custom
           </p>
           <div onFocus={() => (isEditingPicker.current = true)}>

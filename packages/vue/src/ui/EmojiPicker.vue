@@ -122,8 +122,7 @@ function scrollToCategory(id: string) {
     </div>
 
     <div class="xpe-emoji-scroll">
-      <p v-if="controlled && !filtered" class="xpe-emoji-empty">Keep typing to search emoji…</p>
-      <template v-else-if="filtered">
+      <template v-if="filtered">
         <p v-if="filtered.length === 0" class="xpe-emoji-empty">No emoji found</p>
         <div v-else class="xpe-emoji-grid">
           <button
@@ -140,7 +139,7 @@ function scrollToCategory(id: string) {
       </template>
       <template v-else>
         <div v-for="cat in categoriesToRender" :key="cat.id" :ref="(el) => { sectionEls[cat.id] = el as HTMLElement }">
-          <p class="xpe-emoji-heading">{{ cat.label }}</p>
+          <p class="xpe-menu-heading xpe-emoji-heading">{{ cat.label }}</p>
           <div class="xpe-emoji-grid">
             <button
               v-for="entry in cat.emojis"
@@ -157,7 +156,7 @@ function scrollToCategory(id: string) {
       </template>
     </div>
 
-    <div v-if="!controlled" class="xpe-emoji-catbar">
+    <div v-if="!filtered" class="xpe-emoji-catbar">
       <button type="button" title="Recently used" @click="scrollToCategory('recents')">
         <Clock class="h-4 w-4" />
       </button>
@@ -176,17 +175,36 @@ function scrollToCategory(id: string) {
 
 <style scoped>
 .xpe-emoji-picker { display: flex; flex-direction: column; width: 300px; height: 340px; }
-.xpe-emoji-picker--controlled { height: auto; max-height: 260px; width: 280px; }
-.xpe-emoji-search { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--xpe-border, #e5e7eb); flex-shrink: 0; }
+.xpe-emoji-picker--controlled { width: 300px; height: 320px; }
+.xpe-emoji-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 8px 0;
+  padding: 0 10px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid var(--xpe-border, #e5e7eb);
+  border-radius: 10px;
+  background: var(--xpe-background, #fff);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.xpe-emoji-search:focus-within {
+  border-color: var(--xpe-ring, #6366f1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--xpe-ring, #6366f1) 18%, transparent);
+}
 .xpe-emoji-search-input { flex: 1; border: none; background: transparent; outline: none; font-size: 13px; color: var(--xpe-foreground, #111827); }
 .xpe-emoji-search-input::placeholder { color: var(--xpe-muted-foreground, #9ca3af); }
-.xpe-emoji-scroll { flex: 1; overflow-y: auto; padding: 6px 8px; }
-.xpe-emoji-heading { padding: 6px 4px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--xpe-muted-foreground, #9ca3af); }
+.xpe-emoji-scroll { flex: 1; overflow-y: auto; padding: 8px; }
+.xpe-emoji-heading {
+  /* typography from .xpe-menu-heading; this only adds picker spacing */
+  padding: 6px 4px 4px;
+}
 .xpe-emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
 .xpe-emoji-cell { display: flex; align-items: center; justify-content: center; height: 32px; border-radius: 8px; border: none; background: transparent; font-size: 19px; line-height: 1; cursor: pointer; transition: background 0.1s, transform 0.1s; }
-.xpe-emoji-cell:hover { background: var(--xpe-muted, #f3f4f6); transform: scale(1.12); }
+.xpe-emoji-cell:hover { background: var(--xpe-muted, #f3f4f6); transform: scale(1.08); }
 .xpe-emoji-empty { padding: 24px 8px; text-align: center; font-size: 12px; color: var(--xpe-muted-foreground, #9ca3af); }
-.xpe-emoji-catbar { display: flex; align-items: center; justify-content: space-between; gap: 2px; padding: 6px 8px; border-top: 1px solid var(--xpe-border, #e5e7eb); flex-shrink: 0; }
-.xpe-emoji-catbar button { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent; color: var(--xpe-muted-foreground, #9ca3af); cursor: pointer; transition: background 0.1s, color 0.1s; }
-.xpe-emoji-catbar button:hover { background: var(--xpe-muted, #f3f4f6); color: var(--xpe-foreground, #111827); }
+.xpe-emoji-catbar { display: flex; align-items: center; justify-content: space-between; gap: 2px; padding: 6px 8px; border-top: 1px solid var(--xpe-border, #f3f4f6); flex-shrink: 0; }
+.xpe-emoji-catbar button { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 7px; border: none; background: transparent; color: var(--xpe-muted-foreground, #9ca3af); cursor: pointer; transition: background 0.1s, color 0.1s; }
+.xpe-emoji-catbar button:hover { background: var(--xpe-surface-hover, #f9fafb); color: var(--xpe-foreground, #111827); }
 </style>

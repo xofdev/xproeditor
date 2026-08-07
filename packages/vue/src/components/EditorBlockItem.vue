@@ -1,18 +1,15 @@
 <script setup lang="ts">
-import { Copy, GripVertical, Plus, ChevronRight, Trash2 } from 'lucide-vue-next'
+import { GripVertical, Plus, ChevronRight } from 'lucide-vue-next'
 import { ref, computed, watch, nextTick } from 'vue'
-import { isTextBlock, resolveBlockDirection } from '@xproeditor/core'
-import type { Block, InlineSpan, MarkName, TableCellCoord } from '@xproeditor/core'
+import { BUTTON_COLOR_PRESETS, isTextBlock, resolveBlockDirection } from '@xproeditor/core'
+import type { Block, BlockType, InlineSpan, MarkName, TableCellCoord } from '@xproeditor/core'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
   IconEmojiPicker,
   IconValueDisplay,
 } from '../ui'
 import EditorAudioBlock from './EditorAudioBlock.vue'
 import EditorBlockContextMenu from './EditorBlockContextMenu.vue'
+import EditorBookmarkBlock from './EditorBookmarkBlock.vue'
 import EditorButtonBlock from './EditorButtonBlock.vue'
 import EditorCodeBlock from './EditorCodeBlock.vue'
 import EditorFileBlock from './EditorFileBlock.vue'
@@ -34,12 +31,19 @@ const props = defineProps<{
     accept: string[]
     title?: string
   }) => Promise<{ url: string; alt?: string; caption?: string } | null>
+  fetchBookmarkMeta?: (url: string) => Promise<{
+    title?: string
+    description?: string
+    favicon?: string
+    image?: string
+  } | null | undefined>
   /** Shell / language direction fallback when block dir is auto. */
   editorDir?: 'ltr' | 'rtl'
   readonly?: boolean
   themeSource?: HTMLElement | null
   /** When set, opens the callout icon picker (slash command / programmatic). */
   iconPickerRequest?: { tab: 'emoji' | 'icon' } | null
+  aiEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -57,7 +61,11 @@ const emit = defineEmits<{
   select: []
   addBelow: []
   duplicate: []
+  copy: []
+  cut: []
   remove: []
+  turnInto: [type: BlockType]
+  askAI: []
   dragHandleStart: [e: DragEvent]
   pointerdown: [e: PointerEvent]
   selectionPointerDown: [payload: { shiftKey: boolean; clientX: number; clientY: number }]
@@ -77,15 +85,30 @@ const calloutIconPickerRef = ref<InstanceType<typeof IconEmojiPicker> | null>(nu
 const showCalloutColors = ref(false)
 const contextMenuPos = ref<{ x: number; y: number } | null>(null)
 
-function onContextMenu(e: MouseEvent) {
-  if (props.readonly) {
-return
+function openContextMenuAt(x: number, y: number) {
+  emit('select')
+  contextMenuPos.value = { x, y }
 }
 
+function onContextMenu(e: MouseEvent) {
+  if (props.readonly) return
   e.preventDefault()
-  emit('select')
-  contextMenuPos.value = { x: e.clientX, y: e.clientY }
+  openContextMenuAt(e.clientX, e.clientY)
 }
+
+function onHandleClick(e: MouseEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  const target = e.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  openContextMenuAt(rect.right + 4, rect.top)
+}
+
+const colorPresets = computed(() => {
+  if (props.block.type === 'callout') return CALLOUT_COLORS
+  if (props.block.type === 'button') return [...BUTTON_COLOR_PRESETS]
+  return undefined
+})
 
 const calloutIcon = computed({
   get: () => props.block.props.icon ?? '💡',
@@ -154,11 +177,11 @@ defineExpose({
 
 <template>
   <div
-    class="ebi group/block relative"
+    class="ebi group/block"
     :class="{ 'ebi-selected': selected }"
     :data-block-id="block.id"
     :dir="blockDir"
-    :style="{ paddingInlineStart: `${indent * 28}px` }"
+    :style="{ '--xpe-block-indent': indent }"
     @pointerdown="emit('pointerdown', $event)"
     @contextmenu="onContextMenu"
   >
@@ -166,11 +189,11 @@ defineExpose({
     <div v-if="dropPosition === 'before'" class="ebi-drop -top-[2px]" />
     <div v-if="dropPosition === 'after'" class="ebi-drop -bottom-[2px]" />
 
-    <div class="flex items-start gap-0.5">
+    <div class="ebi-row">
       <!-- Gutter: + and drag handle -->
       <div
         v-if="!readonly"
-        class="ebi-gutter flex items-center shrink-0 pt-[5px] opacity-0 group-hover/block:opacity-100 transition-opacity select-none"
+        class="ebi-gutter"
         contenteditable="false"
       >
         <button
@@ -181,35 +204,21 @@ defineExpose({
         >
           <Plus class="w-3.5 h-3.5" />
         </button>
-        <div class="relative">
-          <DropdownMenu>
-            <DropdownMenuTrigger as-child>
-              <button
-                class="ebi-gutter-btn ebi-reorder-handle cursor-grab active:cursor-grabbing"
-                title="Drag to move, click for menu"
-                draggable="true"
-                @pointerdown.stop
-                @dragstart="emit('dragHandleStart', $event)"
-              >
-                <GripVertical class="w-3.5 h-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent :align="isRtl ? 'end' : 'start'" class="w-36">
-              <DropdownMenuItem @click="emit('duplicate')">
-                <Copy class="w-3.5 h-3.5 text-[var(--xpe-muted-foreground)]" />
-                Duplicate
-              </DropdownMenuItem>
-              <DropdownMenuItem class="text-[var(--xpe-danger)] focus:text-[var(--xpe-danger)]" @click="emit('remove')">
-                <Trash2 class="w-3.5 h-3.5" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <button
+          type="button"
+          class="ebi-gutter-btn ebi-reorder-handle cursor-grab active:cursor-grabbing"
+          title="Drag to move, click for menu"
+          draggable="true"
+          @pointerdown.stop
+          @dragstart="emit('dragHandleStart', $event)"
+          @click="onHandleClick"
+        >
+          <GripVertical class="w-3.5 h-3.5" />
+        </button>
       </div>
 
       <!-- Block body -->
-      <div class="relative flex-1 min-w-0 py-[3px]">
+      <div class="ebi-body">
         <!-- Quote -->
         <div v-if="block.type === 'quote'" class="flex gap-3 border-s-[3px] border-[var(--xpe-foreground)] ps-3.5">
           <EditorTextBlock
@@ -309,18 +318,30 @@ defineExpose({
           />
         </div>
 
-        <!-- Lists / to-do / toggle -->
-        <div v-else-if="['bulleted_list_item', 'numbered_list_item', 'to_do', 'toggle'].includes(block.type)" class="ebi-list-row flex items-start gap-1.5">
-          <div class="shrink-0 flex items-center justify-center w-6 pt-[5px] select-none" contenteditable="false">
-            <span v-if="block.type === 'bulleted_list_item'" class="text-[var(--xpe-foreground)] text-base leading-none mt-1">•</span>
-            <span v-else-if="block.type === 'numbered_list_item'" class="text-[var(--xpe-foreground)] text-[14px] leading-snug tabular-nums">{{ number ?? 1 }}.</span>
+        <!-- Lists / to-do / toggle / toggle headings -->
+        <div
+          v-else-if="['bulleted_list_item', 'numbered_list_item', 'to_do', 'toggle', 'toggle_heading_1', 'toggle_heading_2', 'toggle_heading_3'].includes(block.type)"
+          class="ebi-list-row"
+        >
+          <div
+            class="ebi-list-marker"
+            :class="{
+              'ebi-list-marker--h1': block.type === 'toggle_heading_1',
+              'ebi-list-marker--h2': block.type === 'toggle_heading_2',
+              'ebi-list-marker--h3': block.type === 'toggle_heading_3',
+            }"
+            contenteditable="false"
+          >
+            <span v-if="block.type === 'bulleted_list_item'" class="ebi-list-bullet">•</span>
+            <span v-else-if="block.type === 'numbered_list_item'" class="ebi-list-number">{{ number ?? 1 }}.</span>
             <button
               v-else-if="block.type === 'to_do'"
+              type="button"
               role="checkbox"
               aria-label="Toggle to-do"
               :aria-checked="!!block.props.checked"
-              class="appearance-none w-[15px] h-[15px] mt-1 rounded-[4px] border flex items-center justify-center transition-colors"
-              :class="block.props.checked ? 'bg-[var(--xpe-primary)] border-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] hover:border-[var(--xpe-ring)] bg-[var(--xpe-surface)]'"
+              class="ebi-todo"
+              :class="{ 'ebi-todo--checked': block.props.checked }"
               :disabled="readonly"
               @click="emit('patch', { checked: !block.props.checked })"
             >
@@ -328,7 +349,10 @@ defineExpose({
             </button>
             <button
               v-else
-              class="w-5 h-5 mt-0.5 rounded flex items-center justify-center text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)] transition-transform"
+              type="button"
+              :aria-label="block.props.collapsed ? 'Expand toggle' : 'Collapse toggle'"
+              :aria-expanded="!block.props.collapsed"
+              class="ebi-toggle-btn"
               :disabled="readonly"
               @click="emit('patch', { collapsed: !block.props.collapsed })"
             >
@@ -346,8 +370,15 @@ defineExpose({
             ref="inner"
             :block="block"
             :readonly="readonly"
-            :placeholder="placeholder ?? (block.type === 'to_do' ? 'To-do' : block.type === 'toggle' ? 'Toggle' : 'List item')"
-            class="flex-1"
+            :placeholder="placeholder ?? (
+              block.type === 'to_do' ? 'To-do'
+              : block.type === 'toggle' ? 'Toggle'
+              : block.type === 'toggle_heading_1' ? 'Heading 1'
+              : block.type === 'toggle_heading_2' ? 'Heading 2'
+              : block.type === 'toggle_heading_3' ? 'Heading 3'
+              : 'List item'
+            )"
+            class="flex-1 min-w-0"
             :class="{ 'line-through !text-[var(--xpe-muted-foreground)]': block.type === 'to_do' && block.props.checked }"
             @input="(s, c) => emit('input', s, c)"
             @enter="o => emit('enter', o)"
@@ -466,6 +497,16 @@ defineExpose({
           @select="emit('select')"
         />
 
+        <EditorBookmarkBlock
+          v-else-if="block.type === 'bookmark'"
+          :block="block"
+          :selected="selected"
+          :readonly="readonly"
+          :fetch-bookmark-meta="fetchBookmarkMeta"
+          @patch="p => emit('patch', p)"
+          @select="emit('select')"
+        />
+
         <!-- Plain text blocks -->
         <EditorTextBlock
           v-else
@@ -498,65 +539,22 @@ defineExpose({
     <EditorBlockContextMenu
       v-if="contextMenuPos"
       :position="contextMenuPos"
+      :block-type="block.type"
       :theme-source="themeSource"
-      :color-presets="block.type === 'callout' ? CALLOUT_COLORS : undefined"
+      :color-presets="colorPresets"
       :current-color="block.props.color"
+      :can-turn-into="textual"
+      :ai-enabled="aiEnabled"
       @color="c => emit('patch', { color: c })"
+      @turn-into="t => emit('turnInto', t)"
       @duplicate="emit('duplicate')"
+      @copy="emit('copy')"
+      @cut="emit('cut')"
       @delete="emit('remove')"
+      @insert-below="emit('addBelow')"
+      @ask-ai="emit('askAI')"
       @close="contextMenuPos = null"
     />
   </div>
 </template>
 
-<style scoped>
-.ebi-selected {
-  background: var(--xpe-primary-muted, rgb(99 102 241 / 0.06));
-  border-radius: 6px;
-}
-.ebi-drop {
-  position: absolute;
-  inset-inline-start: 28px;
-  inset-inline-end: 0;
-  height: 3px;
-  background: var(--xpe-ring, #818cf8);
-  border-radius: 2px;
-  z-index: 10;
-  pointer-events: none;
-}
-.ebi-gutter-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--xpe-muted-foreground, #c0c4cc);
-  cursor: pointer;
-  transition: background 0.1s, color 0.1s;
-  padding: 0;
-}
-.ebi-gutter-btn:hover { background: var(--xpe-muted, #f3f4f6); color: var(--xpe-foreground, #6b7280); }
-.ebi-chevron-rtl {
-  transform: scaleX(-1);
-}
-.ebi-chevron-rtl.rotate-90 {
-  transform: scaleX(-1) rotate(90deg);
-}
-.ebi-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 12px;
-  font-size: 13px;
-  color: var(--xpe-foreground, #374151);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-}
-.ebi-menu-item:hover { background: var(--xpe-surface-hover, #f9fafb); }
-</style>

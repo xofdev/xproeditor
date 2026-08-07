@@ -1,18 +1,20 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import hljs from 'highlight.js/lib/common'
-import { ChevronRight, Link as LinkIcon, X } from 'lucide-react'
+import { Check, ChevronRight, Copy, Link as LinkIcon, X } from 'lucide-react'
 import {
   computeListNumbering,
   escapeHtml,
   formatFileSize,
   headingAnchorIds,
   isAllowedEmbedUrl,
+  isToggleBlock,
   normalizeTableData,
   resolveBlockDirection,
   spansToHtml,
   tableCellStyle,
   tableWrapperStyle,
+  toggleHeadingLevel,
 } from '@xproeditor/core'
 import type { Block, TableCell } from '@xproeditor/core'
 import { IconValueDisplay } from '../ui'
@@ -39,9 +41,14 @@ function highlightCode(code: string, language?: string): string {
   return escapeHtml(code)
 }
 
+function indentVars(indent = 0): CSSProperties {
+  return { ['--xpe-block-indent' as string]: indent }
+}
+
 export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
   const [toggleOverrides, setToggleOverrides] = useState<Record<number, boolean>>({})
   const [copiedAnchor, setCopiedAnchor] = useState<string | null>(null)
+  const [copiedCode, setCopiedCode] = useState<number | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   function isCollapsed(idx: number, block: Block): boolean {
@@ -62,7 +69,7 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
 
       out.push({ block, idx })
 
-      if (block.type === 'toggle' && (toggleOverrides[idx] ?? block.props.collapsed))
+      if (isToggleBlock(block.type) && (toggleOverrides[idx] ?? block.props.collapsed))
         hideDeeperThan = ind
     })
 
@@ -77,6 +84,16 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
     navigator.clipboard?.writeText(url)
     setCopiedAnchor(id)
     setTimeout(() => setCopiedAnchor(null), 1500)
+  }
+
+  async function copyCodeBlock(idx: number, text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      /* ignore */
+    }
+    setCopiedCode(idx)
+    setTimeout(() => setCopiedCode((cur) => (cur === idx ? null : cur)), 1600)
   }
 
   function safeVideoEmbedUrl(block: Block): string {
@@ -119,10 +136,10 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           return (
             <p
               key={idx}
-              className="db-p"
+              className="db-p db-indent"
               dir="auto"
               style={{
-                paddingInlineStart: `${(block.props.indent ?? 0) * 24}px`,
+                ...indentVars(block.props.indent),
                 textAlign: block.props.align,
               }}
               dangerouslySetInnerHTML={{ __html: spansToHtml(block.content) }}
@@ -134,9 +151,9 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           return (
             <div
               key={idx}
-              className="db-li"
+              className="db-li db-indent"
               dir={blockDir}
-              style={{ paddingInlineStart: `${(block.props.indent ?? 0) * 24}px` }}
+              style={indentVars(block.props.indent)}
             >
               <span
                 className={`db-li-marker${block.type === 'numbered_list_item' ? ' tabular-nums' : ''}`}
@@ -155,9 +172,9 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           return (
             <div
               key={idx}
-              className="db-li"
+              className="db-li db-indent"
               dir={blockDir}
-              style={{ paddingInlineStart: `${(block.props.indent ?? 0) * 24}px` }}
+              style={indentVars(block.props.indent)}
             >
               <span className={`db-todo-box${block.props.checked ? ' db-todo-checked' : ''}`}>
                 {block.props.checked && (
@@ -174,16 +191,18 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           )
         }
 
-        if (block.type === 'toggle') {
+        if (isToggleBlock(block.type)) {
           const collapsed = isCollapsed(idx, block)
+          const level = toggleHeadingLevel(block.type)
 
           return (
             <div
               key={idx}
-              className="db-li db-toggle"
+              className={`db-li db-toggle db-indent${level ? ` db-toggle-heading_${level}` : ''}`}
               dir={blockDir}
-              style={{ paddingInlineStart: `${(block.props.indent ?? 0) * 24}px` }}
+              style={indentVars(block.props.indent)}
               role="button"
+              aria-expanded={!collapsed}
               onClick={() => setToggleOverrides((prev) => ({ ...prev, [idx]: !collapsed }))}
             >
               <span
@@ -192,7 +211,7 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
                 <ChevronRight className="w-4 h-4" />
               </span>
               <span
-                className="db-li-content font-medium"
+                className={`db-li-content${level ? '' : ' font-medium'}`}
                 dangerouslySetInnerHTML={{ __html: spansToHtml(block.content) }}
               />
             </div>
@@ -203,9 +222,9 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           return (
             <blockquote
               key={idx}
-              className="db-quote"
+              className="db-quote db-indent-margin"
               dir="auto"
-              style={{ marginInlineStart: `${(block.props.indent ?? 0) * 24}px` }}
+              style={indentVars(block.props.indent)}
               dangerouslySetInnerHTML={{ __html: spansToHtml(block.content) }}
             />
           )
@@ -215,10 +234,10 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           return (
             <div
               key={idx}
-              className="db-callout"
+              className="db-callout db-indent-margin"
               dir={blockDir}
               style={{
-                marginInlineStart: `${(block.props.indent ?? 0) * 24}px`,
+                ...indentVars(block.props.indent),
                 background: block.props.color || undefined,
               }}
             >
@@ -234,16 +253,32 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
         }
 
         if (block.type === 'code') {
+          const lang = block.props.language ?? 'plaintext'
+          const text = block.props.code ?? ''
+          const isCopied = copiedCode === idx
           return (
-            <div key={idx} className="db-code" dir="ltr">
+            <div
+              key={idx}
+              className={`db-code${block.props.wrap ? ' db-code--wrap' : ''}`}
+              dir="ltr"
+            >
               <div className="db-code-header">
-                <span>{block.props.language ?? 'plaintext'}</span>
+                <span className="db-code-lang">{lang === 'plaintext' ? 'Plain text' : lang}</span>
+                <button
+                  type="button"
+                  className={`db-code-copy${isCopied ? ' db-code-copy--ok' : ''}`}
+                  title={isCopied ? 'Copied' : 'Copy code'}
+                  aria-label={isCopied ? 'Copied' : 'Copy code'}
+                  onClick={() => void copyCodeBlock(idx, text)}
+                >
+                  {isCopied ? <Check /> : <Copy />}
+                </button>
               </div>
               <pre>
                 <code
                   className="hljs"
                   dangerouslySetInnerHTML={{
-                    __html: highlightCode(block.props.code ?? '', block.props.language),
+                    __html: highlightCode(text, block.props.language),
                   }}
                 />
               </pre>
@@ -369,6 +404,44 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
                 />
               )}
             </div>
+          )
+        }
+
+        if (block.type === 'bookmark' && block.props.url) {
+          const title = block.props.title || block.props.url
+          let host = block.props.url
+          try {
+            host = new URL(block.props.url).hostname.replace(/^www\./i, '')
+          } catch {
+            /* keep raw url */
+          }
+
+          return (
+            <a
+              key={idx}
+              className="db-bookmark"
+              href={block.props.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <div className="db-bookmark__body">
+                <div className="db-bookmark__title">
+                  {block.props.favicon ? (
+                    <img src={block.props.favicon} alt="" className="db-bookmark__favicon" />
+                  ) : null}
+                  <span>{title}</span>
+                </div>
+                {block.props.description ? (
+                  <p className="db-bookmark__desc">{block.props.description}</p>
+                ) : null}
+                <span className="db-bookmark__url">{host}</span>
+              </div>
+              {block.props.image ? (
+                <div className="db-bookmark__media">
+                  <img src={block.props.image} alt="" />
+                </div>
+              ) : null}
+            </a>
           )
         }
 

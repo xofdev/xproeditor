@@ -92,19 +92,64 @@ export function normalizeTableData(raw: unknown): TableData {
   return { hasHeader, rows, width, style }
 }
 
-function normalizeTableWidth(raw: unknown): TableWidth {
+export function normalizeTableWidth(raw: unknown): TableWidth {
   if (!raw || typeof raw !== 'object') {
     return { ...DEFAULT_TABLE_WIDTH }
   }
 
   const value = raw as Record<string, unknown>
   const mode = value.mode === 'pixel' ? 'pixel' : 'percent'
-  const num = typeof value.value === 'number' ? value.value : DEFAULT_TABLE_WIDTH.value
+  const num = typeof value.value === 'number' && Number.isFinite(value.value)
+    ? value.value
+    : DEFAULT_TABLE_WIDTH.value
 
   return {
     mode,
     value: mode === 'percent' ? Math.min(100, Math.max(10, num)) : Math.min(2000, Math.max(200, num)),
   }
+}
+
+/** Switch width mode with sensible defaults (avoids 100% → 100px clamp). */
+export function switchTableWidthMode(
+  width: TableWidth | undefined,
+  mode: TableWidth['mode'],
+): TableWidth {
+  const current = getResolvedTableWidth(width)
+
+  if (current.mode === mode) {
+    return current
+  }
+
+  if (mode === 'percent') {
+    return normalizeTableWidth({ mode: 'percent', value: 100 })
+  }
+
+  return normalizeTableWidth({ mode: 'pixel', value: 640 })
+}
+
+/** Visible cells in the rectangle between two corners (inclusive). */
+export function cellsInBounds(
+  table: TableData,
+  a: TableCellCoord,
+  b: TableCellCoord,
+): TableCellCoord[] {
+  const minRow = Math.min(a.row, b.row)
+  const maxRow = Math.max(a.row, b.row)
+  const minCol = Math.min(a.col, b.col)
+  const maxCol = Math.max(a.col, b.col)
+  const next: TableCellCoord[] = []
+
+  for (let row = minRow; row <= maxRow; row += 1) {
+    for (let col = minCol; col <= maxCol; col += 1) {
+      const cell = table.rows[row]?.[col]
+
+      if (cell && !cell.hidden) {
+        next.push({ row, col })
+      }
+    }
+  }
+
+  return next
 }
 
 function normalizeTableStyle(raw: unknown): TableStyle | undefined {
@@ -419,17 +464,80 @@ export function unmergeCell(table: TableData, row: number, col: number): TableDa
   return next
 }
 
-export function addTableRow(table: TableData): TableData {
+/**
+ * Insert a row. `at` defaults to append. Spans that cross the insert line
+ * grow by one and cover the new cells (marked hidden).
+ */
+export function addTableRow(table: TableData, at?: number): TableData {
   const next = cloneTableData(table)
   const cols = next.rows[0]?.length ?? 1
-  next.rows.push(Array.from({ length: cols }, () => emptyTableCell()))
+  const index = at === undefined ? next.rows.length : Math.max(0, Math.min(at, next.rows.length))
+  const newRow = Array.from({ length: cols }, () => emptyTableCell())
+  next.rows.splice(index, 0, newRow)
+
+  for (let rowIdx = 0; rowIdx < index; rowIdx += 1) {
+    const row = next.rows[rowIdx]
+
+    for (let colIdx = 0; colIdx < row.length; colIdx += 1) {
+      const cell = row[colIdx]
+
+      if (cell.hidden) {
+        continue
+      }
+
+      const rowspan = cell.rowspan ?? 1
+      const colspan = cell.colspan ?? 1
+
+      if (rowIdx + rowspan > index) {
+        cell.rowspan = rowspan + 1
+
+        for (let c = colIdx; c < colIdx + colspan && c < cols; c += 1) {
+          next.rows[index][c] = { ...emptyTableCell(), hidden: true }
+        }
+      }
+    }
+  }
 
   return next
 }
 
-export function addTableColumn(table: TableData): TableData {
+/**
+ * Insert a column. `at` defaults to append. Spans that cross the insert line
+ * grow by one and cover the new cells (marked hidden).
+ */
+export function addTableColumn(table: TableData, at?: number): TableData {
   const next = cloneTableData(table)
-  next.rows = next.rows.map((row) => [...row, emptyTableCell()])
+  const colCount = next.rows[0]?.length ?? 0
+  const index = at === undefined ? colCount : Math.max(0, Math.min(at, colCount))
+
+  next.rows = next.rows.map((row) => {
+    const copy = [...row]
+    copy.splice(index, 0, emptyTableCell())
+    return copy
+  })
+
+  for (let rowIdx = 0; rowIdx < next.rows.length; rowIdx += 1) {
+    const row = next.rows[rowIdx]
+
+    for (let colIdx = 0; colIdx < index; colIdx += 1) {
+      const cell = row[colIdx]
+
+      if (cell.hidden) {
+        continue
+      }
+
+      const colspan = cell.colspan ?? 1
+      const rowspan = cell.rowspan ?? 1
+
+      if (colIdx + colspan > index) {
+        cell.colspan = colspan + 1
+
+        for (let r = rowIdx; r < rowIdx + rowspan && r < next.rows.length; r += 1) {
+          next.rows[r][index] = { ...emptyTableCell(), hidden: true }
+        }
+      }
+    }
+  }
 
   return next
 }

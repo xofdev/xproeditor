@@ -13,6 +13,7 @@ export interface BlockEditorProps {
   defaultValue: Block[]
   upload?: UseBlockEditorOptions['upload']
   pickMedia?: UseBlockEditorOptions['pickMedia']
+  fetchBookmarkMeta?: UseBlockEditorOptions['fetchBookmarkMeta']
   editorDir?: 'ltr' | 'rtl'
   readonly?: boolean
   /** Floating bubble toolbar on text selection (disabled when using a sticky format toolbar). */
@@ -50,6 +51,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
     defaultValue,
     upload,
     pickMedia,
+    fetchBookmarkMeta,
     editorDir,
     readonly,
     showBubbleToolbar,
@@ -63,6 +65,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
     defaultValue,
     upload,
     pickMedia,
+    fetchBookmarkMeta,
     editorDir,
     readonly,
     showBubbleToolbar,
@@ -117,6 +120,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           dropPosition={ed.dropTarget && ed.dropTarget.id === block.id ? ed.dropTarget.position : null}
           upload={ed.upload}
           pickMedia={ed.pickMedia}
+          fetchBookmarkMeta={ed.fetchBookmarkMeta}
           editorDir={ed.editorDir}
           readonly={ed.readonly}
           themeSource={ed.rootRef.current}
@@ -138,9 +142,14 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           onPatch={(p) => ed.patchProps(block, p)}
           onIconPickerOpened={() => ed.setIconPickerRequest(null)}
           onSelect={() => ed.selectBlock(block.id)}
+          aiEnabled={!!ed.ai?.transport}
           onAddBelow={() => ed.addBelow(block)}
           onDuplicate={() => ed.duplicateBlock(block)}
+          onCopy={() => void ed.copyBlock(block)}
+          onCut={() => void ed.cutBlock(block)}
           onRemove={() => ed.removeBlock(block)}
+          onTurnInto={(type) => ed.turnBlockInto(block, type)}
+          onAskAI={ed.ai?.transport ? () => ed.openAIMenu() : undefined}
           onDragHandleStart={(e) => ed.onDragHandleStart(block, e)}
           onPointerDown={(e) => ed.onBlockPointerDown(block, e)}
           onSelectionPointerDown={(p) => ed.onSelectionPointerDown(block, p)}
@@ -162,7 +171,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
           position={ed.slashState.position}
           dir={ed.editorDir ?? 'ltr'}
           themeSource={ed.rootRef.current}
-          showAI={!!ed.ai?.transport}
+          aiEnabled={typeof ed.ai?.transport === 'function'}
           onSelect={ed.onSlashSelect}
           onClose={ed.closeSlash}
         />
@@ -181,14 +190,23 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(funct
       {ed.showBubbleToolbar && ed.bubble && !ed.readonly && (
         <BubbleToolbar
           position={ed.bubble.position}
+          placement={ed.bubble.placement}
           activeMarks={ed.bubble.activeMarks}
           currentLink={ed.bubble.currentLink}
           currentColor={ed.bubble.currentColor}
           currentHighlight={ed.bubble.currentHighlight}
           blockType={ed.bubble.blockType}
+          multiBlock={ed.bubble.multiBlock}
+          mixedTypes={ed.bubble.mixedTypes}
+          aiEnabled={typeof ed.ai?.transport === 'function'}
           themeSource={ed.rootRef.current}
           onMark={ed.onBubbleMark}
           onTurnInto={ed.onBubbleTurnInto}
+          onClearFormatting={ed.onBubbleClearFormatting}
+          onAskAI={ed.onBubbleAskAI}
+          onCopy={ed.bubble.multiBlock ? ed.onBubbleCopy : undefined}
+          onDuplicate={ed.bubble.multiBlock ? ed.onBubbleDuplicate : undefined}
+          onDelete={ed.bubble.multiBlock ? ed.onBubbleDelete : undefined}
         />
       )}
 

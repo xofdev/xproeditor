@@ -65,7 +65,7 @@ withDefaults(
   color: var(--xpe-primary-foreground, #fff);
 }
 .xpe-btn--default:hover:not(:disabled) {
-  background: var(--xpe-primary, #4338ca);
+  background: color-mix(in srgb, var(--xpe-primary, #4f46e5) 88%, #000);
 }
 .xpe-btn--outline {
   background: var(--xpe-surface, #fff);

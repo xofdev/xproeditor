@@ -151,7 +151,7 @@ function isPresetActive(color: string, active: string | null): boolean {
             </div>
 
             <div class="border-t border-[var(--xpe-border)] pt-3">
-                <p class="mb-2 text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
+                <p class="xpe-menu-heading mb-2">
                     Custom
                 </p>
                 <div @focusin="onPickerFocus">
@@ -202,7 +202,7 @@ function isPresetActive(color: string, active: string | null): boolean {
             </div>
 
             <div class="border-t border-[var(--xpe-border)] pt-3">
-                <p class="mb-2 text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">
+                <p class="xpe-menu-heading mb-2">
                     Custom
                 </p>
                 <div @focusin="onPickerFocus">

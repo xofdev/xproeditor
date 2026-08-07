@@ -38,21 +38,41 @@ function blockLength(block: Block): number {
   return isTextBlock(block.type) ? spansToText(block.content).length : 0
 }
 
-function visibleTextBlockIndex(visibleBlocks: Block[], blockId: string): number {
-  return visibleBlocks.findIndex(b => b.id === blockId && isTextBlock(b.type))
+/**
+ * Exclusive end offset for a selection endpoint on `block`.
+ * Text blocks use content length; non-text blocks use 1 (whole-block edge).
+ */
+export function selectionEndOffset(block: Block): number {
+  return isTextBlock(block.type) ? blockLength(block) : 1
+}
+
+function visibleBlockIndex(visibleBlocks: Block[], blockId: string): number {
+  return visibleBlocks.findIndex(b => b.id === blockId)
 }
 
 function clampOffset(block: Block, offset: number): number {
+  if (!isTextBlock(block.type)) {
+    return Math.max(0, Math.min(offset, 1))
+  }
+
   return Math.max(0, Math.min(offset, blockLength(block)))
 }
 
-/** Order anchor/focus into document order using visible text blocks. */
+function pointOrderKey(
+  block: Block,
+  offset: number,
+  index: number,
+): { index: number; offset: number } {
+  return { index, offset: clampOffset(block, offset) }
+}
+
+/** Order anchor/focus into document order using visible blocks (text + non-text). */
 export function normalizeTextRange(
   range: TextRangeSelection,
   visibleBlocks: Block[],
 ): NormalizedTextRange | null {
-  const anchorIdx = visibleTextBlockIndex(visibleBlocks, range.anchor.blockId)
-  const focusIdx = visibleTextBlockIndex(visibleBlocks, range.focus.blockId)
+  const anchorIdx = visibleBlockIndex(visibleBlocks, range.anchor.blockId)
+  const focusIdx = visibleBlockIndex(visibleBlocks, range.focus.blockId)
 
   if (anchorIdx === -1 || focusIdx === -1) {
     return null
@@ -60,23 +80,23 @@ export function normalizeTextRange(
 
   const anchorBlock = visibleBlocks[anchorIdx]
   const focusBlock = visibleBlocks[focusIdx]
-  const anchorOffset = clampOffset(anchorBlock, range.anchor.offset)
-  const focusOffset = clampOffset(focusBlock, range.focus.offset)
+  const anchor = pointOrderKey(anchorBlock, range.anchor.offset, anchorIdx)
+  const focus = pointOrderKey(focusBlock, range.focus.offset, focusIdx)
 
-  if (anchorIdx < focusIdx || (anchorIdx === focusIdx && anchorOffset <= focusOffset)) {
+  if (anchor.index < focus.index || (anchor.index === focus.index && anchor.offset <= focus.offset)) {
     return {
       startBlockId: range.anchor.blockId,
-      startOffset: anchorOffset,
+      startOffset: anchor.offset,
       endBlockId: range.focus.blockId,
-      endOffset: focusOffset,
+      endOffset: focus.offset,
     }
   }
 
   return {
     startBlockId: range.focus.blockId,
-    startOffset: focusOffset,
+    startOffset: focus.offset,
     endBlockId: range.anchor.blockId,
-    endOffset: anchorOffset,
+    endOffset: anchor.offset,
   }
 }
 
@@ -107,6 +127,26 @@ export function isCrossBlockTextRange(
   return normalized.startBlockId !== normalized.endBlockId
 }
 
+/** True when the range spans multiple blocks or covers a whole non-text block. */
+export function isManagedMultiBlockRange(
+  range: TextRangeSelection,
+  visibleBlocks: Block[],
+): boolean {
+  const normalized = normalizeTextRange(range, visibleBlocks)
+
+  if (!normalized || isTextRangeCollapsed(range, visibleBlocks)) {
+    return false
+  }
+
+  if (normalized.startBlockId !== normalized.endBlockId) {
+    return true
+  }
+
+  const block = visibleBlocks.find(b => b.id === normalized.startBlockId)
+
+  return !!block && !isTextBlock(block.type)
+}
+
 /** Segments for each text block touched by the range. */
 export function getTextRangeSegments(
   range: TextRangeSelection,
@@ -119,8 +159,8 @@ export function getTextRangeSegments(
     return []
   }
 
-  const startIdx = visibleTextBlockIndex(visibleBlocks, normalized.startBlockId)
-  const endIdx = visibleTextBlockIndex(visibleBlocks, normalized.endBlockId)
+  const startIdx = visibleBlockIndex(visibleBlocks, normalized.startBlockId)
+  const endIdx = visibleBlockIndex(visibleBlocks, normalized.endBlockId)
 
   if (startIdx === -1 || endIdx === -1) {
     return []
@@ -177,8 +217,12 @@ export function isBlockFullySelected(
 ): boolean {
   const block = blocks.find(b => b.id === blockId)
 
-  if (!block || !isTextBlock(block.type)) {
+  if (!block) {
     return false
+  }
+
+  if (!isTextBlock(block.type)) {
+    return isBlockCoveredByTextRange(blockId, range, blocks, visibleBlocks)
   }
 
   const segments = getTextRangeSegments(range, blocks, visibleBlocks)
@@ -234,39 +278,83 @@ export function deleteTextRange(
   const startBlock = blocks[startIdx]
   const endBlock = blocks[endIdx]
 
-  if (!isTextBlock(startBlock.type) || !isTextBlock(endBlock.type)) {
+  if (startIdx === endIdx) {
+    if (isTextBlock(startBlock.type)) {
+      startBlock.content = deleteRangeInSpans(
+        startBlock.content,
+        normalized.startOffset,
+        normalized.endOffset,
+      )
+
+      return { focusBlockId: startBlock.id, focusOffset: normalized.startOffset }
+    }
+
+    blocks.splice(startIdx, 1)
+    const neighbor = blocks[Math.min(startIdx, blocks.length - 1)]
+
+    if (!neighbor) {
+      return null
+    }
+
+    return {
+      focusBlockId: neighbor.id,
+      focusOffset: isTextBlock(neighbor.type) ? 0 : 0,
+    }
+  }
+
+  const before = isTextBlock(startBlock.type)
+    ? splitSpansAt(startBlock.content, normalized.startOffset)[0]
+    : []
+  const after = isTextBlock(endBlock.type)
+    ? splitSpansAt(endBlock.content, normalized.endOffset)[1]
+    : []
+
+  if (isTextBlock(startBlock.type) && isTextBlock(endBlock.type)) {
+    startBlock.content = normalizeSpans([...before, ...after])
+    blocks.splice(startIdx + 1, endIdx - startIdx)
+
+    return {
+      focusBlockId: startBlock.id,
+      focusOffset: spansToText(before).length,
+    }
+  }
+
+  if (isTextBlock(startBlock.type)) {
+    startBlock.content = normalizeSpans(before)
+    blocks.splice(startIdx + 1, endIdx - startIdx)
+
+    return {
+      focusBlockId: startBlock.id,
+      focusOffset: spansToText(before).length,
+    }
+  }
+
+  if (isTextBlock(endBlock.type)) {
+    endBlock.content = normalizeSpans(after)
+    blocks.splice(startIdx, endIdx - startIdx)
+
+    return {
+      focusBlockId: endBlock.id,
+      focusOffset: 0,
+    }
+  }
+
+  blocks.splice(startIdx, endIdx - startIdx + 1)
+  const neighbor = blocks[Math.min(startIdx, blocks.length - 1)]
+
+  if (!neighbor) {
     return null
   }
 
-  if (normalized.startBlockId === normalized.endBlockId) {
-    startBlock.content = deleteRangeInSpans(
-      startBlock.content,
-      normalized.startOffset,
-      normalized.endOffset,
-    )
-
-    return { focusBlockId: startBlock.id, focusOffset: normalized.startOffset }
-  }
-
-  const [before] = splitSpansAt(startBlock.content, normalized.startOffset)
-  const [, after] = splitSpansAt(endBlock.content, normalized.endOffset)
-  startBlock.content = normalizeSpans([...before, ...after])
-
-  const removeCount = endIdx - startIdx
-
-  if (removeCount > 0) {
-    blocks.splice(startIdx + 1, removeCount)
-  }
-
   return {
-    focusBlockId: startBlock.id,
-    focusOffset: spansToText(before).length,
+    focusBlockId: neighbor.id,
+    focusOffset: isTextBlock(neighbor.type) ? 0 : 0,
   }
 }
 
 /**
  * True when a block sits inside a managed cross-block range (including
- * non-text blocks between the text endpoints — images, code, dividers, etc.).
+ * non-text blocks between the endpoints — images, code, dividers, etc.).
  */
 export function isBlockCoveredByTextRange(
   blockId: string,
@@ -295,6 +383,15 @@ export function isBlockCoveredByTextRange(
   const block = blocks[idx]
 
   if (!isTextBlock(block.type)) {
+    // Endpoint non-text: covered when the range actually includes the block edge.
+    if (idx === startIdx && normalized.startOffset >= 1) {
+      return false
+    }
+
+    if (idx === endIdx && normalized.endOffset <= 0) {
+      return false
+    }
+
     return true
   }
 
@@ -327,6 +424,14 @@ export function extractTextRangeAsBlocks(
     const block = blocks[i]
 
     if (!isTextBlock(block.type)) {
+      if (i === startIdx && normalized.startOffset >= 1) {
+        continue
+      }
+
+      if (i === endIdx && normalized.endOffset <= 0) {
+        continue
+      }
+
       result.push(cloneBlock(block))
       continue
     }
@@ -365,7 +470,7 @@ export function isWholeBlockTextRange(
   const segments = getTextRangeSegments(range, blocks, visibleBlocks)
 
   if (segments.length === 0) {
-    return false
+    return isManagedMultiBlockRange(range, visibleBlocks)
   }
 
   return segments.every(s => s.fullBlock)
@@ -452,33 +557,102 @@ export function rangeMarkValueAcrossSegments(
   return unified ?? null
 }
 
-/** Build a text range selecting full content of visible text blocks from first to last. */
+/** Build a text range selecting every visible block from first to last. */
 export function fullBlockTextRange(visibleBlocks: Block[]): TextRangeSelection | null {
-  const textBlocks = visibleBlocks.filter(b => isTextBlock(b.type))
-
-  if (textBlocks.length === 0) {
+  if (visibleBlocks.length === 0) {
     return null
   }
 
-  const first = textBlocks[0]
-  const last = textBlocks[textBlocks.length - 1]
+  const first = visibleBlocks[0]
+  const last = visibleBlocks[visibleBlocks.length - 1]
 
   return {
     anchor: { blockId: first.id, offset: 0 },
-    focus: { blockId: last.id, offset: blockLength(last) },
+    focus: { blockId: last.id, offset: selectionEndOffset(last) },
   }
 }
 
 /** Build a text range selecting full content of a single block. */
 export function fullBlockContentRange(block: Block): TextRangeSelection | null {
-  if (!isTextBlock(block.type)) {
-    return null
-  }
-
-  const len = blockLength(block)
-
   return {
     anchor: { blockId: block.id, offset: 0 },
-    focus: { blockId: block.id, offset: len },
+    focus: { blockId: block.id, offset: selectionEndOffset(block) },
   }
+}
+
+/** True when `range` already covers every visible block (document select-all). */
+export function isFullDocumentRange(
+  range: TextRangeSelection,
+  visibleBlocks: Block[],
+): boolean {
+  const full = fullBlockTextRange(visibleBlocks)
+
+  if (!full) {
+    return false
+  }
+
+  const normalized = normalizeTextRange(range, visibleBlocks)
+  const fullNormalized = normalizeTextRange(full, visibleBlocks)
+
+  if (!normalized || !fullNormalized) {
+    return false
+  }
+
+  return normalized.startBlockId === fullNormalized.startBlockId
+    && normalized.startOffset === fullNormalized.startOffset
+    && normalized.endBlockId === fullNormalized.endBlockId
+    && normalized.endOffset === fullNormalized.endOffset
+}
+
+/** Two-stage Ctrl/Cmd+A: in-block first, then whole document. */
+export type SelectAllStage = 'none' | 'block' | 'document'
+
+export type SelectAllAction = 'select-block' | 'select-document' | 'noop'
+
+/**
+ * Decide the next select-all action from the current stage and whether the
+ * active block / document is already fully selected (browser or managed).
+ */
+export function resolveSelectAllShortcut(input: {
+  stage: SelectAllStage
+  documentAlreadySelected: boolean
+  blockAlreadySelected: boolean
+  hasActiveBlock: boolean
+}): { action: SelectAllAction; stage: SelectAllStage } {
+  if (input.documentAlreadySelected || input.stage === 'document') {
+    return { action: 'noop', stage: 'document' }
+  }
+
+  if (input.stage === 'block' || input.blockAlreadySelected) {
+    return { action: 'select-document', stage: 'document' }
+  }
+
+  if (!input.hasActiveBlock) {
+    return { action: 'select-document', stage: 'document' }
+  }
+
+  return { action: 'select-block', stage: 'block' }
+}
+
+export type HistoryShortcut = 'undo' | 'redo'
+
+/**
+ * Map Ctrl/Cmd+Z / Shift+Ctrl/Cmd+Z / Ctrl+Y to document history actions.
+ * Callers must invoke this before any contenteditable/textarea bail-out so
+ * editor history wins over the browser's field-local undo stack.
+ */
+export function resolveHistoryShortcut(input: {
+  key: string
+  ctrlKey: boolean
+  metaKey: boolean
+  shiftKey: boolean
+}): HistoryShortcut | null {
+  if (!(input.ctrlKey || input.metaKey)) return null
+
+  const key = input.key.toLowerCase()
+
+  if (key === 'z') return input.shiftKey ? 'redo' : 'undo'
+  if (key === 'y') return 'redo'
+
+  return null
 }

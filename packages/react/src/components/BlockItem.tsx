@@ -1,17 +1,12 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { Copy, GripVertical, Plus, ChevronRight, Trash2 } from 'lucide-react'
-import { isTextBlock, resolveBlockDirection } from '@xproeditor/core'
-import type { Block, InlineSpan, MarkName, TableCellCoord } from '@xproeditor/core'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  IconEmojiPicker,
-} from '../ui'
+import { GripVertical, Plus, ChevronRight } from 'lucide-react'
+import { BUTTON_COLOR_PRESETS, isTextBlock, resolveBlockDirection } from '@xproeditor/core'
+import type { Block, BlockType, InlineSpan, MarkName, TableCellCoord } from '@xproeditor/core'
+import { IconEmojiPicker } from '../ui'
 import { CodeBlock, type CodeBlockHandle } from './CodeBlock'
 import { AudioBlock } from './AudioBlock'
 import { BlockContextMenu } from './BlockContextMenu'
+import { BookmarkBlock } from './BookmarkBlock'
 import { ButtonBlock } from './ButtonBlock'
 import { FileBlock } from './FileBlock'
 import { ImageBlock } from './ImageBlock'
@@ -19,10 +14,20 @@ import { SelectionHighlight } from './SelectionHighlight'
 import { TableBlock, type TableBlockHandle } from './TableBlock'
 import { TextBlock, type TextBlockHandle } from './TextBlock'
 import { VideoBlock } from './VideoBlock'
-import type { BlockItemHandle, PickMediaFn, UploadFn } from '../types'
+import type { BlockItemHandle, FetchBookmarkMetaFn, PickMediaFn, UploadFn } from '../types'
 
 const CALLOUT_COLORS = ['#f8fafc', '#fefce8', '#fff7ed', '#fef2f2', '#f0fdf4', '#eff6ff', '#faf5ff']
-const LIST_LIKE = ['bulleted_list_item', 'numbered_list_item', 'to_do', 'toggle']
+const LIST_LIKE = [
+  'bulleted_list_item',
+  'numbered_list_item',
+  'to_do',
+  'toggle',
+  'toggle_heading_1',
+  'toggle_heading_2',
+  'toggle_heading_3',
+]
+
+const TOGGLE_LIKE = ['toggle', 'toggle_heading_1', 'toggle_heading_2', 'toggle_heading_3']
 
 export interface BlockItemProps {
   block: Block
@@ -33,10 +38,12 @@ export interface BlockItemProps {
   dropPosition?: 'before' | 'after' | null
   upload?: UploadFn
   pickMedia?: PickMediaFn
+  fetchBookmarkMeta?: FetchBookmarkMetaFn
   editorDir?: 'ltr' | 'rtl'
   readonly?: boolean
   themeSource?: HTMLElement | null
   iconPickerRequest?: { tab: 'emoji' | 'icon' } | null
+  aiEnabled?: boolean
   onInput: (spans: InlineSpan[], caret: number | null) => void
   onEnter: (offsets: { start: number; end: number }) => void
   onBackspaceStart: () => void
@@ -56,7 +63,11 @@ export interface BlockItemProps {
   onSelect: () => void
   onAddBelow: () => void
   onDuplicate: () => void
+  onCopy: () => void
+  onCut: () => void
   onRemove: () => void
+  onTurnInto: (type: BlockType) => void
+  onAskAI?: () => void
   onDragHandleStart: (e: React.DragEvent) => void
   onPointerDown: (e: React.PointerEvent) => void
   onSelectionPointerDown: (payload: { shiftKey: boolean; clientX: number; clientY: number }) => void
@@ -89,10 +100,12 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
       dropPosition,
       upload,
       pickMedia,
+      fetchBookmarkMeta,
       editorDir,
       readonly,
       themeSource,
       iconPickerRequest,
+      aiEnabled,
       onInput,
       onEnter,
       onBackspaceStart,
@@ -107,7 +120,11 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
       onSelect,
       onAddBelow,
       onDuplicate,
+      onCopy,
+      onCut,
       onRemove,
+      onTurnInto,
+      onAskAI,
       onDragHandleStart,
       onPointerDown,
       onSelectionPointerDown,
@@ -125,13 +142,31 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
     const [showCalloutColors, setShowCalloutColors] = useState(false)
     const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
 
+    function openContextMenuAt(x: number, y: number) {
+      onSelect()
+      setContextMenuPos({ x, y })
+    }
+
     function onContextMenu(e: React.MouseEvent) {
       if (readonly) return
 
       e.preventDefault()
-      onSelect()
-      setContextMenuPos({ x: e.clientX, y: e.clientY })
+      openContextMenuAt(e.clientX, e.clientY)
     }
+
+    function onHandleClick(e: React.MouseEvent<HTMLButtonElement>) {
+      e.preventDefault()
+      e.stopPropagation()
+      const rect = e.currentTarget.getBoundingClientRect()
+      openContextMenuAt(rect.right + 4, rect.top)
+    }
+
+    const colorPresets =
+      block.type === 'callout'
+        ? CALLOUT_COLORS
+        : block.type === 'button'
+          ? [...BUTTON_COLOR_PRESETS]
+          : undefined
 
     useEffect(() => {
       if (!iconPickerRequest || readonly || block.type !== 'callout') return
@@ -206,22 +241,31 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
       )
     }
 
+    const markerLevel =
+      block.type === 'toggle_heading_1'
+        ? 'h1'
+        : block.type === 'toggle_heading_2'
+          ? 'h2'
+          : block.type === 'toggle_heading_3'
+            ? 'h3'
+            : null
+
     return (
       <div
-        className={`ebi group/block relative${selected ? ' ebi-selected' : ''}`}
+        className={`ebi group/block${selected ? ' ebi-selected' : ''}`}
         data-block-id={block.id}
         dir={blockDir}
-        style={{ paddingInlineStart: `${indent * 28}px` }}
+        style={{ ['--xpe-block-indent' as string]: indent }}
         onPointerDown={onPointerDown}
         onContextMenu={onContextMenu}
       >
         {dropPosition === 'before' && <div className="ebi-drop -top-[2px]" />}
         {dropPosition === 'after' && <div className="ebi-drop -bottom-[2px]" />}
 
-        <div className="flex items-start gap-0.5">
+        <div className="ebi-row">
           {!readonly && (
             <div
-              className="ebi-gutter flex items-center shrink-0 pt-[5px] opacity-0 group-hover/block:opacity-100 transition-opacity select-none"
+              className="ebi-gutter"
               contentEditable={false}
               suppressContentEditableWarning
             >
@@ -233,35 +277,21 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
-              <div className="relative">
-                <DropdownMenu>
-                  <DropdownMenuTrigger>
-                    <button
-                      className="ebi-gutter-btn ebi-reorder-handle cursor-grab active:cursor-grabbing"
-                      title="Drag to move, click for menu"
-                      draggable
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onDragStart={onDragHandleStart}
-                    >
-                      <GripVertical className="w-3.5 h-3.5" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align={isRtl ? 'end' : 'start'} className="w-36">
-                    <DropdownMenuItem onClick={onDuplicate}>
-                      <Copy className="w-3.5 h-3.5 text-[var(--xpe-muted-foreground)]" />
-                      Duplicate
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-[var(--xpe-danger)]" onClick={onRemove}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              <button
+                type="button"
+                className="ebi-gutter-btn ebi-reorder-handle cursor-grab active:cursor-grabbing"
+                title="Drag to move, click for menu"
+                draggable
+                onPointerDown={(e) => e.stopPropagation()}
+                onDragStart={onDragHandleStart}
+                onClick={onHandleClick}
+              >
+                <GripVertical className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
 
-          <div className="relative flex-1 min-w-0 py-[3px]">
+          <div className="ebi-body">
             {block.type === 'quote' ? (
               <div className="flex gap-3 border-s-[3px] border-[var(--xpe-foreground)] ps-3.5">
                 {renderTextBlock('flex-1', 'Quote')}
@@ -333,26 +363,25 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                 {renderTextBlock('flex-1', 'Type something...')}
               </div>
             ) : LIST_LIKE.includes(block.type) ? (
-              <div className="ebi-list-row flex items-start gap-1.5">
+              <div className="ebi-list-row">
                 <div
-                  className="shrink-0 flex items-center justify-center w-6 pt-[5px] select-none"
+                  className={`ebi-list-marker${markerLevel ? ` ebi-list-marker--${markerLevel}` : ''}`}
                   contentEditable={false}
                   suppressContentEditableWarning
                 >
                   {block.type === 'bulleted_list_item' && (
-                    <span className="text-[var(--xpe-foreground)] text-base leading-none mt-1">•</span>
+                    <span className="ebi-list-bullet">•</span>
                   )}
                   {block.type === 'numbered_list_item' && (
-                    <span className="text-[var(--xpe-foreground)] text-[14px] leading-snug tabular-nums">
-                      {number ?? 1}.
-                    </span>
+                    <span className="ebi-list-number">{number ?? 1}.</span>
                   )}
                   {block.type === 'to_do' && (
                     <button
+                      type="button"
                       role="checkbox"
                       aria-label="Toggle to-do"
                       aria-checked={!!block.props.checked}
-                      className={`appearance-none w-[15px] h-[15px] mt-1 rounded-[4px] border flex items-center justify-center transition-colors ${block.props.checked ? 'bg-[var(--xpe-primary)] border-[var(--xpe-primary)]' : 'border-[var(--xpe-border)] hover:border-[var(--xpe-ring)] bg-[var(--xpe-surface)]'}`}
+                      className={`ebi-todo${block.props.checked ? ' ebi-todo--checked' : ''}`}
                       disabled={readonly}
                       onClick={() => onPatch({ checked: !block.props.checked })}
                     >
@@ -371,9 +400,12 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                       )}
                     </button>
                   )}
-                  {block.type === 'toggle' && (
+                  {TOGGLE_LIKE.includes(block.type) && (
                     <button
-                      className="w-5 h-5 mt-0.5 rounded flex items-center justify-center text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)] transition-transform"
+                      type="button"
+                      aria-label={block.props.collapsed ? 'Expand toggle' : 'Collapse toggle'}
+                      aria-expanded={!block.props.collapsed}
+                      className="ebi-toggle-btn"
                       disabled={readonly}
                       onClick={() => onPatch({ collapsed: !block.props.collapsed })}
                     >
@@ -386,13 +418,19 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                 </div>
                 {renderTextBlock(
                   block.type === 'to_do' && block.props.checked
-                    ? 'line-through !text-[var(--xpe-muted-foreground)]'
-                    : undefined,
+                    ? 'flex-1 min-w-0 line-through !text-[var(--xpe-muted-foreground)]'
+                    : 'flex-1 min-w-0',
                   block.type === 'to_do'
                     ? 'To-do'
                     : block.type === 'toggle'
                       ? 'Toggle'
-                      : 'List item',
+                      : block.type === 'toggle_heading_1'
+                        ? 'Heading 1'
+                        : block.type === 'toggle_heading_2'
+                          ? 'Heading 2'
+                          : block.type === 'toggle_heading_3'
+                            ? 'Heading 3'
+                            : 'List item',
                 )}
               </div>
             ) : block.type === 'code' ? (
@@ -482,6 +520,15 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                 onPatch={onPatch}
                 onSelect={onSelect}
               />
+            ) : block.type === 'bookmark' ? (
+              <BookmarkBlock
+                block={block}
+                selected={selected}
+                readonly={readonly}
+                fetchBookmarkMeta={fetchBookmarkMeta}
+                onPatch={onPatch}
+                onSelect={onSelect}
+              />
             ) : (
               renderTextBlock()
             )}
@@ -499,12 +546,20 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
         {contextMenuPos && (
           <BlockContextMenu
             position={contextMenuPos}
+            blockType={block.type}
             themeSource={themeSource}
-            colorPresets={block.type === 'callout' ? CALLOUT_COLORS : undefined}
+            colorPresets={colorPresets}
             currentColor={block.props.color}
+            canTurnInto={textual}
+            aiEnabled={aiEnabled}
             onColor={(color) => onPatch({ color })}
+            onTurnInto={onTurnInto}
             onDuplicate={onDuplicate}
+            onCopy={onCopy}
+            onCut={onCut}
             onDelete={onRemove}
+            onInsertBelow={onAddBelow}
+            onAskAI={onAskAI}
             onClose={() => setContextMenuPos(null)}
           />
         )}

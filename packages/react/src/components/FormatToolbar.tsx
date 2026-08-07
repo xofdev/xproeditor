@@ -25,6 +25,7 @@ import {
   Heading3,
   CheckSquare,
   Lightbulb,
+  Bookmark,
   SquareMousePointer,
   Sparkles,
   Underline,
@@ -44,7 +45,7 @@ export type { FormatToolbarAlign, FormatToolbarState }
 
 export interface FormatToolbarProps {
   state: FormatToolbarState | null
-  showAI?: boolean
+  aiEnabled?: boolean
   onMark: (mark: MarkName, value: boolean | string | null) => void
   onTurnInto: (type: BlockType) => void
   onIndent: () => void
@@ -66,14 +67,18 @@ const TURN_INTO: Array<{ type: BlockType; label: string; icon: typeof Type }> = 
   { type: 'numbered_list_item', label: 'Numbered list', icon: ListOrdered },
   { type: 'to_do', label: 'To-do', icon: CheckSquare },
   { type: 'toggle', label: 'Toggle list', icon: ChevronRight },
+  { type: 'toggle_heading_1', label: 'Toggle heading 1', icon: Heading1 },
+  { type: 'toggle_heading_2', label: 'Toggle heading 2', icon: Heading2 },
+  { type: 'toggle_heading_3', label: 'Toggle heading 3', icon: Heading3 },
   { type: 'quote', label: 'Quote', icon: Quote },
   { type: 'callout', label: 'Callout', icon: Lightbulb },
   { type: 'button', label: 'Button', icon: SquareMousePointer },
+  { type: 'bookmark', label: 'Web bookmark', icon: Bookmark },
 ]
 
 export function FormatToolbar({
   state,
-  showAI,
+  aiEnabled,
   onMark,
   onTurnInto,
   onIndent,
@@ -153,7 +158,7 @@ export function FormatToolbar({
         <ToolbarPopover
           open={turnIntoOpen}
           onOpenChange={onTurnIntoOpenChange}
-          contentClassName="w-48 py-1"
+          contentClassName="xpe-menu-list w-52 !p-1.5"
           trigger={
             <ToolbarButton wide disabled={blockActionsDisabled || isTable}>
               {turnIntoLabel}
@@ -163,27 +168,28 @@ export function FormatToolbar({
         >
           {TURN_INTO.map((t) => {
             const Icon = t.icon
+            const selected = t.type === state?.blockType
             return (
               <button
                 key={t.type}
                 type="button"
-                className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] transition-colors ${t.type === state?.blockType ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]'}`}
+                className={`xpe-menu-item${selected ? ' xpe-menu-item--selected' : ''}`}
                 onClick={() => {
                   onTurnInto(t.type)
                   setTurnIntoOpen(false)
                 }}
               >
-                <Icon className="size-3.5 shrink-0 text-[var(--xpe-muted-foreground)]" />
-                <span className="flex-1">{t.label}</span>
-                {t.type === state?.blockType && (
-                  <Check className="size-3.5 shrink-0 text-[var(--xpe-primary)]" />
-                )}
+                <span className="xpe-menu-item__icon">
+                  <Icon />
+                </span>
+                <span className="xpe-menu-item__label">{t.label}</span>
+                {selected && <Check className="xpe-menu-item__meta" />}
               </button>
             )
           })}
         </ToolbarPopover>
 
-        {showAI && onAskAI && (
+        {aiEnabled && onAskAI && (
           <ToolbarButton title="Ask AI" onClick={onAskAI}>
             <Sparkles className="size-3.5" />
           </ToolbarButton>

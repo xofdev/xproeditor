@@ -32,6 +32,9 @@ export function createBlock(
       type === 'numbered_list_item' ||
       type === 'to_do' ||
       type === 'toggle' ||
+      type === 'toggle_heading_1' ||
+      type === 'toggle_heading_2' ||
+      type === 'toggle_heading_3' ||
       type === 'quote' ||
       type === 'callout' ||
       type === 'button')
@@ -50,6 +53,16 @@ props.code = ''
   if (type === 'to_do' && props.checked === undefined) {
 props.checked = false
 }
+
+  if (
+    (type === 'toggle' ||
+      type === 'toggle_heading_1' ||
+      type === 'toggle_heading_2' ||
+      type === 'toggle_heading_3') &&
+    props.collapsed === undefined
+  ) {
+    props.collapsed = false
+  }
 
   if (type === 'callout' && props.icon === undefined) {
 props.icon = '💡'
@@ -78,6 +91,10 @@ props.buttonStyle = 'primary'
   if (type === 'button' && props.align === undefined) {
 props.align = 'left'
 }
+
+  if (type === 'bookmark' && props.url === undefined) {
+    props.url = ''
+  }
 
   return {
     id: partial.id ?? generateBlockId(),

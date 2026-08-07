@@ -25,6 +25,8 @@ export type AICommandKind = 'add' | 'update'
 export interface AICommand {
   id: string
   label: string
+  /** Short helper under the label in the AI menu */
+  description?: string
   /** Shown when the user has a text selection */
   requiresSelection?: boolean
   /** Shown when there is no selection (cursor only) */
@@ -82,6 +84,7 @@ export const DEFAULT_AI_COMMANDS: AICommand[] = [
   {
     id: 'improve',
     label: 'Improve writing',
+    description: 'Polish tone and clarity',
     requiresSelection: true,
     kind: 'update',
     prompt: 'Improve the writing of the selected text. Keep the meaning.',
@@ -90,6 +93,7 @@ export const DEFAULT_AI_COMMANDS: AICommand[] = [
   {
     id: 'fix-spelling',
     label: 'Fix spelling & grammar',
+    description: 'Correct mistakes only',
     requiresSelection: true,
     kind: 'update',
     prompt: 'Fix spelling and grammar in the selected text.',
@@ -98,6 +102,7 @@ export const DEFAULT_AI_COMMANDS: AICommand[] = [
   {
     id: 'simplify',
     label: 'Simplify',
+    description: 'Shorter and clearer',
     requiresSelection: true,
     kind: 'update',
     prompt: 'Simplify the selected text. Make it clearer and shorter.',
@@ -106,6 +111,7 @@ export const DEFAULT_AI_COMMANDS: AICommand[] = [
   {
     id: 'continue',
     label: 'Continue writing',
+    description: 'Extend from the cursor',
     requiresNoSelection: true,
     kind: 'add',
     prompt: 'Continue writing from the cursor in the same style.',
@@ -114,6 +120,7 @@ export const DEFAULT_AI_COMMANDS: AICommand[] = [
   {
     id: 'summarize',
     label: 'Summarize',
+    description: 'Short paragraph summary',
     requiresNoSelection: true,
     kind: 'add',
     prompt: 'Summarize the document above the cursor in a short paragraph.',
@@ -122,17 +129,11 @@ export const DEFAULT_AI_COMMANDS: AICommand[] = [
   {
     id: 'action-items',
     label: 'Add action items',
+    description: 'Extract as a to-do list',
     requiresNoSelection: true,
     kind: 'add',
     prompt: 'Extract action items from the document as a to-do list.',
     aliases: ['todos', 'action items', 'tasks'],
-  },
-  {
-    id: 'ask',
-    label: 'Ask AI anything…',
-    kind: 'add',
-    prompt: '',
-    aliases: ['ask', 'custom'],
   },
 ]
 
@@ -156,7 +157,9 @@ export function filterAICommands(
       return true
     }
 
-    const hay = [cmd.label, cmd.id, ...(cmd.aliases ?? [])].join(' ').toLowerCase()
+    const hay = [cmd.label, cmd.description ?? '', cmd.id, ...(cmd.aliases ?? [])]
+      .join(' ')
+      .toLowerCase()
 
     return hay.includes(q)
   })

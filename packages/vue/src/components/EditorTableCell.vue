@@ -33,6 +33,14 @@ const emit = defineEmits<{
   arrowLeft: []
   arrowRight: []
   cellClick: [payload: { row: number; col: number; shiftKey: boolean }]
+  cellPointerDown: [payload: {
+    row: number
+    col: number
+    shiftKey: boolean
+    pointerId: number
+    clientX: number
+    clientY: number
+  }]
 }>()
 
 const el = ref<HTMLElement | null>(null)
@@ -104,6 +112,14 @@ function onPointerDown(e: PointerEvent) {
     return
   }
 
+  emit('cellPointerDown', {
+    row: props.rowIdx,
+    col: props.colIdx,
+    shiftKey: e.shiftKey,
+    pointerId: e.pointerId,
+    clientX: e.clientX,
+    clientY: e.clientY,
+  })
   emit('cellClick', { row: props.rowIdx, col: props.colIdx, shiftKey: e.shiftKey })
 }
 
@@ -238,6 +254,8 @@ defineExpose({ focusAt, getSelection, setSelection, el })
       selected ? 'ring-2 ring-[var(--xpe-ring)] ring-inset' : '',
     ]"
     :style="cellStyle"
+    :data-etable-row="rowIdx"
+    :data-etable-col="colIdx"
     :colspan="cell.colspan && cell.colspan > 1 ? cell.colspan : undefined"
     :rowspan="cell.rowspan && cell.rowspan > 1 ? cell.rowspan : undefined"
     @click.stop

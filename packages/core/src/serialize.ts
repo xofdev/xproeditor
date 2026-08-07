@@ -16,6 +16,13 @@ return block.props.caption ?? ''
 return block.props.name ?? block.props.caption ?? ''
 }
 
+  if (block.type === 'bookmark') {
+    const title = block.props.title?.trim()
+    const url = block.props.url?.trim()
+    if (title && url) return `${title}\n${url}`
+    return title || url || ''
+  }
+
   if (block.type === 'table') {
     const table = normalizeTableData(block.props.table)
 
@@ -47,7 +54,7 @@ export function extractHeadings(blocks: Block[]): DocHeading[] {
   const headings: DocHeading[] = []
 
   for (const block of blocks) {
-    const match = /^heading_([1-3])$/.exec(block.type)
+    const match = /^(?:toggle_)?heading_([1-3])$/.exec(block.type)
 
     if (!match) {
 continue
@@ -79,7 +86,7 @@ export function headingAnchorIds(blocks: Block[]): Map<string, string> {
   const seen = new Map<string, number>()
 
   for (const block of blocks) {
-    if (!/^heading_[1-3]$/.test(block.type)) {
+    if (!/^(?:toggle_)?heading_[1-3]$/.test(block.type)) {
 continue
 }
 

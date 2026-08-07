@@ -24,7 +24,7 @@ const model = defineModel<string>({ default: '' })
 }
 .xpe-input:focus {
   border-color: var(--xpe-ring, #6366f1);
-  box-shadow: 0 0 0 3px rgb(99 102 241 / 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--xpe-ring, #6366f1) 18%, transparent);
 }
 .xpe-input::placeholder {
   color: var(--xpe-muted-foreground, #9ca3af);

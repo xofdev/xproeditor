@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, Loader2, Sparkles, X } from 'lucide-react'
+import {
+  ArrowUp,
+  Check,
+  ListTodo,
+  Loader2,
+  Minimize2,
+  SpellCheck,
+  Sparkles,
+  Text,
+  WandSparkles,
+  X,
+} from 'lucide-react'
 import {
   applyAISuggestion,
   DEFAULT_AI_COMMANDS,
@@ -14,7 +25,6 @@ import {
   type AITransport,
   type Block,
 } from '@xproeditor/core'
-import { Button, Input } from '../ui'
 
 export interface AIMenuProps {
   open: boolean
@@ -27,6 +37,30 @@ export interface AIMenuProps {
   themeSource?: HTMLElement | null
   onApply: (nextBlocks: Block[], focusBlockId: string | null) => void
   onClose: () => void
+}
+
+const CMD_ICONS: Record<string, typeof Sparkles> = {
+  improve: WandSparkles,
+  'fix-spelling': SpellCheck,
+  simplify: Minimize2,
+  continue: Text,
+  summarize: Text,
+  'action-items': ListTodo,
+}
+
+function clampMenuPosition(x: number, y: number, width: number, height: number) {
+  const pad = 8
+  const maxX = Math.max(pad, window.innerWidth - width - pad)
+  const maxY = Math.max(pad, window.innerHeight - height - pad)
+  return {
+    left: Math.min(Math.max(pad, x), maxX),
+    top: Math.min(Math.max(pad, y), maxY),
+  }
+}
+
+function previewFromSuggestion(suggestion: AISuggestion, streamText: string): string {
+  if (streamText.trim()) return streamText
+  return suggestion.blocks.map((b) => b.content.map((s) => s.text).join('')).join('\n')
 }
 
 export function AIMenu({
@@ -47,14 +81,19 @@ export function AIMenu({
   const [error, setError] = useState<string | null>(null)
   const [suggestion, setSuggestion] = useState<AISuggestion | null>(null)
   const [activeCommand, setActiveCommand] = useState<AICommand | null>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
   const abortRef = useRef<AbortController | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const hasSelection = selectionBlocks.length > 0
 
   const visibleCommands = useMemo(
     () => filterAICommands(commands, prompt, hasSelection),
     [commands, prompt, hasSelection],
   )
+
+  const isBusy = status === 'thinking' || status === 'ai-writing'
+  const canSubmit = prompt.trim().length > 0 && !isBusy
 
   useEffect(() => {
     if (!open) {
@@ -65,16 +104,49 @@ export function AIMenu({
       setError(null)
       setSuggestion(null)
       setActiveCommand(null)
+      setActiveIndex(0)
       return
     }
     setStatus('user-input')
+    const id = window.setTimeout(() => inputRef.current?.focus(), 0)
+    return () => window.clearTimeout(id)
   }, [open])
+
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [prompt, hasSelection, open])
 
   useEffect(() => {
     if (open && themeSource && panelRef.current) {
       syncThemeVars(themeSource, panelRef.current)
     }
   }, [open, themeSource, position])
+
+  useEffect(() => {
+    if (!open) return
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        if (isBusy) stop()
+        else onClose()
+      }
+    }
+
+    function onOutside(e: MouseEvent) {
+      const target = e.target as Node
+      if (panelRef.current?.contains(target)) return
+      if (isBusy) return
+      onClose()
+    }
+
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('mousedown', onOutside, true)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('mousedown', onOutside, true)
+    }
+  }, [open, isBusy, onClose])
 
   async function run(command: AICommand | null, customPrompt: string) {
     const finalPrompt = (customPrompt || command?.prompt || '').trim()
@@ -120,6 +192,8 @@ export function AIMenu({
         if (chunk.done) break
       }
 
+      if (ac.signal.aborted) return
+
       const parsed = parseAIResponseToBlocks({ text: accumulated, blocks: structured })
       if (!parsed.length) {
         setError('No response from AI')
@@ -141,6 +215,16 @@ export function AIMenu({
     }
   }
 
+  function stop() {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setStatus('user-input')
+    setStreamText('')
+    setSuggestion(null)
+    setError(null)
+    window.setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
   function accept() {
     if (!suggestion) return
     const result = applyAISuggestion(blocks, suggestion, focusBlockId)
@@ -148,103 +232,187 @@ export function AIMenu({
     onClose()
   }
 
+  function reject() {
+    setSuggestion(null)
+    setStreamText('')
+    setStatus('user-input')
+    window.setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  function submitCustom() {
+    if (!canSubmit) return
+    void run(
+      activeCommand ?? { id: 'ask', label: 'Ask', kind: hasSelection ? 'update' : 'add' },
+      prompt,
+    )
+  }
+
+  function selectCommand(cmd: AICommand) {
+    setActiveCommand(cmd)
+    if (cmd.prompt) {
+      setPrompt(cmd.prompt)
+      void run(cmd, cmd.prompt)
+      return
+    }
+    setPrompt('')
+    inputRef.current?.focus()
+  }
+
+  function onInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      if (status === 'user-input' && !prompt.trim() && visibleCommands[activeIndex]) {
+        selectCommand(visibleCommands[activeIndex])
+        return
+      }
+      submitCustom()
+      return
+    }
+
+    if (status !== 'user-input' || visibleCommands.length === 0) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIndex((i) => (i + 1) % visibleCommands.length)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIndex((i) => (i - 1 + visibleCommands.length) % visibleCommands.length)
+    }
+  }
+
   if (!open) return null
+
+  const coords = clampMenuPosition(position.x, position.y, 380, 420)
 
   return createPortal(
     <div
       ref={panelRef}
-      className="xpe-ai-menu fixed z-[10050] w-[min(420px,calc(100vw-24px))] rounded-xl border border-[var(--xpe-border)] bg-[var(--xpe-surface)] shadow-xl"
-      style={{ left: Math.max(8, position.x), top: Math.max(8, position.y) }}
+      className="xpe-ai-menu"
+      style={{ left: coords.left, top: coords.top }}
       role="dialog"
       aria-label="Ask AI"
     >
-      <div className="flex items-center gap-2 border-b border-[var(--xpe-border)] px-3 py-2">
-        <Sparkles className="h-4 w-4 text-[var(--xpe-primary)]" />
-        <span className="text-[13px] font-medium text-[var(--xpe-foreground)]">Ask AI</span>
-        <button
-          type="button"
-          className="ms-auto rounded-md p-1 text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <X className="h-4 w-4" />
+      <div className="xpe-ai-menu__head">
+        <span className="xpe-ai-menu__brand" aria-hidden>
+          <Sparkles />
+        </span>
+        <span className="xpe-ai-menu__title">Ask AI</span>
+        {hasSelection && <span className="xpe-ai-menu__badge">Selection</span>}
+        <button type="button" className="xpe-ai-menu__icon-btn" onClick={onClose} aria-label="Close">
+          <X />
         </button>
       </div>
 
-      <div className="p-3">
-        <Input
-          autoFocus
-          placeholder="Ask AI anything…"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              void run(
-                activeCommand ?? { id: 'ask', label: 'Ask', kind: hasSelection ? 'update' : 'add' },
-                prompt,
-              )
-            }
-            if (e.key === 'Escape') onClose()
-          }}
-        />
-
-        {status === 'user-input' && (
-          <div className="mt-2 max-h-48 overflow-y-auto">
-            {visibleCommands.map((cmd) => (
+      <div className="xpe-ai-menu__body">
+        {(status === 'user-input' || status === 'error') && (
+          <>
+            <div className="xpe-ai-menu__composer">
+              <input
+                ref={inputRef}
+                className="xpe-ai-menu__input"
+                placeholder={hasSelection ? 'Edit selection with AI…' : 'Ask AI to write…'}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={onInputKeyDown}
+              />
               <button
-                key={cmd.id}
                 type="button"
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-[13px] text-[var(--xpe-foreground)] hover:bg-[var(--xpe-surface-hover)]"
-                onClick={() => {
-                  setActiveCommand(cmd)
-                  if (cmd.prompt) {
-                    setPrompt(cmd.prompt)
-                    void run(cmd, cmd.prompt)
-                  } else {
-                    setPrompt('')
-                  }
-                }}
+                className="xpe-ai-menu__send"
+                disabled={!canSubmit}
+                onClick={submitCustom}
+                aria-label="Send"
               >
-                <Sparkles className="h-3.5 w-3.5 shrink-0 text-[var(--xpe-muted-foreground)]" />
-                {cmd.label}
+                <ArrowUp />
               </button>
-            ))}
+            </div>
+
+            {status === 'user-input' && (
+              <>
+                {visibleCommands.length > 0 ? (
+                  <div className="xpe-ai-menu__cmds" role="listbox" aria-label="AI commands">
+                    {visibleCommands.map((cmd, i) => {
+                      const Icon = CMD_ICONS[cmd.id] ?? Sparkles
+                      return (
+                        <button
+                          key={cmd.id}
+                          type="button"
+                          role="option"
+                          aria-selected={i === activeIndex}
+                          className={`xpe-ai-menu__cmd${i === activeIndex ? ' xpe-ai-menu__cmd--active' : ''}`}
+                          onMouseEnter={() => setActiveIndex(i)}
+                          onClick={() => selectCommand(cmd)}
+                        >
+                          <span className="xpe-ai-menu__cmd-icon">
+                            <Icon />
+                          </span>
+                          <span className="xpe-ai-menu__cmd-text">
+                            <span className="xpe-ai-menu__cmd-label">{cmd.label}</span>
+                            {cmd.description && (
+                              <span className="xpe-ai-menu__cmd-desc">{cmd.description}</span>
+                            )}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="xpe-ai-menu__hint">No matching commands — press Enter to run your prompt.</p>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {isBusy && (
+          <div className="xpe-ai-menu__stream">
+            <div className="xpe-ai-menu__stream-meta">
+              <Loader2 className="xpe-ai-menu__spin" />
+              Writing…
+            </div>
+            {streamText || 'Thinking…'}
           </div>
         )}
 
-        {(status === 'thinking' || status === 'ai-writing') && (
-          <div className="mt-3 flex items-start gap-2 text-[13px] text-[var(--xpe-muted-foreground)]">
-            <Loader2 className="mt-0.5 h-4 w-4 animate-spin" />
-            <div className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-              {streamText || 'Thinking…'}
-            </div>
+        {isBusy && (
+          <div className="xpe-ai-menu__actions">
+            <button type="button" className="xpe-ai-menu__btn xpe-ai-menu__btn--danger" onClick={stop}>
+              Stop
+            </button>
           </div>
         )}
 
-        {status === 'error' && (
-          <div className="mt-3 text-[13px] text-red-500">
-            {error}
-            <div className="mt-2 flex gap-2">
-              <Button size="sm" onClick={() => void run(activeCommand, prompt)}>Retry</Button>
-              <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
+        {status === 'error' && error && (
+          <>
+            <div className="xpe-ai-menu__error">{error}</div>
+            <div className="xpe-ai-menu__actions">
+              <button
+                type="button"
+                className="xpe-ai-menu__btn xpe-ai-menu__btn--primary"
+                onClick={() => void run(activeCommand, prompt)}
+              >
+                Retry
+              </button>
+              <button type="button" className="xpe-ai-menu__btn xpe-ai-menu__btn--ghost" onClick={onClose}>
+                Cancel
+              </button>
             </div>
-          </div>
+          </>
         )}
 
         {status === 'user-reviewing' && suggestion && (
-          <div className="mt-3">
-            <div className="max-h-40 overflow-y-auto rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-muted)]/30 p-2 text-[13px] text-[var(--xpe-foreground)] whitespace-pre-wrap">
-              {streamText
-                || suggestion.blocks.map((b) => b.content.map((s) => s.text).join('')).join('\n')}
+          <>
+            <div className="xpe-ai-menu__preview">
+              {previewFromSuggestion(suggestion, streamText)}
             </div>
-            <div className="mt-2 flex gap-2">
-              <Button size="sm" onClick={accept}>
-                <Check className="me-1 h-3.5 w-3.5" /> Accept
-              </Button>
-              <Button size="sm" variant="ghost" onClick={onClose}>Reject</Button>
+            <div className="xpe-ai-menu__actions">
+              <button type="button" className="xpe-ai-menu__btn xpe-ai-menu__btn--primary" onClick={accept}>
+                <Check /> Accept
+              </button>
+              <button type="button" className="xpe-ai-menu__btn xpe-ai-menu__btn--ghost" onClick={reject}>
+                Discard
+              </button>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>,

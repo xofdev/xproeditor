@@ -1,9 +1,9 @@
 # @xproeditor/vue
 
 A Notion-like block editor for Vue 3 — contentEditable-based, with a flat
-block model (paragraphs, headings, lists, to-dos, toggles, quotes, callouts,
-code, dividers, buttons, images, video, audio, file attachments, tables)
-and two editing styles built in:
+block model (paragraphs, headings, lists, to-dos, toggles & toggle headings,
+quotes, callouts, code, dividers, buttons, images, video, audio, file
+attachments, tables, web bookmarks) and two editing styles built in:
 
 - **Fixed toolbar** — a sticky top toolbar, classic WYSIWYG feel.
 - **Floating (Notion-like)** — a bubble toolbar on text selection plus a `/`

@@ -378,10 +378,26 @@ export function blocksToMarkdownLossy(blocks: Block[]): string {
         parts.push(url ? `[${label}](${url})` : label)
         break
       }
+      case 'bookmark': {
+        const url = block.props.url ?? ''
+        if (!url) break
+        const label = escapeMd(block.props.title || url)
+        parts.push(`[${label}](${url})`)
+        break
+      }
       case 'callout':
       case 'toggle':
-        parts.push(spansToMarkdownInline(block.content))
+      case 'toggle_heading_1':
+      case 'toggle_heading_2':
+      case 'toggle_heading_3': {
+        const toggleHeading = /^toggle_heading_([1-3])$/.exec(block.type)
+        if (toggleHeading) {
+          parts.push(`${'#'.repeat(Number(toggleHeading[1]))} ${spansToMarkdownInline(block.content)}`)
+        } else {
+          parts.push(spansToMarkdownInline(block.content))
+        }
         break
+      }
       case 'table': {
         const table = normalizeTableData(block.props.table)
 

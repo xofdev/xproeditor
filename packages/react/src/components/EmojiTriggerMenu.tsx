@@ -58,7 +58,7 @@ export function EmojiTriggerMenu({ query, position, dir, themeSource, onSelect }
   return createPortal(
     <div
       ref={menuRef}
-      className="xpe-menu fixed z-[80] border bg-[var(--xpe-surface)] border-[var(--xpe-border)] rounded-[var(--xpe-radius)] [box-shadow:var(--xpe-shadow)] overflow-hidden"
+      className="xpe-menu xpe-float fixed z-[80] overflow-hidden"
       style={{ left: placed.left, top: placed.top }}
       dir={dir}
       onMouseDown={(e) => e.preventDefault()}

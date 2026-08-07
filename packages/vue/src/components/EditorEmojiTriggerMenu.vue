@@ -72,7 +72,7 @@ watch(() => props.query, () => {
   <Teleport to="body">
     <div
       ref="menuEl"
-      class="xpe-menu fixed z-[80] border bg-[var(--xpe-surface)] border-[var(--xpe-border)] rounded-[var(--xpe-radius)] [box-shadow:var(--xpe-shadow)] overflow-hidden"
+      class="xpe-menu xpe-float fixed z-[80] overflow-hidden"
       :style="{ left: `${placed.left}px`, top: `${placed.top}px` }"
       :dir="dir"
       @mousedown.prevent

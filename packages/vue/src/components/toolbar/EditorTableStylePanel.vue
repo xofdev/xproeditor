@@ -163,7 +163,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
         </TabsList>
 
         <TabsContent value="text" class="mt-0 space-y-3">
-            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Text color</p>
+            <p class="xpe-menu-heading">Text color</p>
             <div class="grid grid-cols-5 gap-1.5">
                 <button
                     v-for="color in TEXT_COLOR_PRESETS"
@@ -182,7 +182,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 </button>
             </div>
 
-            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Highlight</p>
+            <p class="xpe-menu-heading">Highlight</p>
             <div class="grid grid-cols-4 gap-1.5">
                 <button
                     v-for="color in HIGHLIGHT_PRESETS"
@@ -242,7 +242,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
         </TabsContent>
 
         <TabsContent value="table" class="mt-0 space-y-3">
-            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Table background</p>
+            <p class="xpe-menu-heading">Table background</p>
             <div class="grid grid-cols-5 gap-1.5">
                 <button
                     v-for="color in TABLE_BG_PRESETS"
@@ -255,7 +255,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 />
             </div>
 
-            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Header background</p>
+            <p class="xpe-menu-heading">Header background</p>
             <div class="grid grid-cols-5 gap-1.5">
                 <button
                     v-for="color in TABLE_BG_PRESETS"
@@ -296,7 +296,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 />
             </div>
 
-            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Width</p>
+            <p class="xpe-menu-heading">Width</p>
             <div class="flex flex-wrap gap-1">
                 <button
                     v-for="width in TABLE_BORDER_WIDTHS"
@@ -310,7 +310,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 </button>
             </div>
 
-            <p class="text-[10px] font-semibold tracking-wider text-[var(--xpe-muted-foreground)] uppercase">Style</p>
+            <p class="xpe-menu-heading">Style</p>
             <div class="flex flex-wrap gap-1">
                 <button
                     v-for="style in TABLE_BORDER_STYLES"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import hljs from 'highlight.js/lib/common'
-import { ChevronRight, Link as LinkIcon, X } from 'lucide-vue-next'
+import { Check, ChevronRight, Copy, Link as LinkIcon, X } from 'lucide-vue-next'
 import { ref, computed } from 'vue'
 import {
   computeListNumbering,
@@ -8,11 +8,13 @@ import {
   formatFileSize,
   headingAnchorIds,
   isAllowedEmbedUrl,
+  isToggleBlock,
   normalizeTableData,
   resolveBlockDirection,
   spansToHtml,
   tableCellStyle,
   tableWrapperStyle,
+  toggleHeadingLevel,
 } from '@xproeditor/core'
 import type { Block, TableCell } from '@xproeditor/core'
 import { IconValueDisplay } from '../ui'
@@ -25,6 +27,10 @@ const props = defineProps<{
 
 function blockDirection(block: Block): 'ltr' | 'rtl' {
   return resolveBlockDirection(block, props.editorDir ?? 'ltr')
+}
+
+function indentVars(indent = 0) {
+  return { '--xpe-block-indent': indent } as Record<string, number>
 }
 
 function tableForBlock(block: Block) {
@@ -65,7 +71,7 @@ return
 
     out.push({ block, idx })
 
-    if (block.type === 'toggle' && isCollapsed(idx, block)) {
+    if (isToggleBlock(block.type) && isCollapsed(idx, block)) {
 hideDeeperThan = ind
 }
   })
@@ -82,6 +88,14 @@ function headingTag(type: string): string {
 
 function inlineHtml(block: Block): string {
   return spansToHtml(block.content)
+}
+
+function bookmarkHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '')
+  } catch {
+    return url
+  }
 }
 
 function buttonAccentStyle(block: Block): Record<string, string> | undefined {
@@ -107,8 +121,21 @@ function highlightCode(code: string, language?: string): string {
   return escapeHtml(code)
 }
 
-// Heading anchor copy
+// Heading anchor / code copy
 const copiedAnchor = ref<string | null>(null)
+const copiedCode = ref<number | null>(null)
+
+async function copyCodeBlock(idx: number, text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    /* ignore */
+  }
+  copiedCode.value = idx
+  setTimeout(() => {
+    if (copiedCode.value === idx) copiedCode.value = null
+  }, 1600)
+}
 
 function copyAnchor(id: string) {
   const url = `${window.location.origin}${window.location.pathname}#${id}`
@@ -158,18 +185,18 @@ function safeVideoEmbedUrl(block: Block): string {
       <!-- Paragraph -->
       <p
         v-else-if="block.type === 'paragraph'"
-        class="db-p"
+        class="db-p db-indent"
         dir="auto"
-        :style="{ paddingInlineStart: `${(block.props.indent ?? 0) * 24}px`, textAlign: block.props.align }"
+        :style="{ ...indentVars(block.props.indent), textAlign: block.props.align }"
         v-html="inlineHtml(block)"
       />
 
       <!-- List items -->
       <div
         v-else-if="block.type === 'bulleted_list_item' || block.type === 'numbered_list_item'"
-        class="db-li"
+        class="db-li db-indent"
         :dir="blockDirection(block)"
-        :style="{ paddingInlineStart: `${(block.props.indent ?? 0) * 24}px` }"
+        :style="indentVars(block.props.indent)"
       >
         <span class="db-li-marker" :class="{ 'tabular-nums': block.type === 'numbered_list_item' }">
           {{ block.type === 'bulleted_list_item' ? '•' : `${numbering.get(block.id) ?? 1}.` }}
@@ -180,9 +207,9 @@ function safeVideoEmbedUrl(block: Block): string {
       <!-- To-do -->
       <div
         v-else-if="block.type === 'to_do'"
-        class="db-li"
+        class="db-li db-indent"
         :dir="blockDirection(block)"
-        :style="{ paddingInlineStart: `${(block.props.indent ?? 0) * 24}px` }"
+        :style="indentVars(block.props.indent)"
       >
         <span
           class="db-todo-box"
@@ -197,13 +224,15 @@ function safeVideoEmbedUrl(block: Block): string {
         />
       </div>
 
-      <!-- Toggle -->
+      <!-- Toggle / toggle headings -->
       <div
-        v-else-if="block.type === 'toggle'"
-        class="db-li db-toggle"
+        v-else-if="isToggleBlock(block.type)"
+        class="db-li db-toggle db-indent"
+        :class="toggleHeadingLevel(block.type) ? `db-toggle-heading_${toggleHeadingLevel(block.type)}` : ''"
         :dir="blockDirection(block)"
-        :style="{ paddingInlineStart: `${(block.props.indent ?? 0) * 24}px` }"
+        :style="indentVars(block.props.indent)"
         role="button"
+        :aria-expanded="!isCollapsed(idx, block)"
         @click="toggleOverrides[idx] = !isCollapsed(idx, block)"
       >
         <span
@@ -215,24 +244,28 @@ function safeVideoEmbedUrl(block: Block): string {
         >
           <ChevronRight class="w-4 h-4" />
         </span>
-        <span class="db-li-content font-medium" v-html="inlineHtml(block)" />
+        <span
+          class="db-li-content"
+          :class="{ 'font-medium': !toggleHeadingLevel(block.type) }"
+          v-html="inlineHtml(block)"
+        />
       </div>
 
       <!-- Quote -->
       <blockquote
         v-else-if="block.type === 'quote'"
-        class="db-quote"
+        class="db-quote db-indent-margin"
         dir="auto"
-        :style="{ marginInlineStart: `${(block.props.indent ?? 0) * 24}px` }"
+        :style="indentVars(block.props.indent)"
         v-html="inlineHtml(block)"
       />
 
       <!-- Callout -->
       <div
         v-else-if="block.type === 'callout'"
-        class="db-callout"
+        class="db-callout db-indent-margin"
         :dir="blockDirection(block)"
-        :style="{ marginInlineStart: `${(block.props.indent ?? 0) * 24}px`, background: block.props.color || undefined }"
+        :style="{ ...indentVars(block.props.indent), background: block.props.color || undefined }"
       >
         <span class="db-callout-icon">
           <IconValueDisplay :icon="block.props.icon ?? '💡'" class="text-lg" />
@@ -241,9 +274,29 @@ function safeVideoEmbedUrl(block: Block): string {
       </div>
 
       <!-- Code -->
-      <div v-else-if="block.type === 'code'" class="db-code" dir="ltr">
+      <div
+        v-else-if="block.type === 'code'"
+        class="db-code"
+        :class="{ 'db-code--wrap': block.props.wrap }"
+        dir="ltr"
+      >
         <div class="db-code-header">
-          <span>{{ block.props.language ?? 'plaintext' }}</span>
+          <span class="db-code-lang">{{
+            (block.props.language ?? 'plaintext') === 'plaintext'
+              ? 'Plain text'
+              : block.props.language
+          }}</span>
+          <button
+            type="button"
+            class="db-code-copy"
+            :class="{ 'db-code-copy--ok': copiedCode === idx }"
+            :title="copiedCode === idx ? 'Copied' : 'Copy code'"
+            :aria-label="copiedCode === idx ? 'Copied' : 'Copy code'"
+            @click="copyCodeBlock(idx, block.props.code ?? '')"
+          >
+            <Check v-if="copiedCode === idx" />
+            <Copy v-else />
+          </button>
         </div>
         <pre><code class="hljs" v-html="highlightCode(block.props.code ?? '', block.props.language)" /></pre>
       </div>
@@ -334,6 +387,34 @@ function safeVideoEmbedUrl(block: Block): string {
         />
       </div>
 
+      <!-- Bookmark -->
+      <a
+        v-else-if="block.type === 'bookmark' && block.props.url"
+        class="db-bookmark"
+        :href="block.props.url"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <div class="db-bookmark__body">
+          <div class="db-bookmark__title">
+            <img
+              v-if="block.props.favicon"
+              :src="block.props.favicon"
+              alt=""
+              class="db-bookmark__favicon"
+            />
+            <span>{{ block.props.title || block.props.url }}</span>
+          </div>
+          <p v-if="block.props.description" class="db-bookmark__desc">
+            {{ block.props.description }}
+          </p>
+          <span class="db-bookmark__url">{{ bookmarkHost(block.props.url) }}</span>
+        </div>
+        <div v-if="block.props.image" class="db-bookmark__media">
+          <img :src="block.props.image" alt="" />
+        </div>
+      </a>
+
       <!-- Table -->
       <div
         v-else-if="block.type === 'table' && block.props.table"
@@ -390,6 +471,14 @@ function safeVideoEmbedUrl(block: Block): string {
   line-height: 1.8;
   color: var(--xpe-foreground);
   word-break: break-word;
+  --xpe-block-indent-step: 24px;
+  --xpe-block-marker-width: 24px;
+}
+.db-indent {
+  padding-inline-start: calc(var(--xpe-block-indent, 0) * var(--xpe-block-indent-step, 24px));
+}
+.db-indent-margin {
+  margin-inline-start: calc(var(--xpe-block-indent, 0) * var(--xpe-block-indent-step, 24px));
 }
 
 /* --- Headings --- */
@@ -454,7 +543,8 @@ function safeVideoEmbedUrl(block: Block): string {
 }
 .db-li-marker {
   flex-shrink: 0;
-  min-width: 1.1em;
+  width: var(--xpe-block-marker-width, 24px);
+  min-width: var(--xpe-block-marker-width, 24px);
   text-align: center;
   line-height: 1.8;
   color: var(--xpe-foreground);
@@ -480,6 +570,9 @@ function safeVideoEmbedUrl(block: Block): string {
 .db-todo-box svg { width: 10px; height: 10px; }
 
 .db-toggle { cursor: pointer; user-select: none; }
+.db-toggle-heading_1 { font-size: 1.875em; font-weight: 800; line-height: 1.2; letter-spacing: -0.015em; }
+.db-toggle-heading_2 { font-size: 1.4em; font-weight: 700; line-height: 1.3; letter-spacing: -0.015em; }
+.db-toggle-heading_3 { font-size: 1.15em; font-weight: 650; line-height: 1.4; letter-spacing: -0.015em; }
 .db-toggle-chevron {
   flex-shrink: 0;
   display: inline-flex;
@@ -487,6 +580,9 @@ function safeVideoEmbedUrl(block: Block): string {
   color: var(--xpe-muted-foreground);
   transition: transform 0.15s;
 }
+.db-toggle-heading_1 .db-toggle-chevron,
+.db-toggle-heading_2 .db-toggle-chevron,
+.db-toggle-heading_3 .db-toggle-chevron { margin-top: 0.55em; }
 .db-toggle-chevron--rtl {
   transform: scaleX(-1);
 }
@@ -516,7 +612,10 @@ function safeVideoEmbedUrl(block: Block): string {
   border: 1px solid var(--xpe-border);
   background: var(--xpe-muted);
 }
-:global(.dark) .db-callout { background: var(--xpe-muted) !important; }
+:global(.xpe-dark) .db-callout,
+:global([data-xpe-theme='dark']) .db-callout {
+  background: var(--xpe-muted) !important;
+}
 .db-callout-icon { font-size: 1.15em; line-height: 1.5; }
 
 /* --- Code --- */
@@ -525,32 +624,64 @@ function safeVideoEmbedUrl(block: Block): string {
   border-radius: var(--xpe-radius, 0.75rem);
   overflow: hidden;
   border: 1px solid var(--xpe-border);
+  background: var(--xpe-code-bg, #f4f6f8);
 }
 .db-code-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.4em 1em;
-  background: #16182a;
-  color: #8b8fa3;
+  gap: 8px;
+  padding: 0.45em 0.75em 0.45em 1em;
+  background: var(--xpe-code-header-bg, #e8ecf1);
+  color: var(--xpe-code-muted, #6b7280);
   font-size: 0.72em;
-  font-family: var(--xpe-font-mono, ui-monospace, monospace);
-  text-transform: lowercase;
+  font-family: var(--xpe-font, ui-sans-serif, system-ui, sans-serif);
+  font-weight: 500;
 }
+.db-code-lang { text-transform: none; letter-spacing: 0.01em; }
+.db-code-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.db-code-copy svg { width: 14px; height: 14px; }
+.db-code-copy:hover {
+  color: var(--xpe-foreground, #111827);
+  background: var(--xpe-surface, #fff);
+  border-color: var(--xpe-border, #e5e7eb);
+}
+.db-code-copy--ok { color: #059669; }
 .db-code pre {
   margin: 0;
   padding: 1.1em 1.25em;
-  background: #1e1e2e;
-  color: #cdd6f4;
+  background: transparent;
+  color: var(--xpe-code-fg, #1f2937);
   overflow-x: auto;
   font-size: 0.85em;
   line-height: 1.7;
+  white-space: pre;
+}
+.db-code--wrap pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
 }
 .db-code code {
   background: none;
   padding: 0;
   border: none;
   font-family: var(--xpe-font-mono, ui-monospace, monospace);
+  color: inherit;
 }
 
 /* --- Divider --- */
@@ -614,6 +745,38 @@ function safeVideoEmbedUrl(block: Block): string {
 .db-button--primary { background: var(--xpe-primary); color: var(--xpe-primary-foreground); }
 .db-button--outline { background: transparent; border-color: var(--xpe-border); color: var(--xpe-foreground); }
 .db-button--ghost { background: var(--xpe-muted); color: var(--xpe-foreground); }
+.db-bookmark {
+  display: flex;
+  overflow: hidden;
+  margin: 0.75em 0;
+  border: 1px solid var(--xpe-border);
+  border-radius: var(--xpe-radius, 0.6rem);
+  background: var(--xpe-surface, #fff);
+  color: inherit;
+  text-decoration: none;
+}
+.db-bookmark:hover { background: var(--xpe-surface-hover, #f9fafb); }
+.db-bookmark__body { flex: 1; min-width: 0; padding: 12px 14px; }
+.db-bookmark__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95em;
+  font-weight: 600;
+  color: var(--xpe-foreground);
+}
+.db-bookmark__favicon { width: 16px; height: 16px; border-radius: 3px; object-fit: cover; }
+.db-bookmark__desc { margin: 4px 0 0; font-size: 0.85em; color: var(--xpe-muted-foreground); }
+.db-bookmark__url { display: block; margin-top: 4px; font-size: 0.8em; color: var(--xpe-muted-foreground); }
+.db-bookmark__media { flex-shrink: 0; width: 120px; max-width: 36%; }
+.db-bookmark__media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 72px;
+  max-height: 110px;
+  object-fit: cover;
+}
 
 /* --- Table --- */
 .db-table-wrap { overflow-x: auto; margin: 1.25em 0; }
@@ -656,20 +819,74 @@ function safeVideoEmbedUrl(block: Block): string {
 }
 .doc-blocks :deep(a:hover) { opacity: 0.8; }
 
-/* --- Syntax highlighting (Catppuccin-ish, matches previous theme) --- */
-.db-code :deep(.hljs-comment), .db-code :deep(.hljs-quote) { color: #6c7086; font-style: italic; }
-.db-code :deep(.hljs-keyword), .db-code :deep(.hljs-selector-tag), .db-code :deep(.hljs-built_in) { color: #cba6f7; }
-.db-code :deep(.hljs-string), .db-code :deep(.hljs-doctag), .db-code :deep(.hljs-title), .db-code :deep(.hljs-section), .db-code :deep(.hljs-attribute) { color: #a6e3a1; }
-.db-code :deep(.hljs-number), .db-code :deep(.hljs-literal) { color: #fab387; }
-.db-code :deep(.hljs-type), .db-code :deep(.hljs-class .hljs-title) { color: #f9e2af; }
-.db-code :deep(.hljs-function), .db-code :deep(.hljs-function .hljs-title) { color: #89b4fa; }
-.db-code :deep(.hljs-params) { color: #f2cdcd; }
-.db-code :deep(.hljs-variable), .db-code :deep(.hljs-template-variable) { color: #f5c2e7; }
-.db-code :deep(.hljs-tag), .db-code :deep(.hljs-name) { color: #89b4fa; }
-.db-code :deep(.hljs-attr) { color: #f9e2af; }
-.db-code :deep(.hljs-symbol), .db-code :deep(.hljs-bullet), .db-code :deep(.hljs-deletion) { color: #f38ba8; }
-.db-code :deep(.hljs-meta) { color: #fab387; }
-.db-code :deep(.hljs-addition) { color: #a6e3a1; }
+/* --- Syntax highlighting — light-friendly; Catppuccin under dark theme --- */
+.db-code :deep(.hljs-comment), .db-code :deep(.hljs-quote) { color: #6a737d; font-style: italic; }
+.db-code :deep(.hljs-keyword), .db-code :deep(.hljs-selector-tag), .db-code :deep(.hljs-built_in) { color: #8250df; }
+.db-code :deep(.hljs-string), .db-code :deep(.hljs-doctag), .db-code :deep(.hljs-title), .db-code :deep(.hljs-section), .db-code :deep(.hljs-attribute) { color: #116329; }
+.db-code :deep(.hljs-number), .db-code :deep(.hljs-literal) { color: #953800; }
+.db-code :deep(.hljs-type), .db-code :deep(.hljs-class .hljs-title) { color: #953800; }
+.db-code :deep(.hljs-function), .db-code :deep(.hljs-function .hljs-title) { color: #0550ae; }
+.db-code :deep(.hljs-params) { color: #24292f; }
+.db-code :deep(.hljs-variable), .db-code :deep(.hljs-template-variable) { color: #953800; }
+.db-code :deep(.hljs-tag), .db-code :deep(.hljs-name) { color: #0550ae; }
+.db-code :deep(.hljs-attr) { color: #953800; }
+.db-code :deep(.hljs-symbol), .db-code :deep(.hljs-bullet), .db-code :deep(.hljs-deletion) { color: #cf222e; }
+.db-code :deep(.hljs-meta) { color: #953800; }
+.db-code :deep(.hljs-addition) { color: #116329; }
 .db-code :deep(.hljs-emphasis) { font-style: italic; }
 .db-code :deep(.hljs-strong) { font-weight: 700; }
+:global(.xpe-dark) .db-code :deep(.hljs-comment),
+:global(.xpe-dark) .db-code :deep(.hljs-quote),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-comment),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-quote) { color: #6c7086; font-style: italic; }
+:global(.xpe-dark) .db-code :deep(.hljs-keyword),
+:global(.xpe-dark) .db-code :deep(.hljs-selector-tag),
+:global(.xpe-dark) .db-code :deep(.hljs-built_in),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-keyword),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-selector-tag),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-built_in) { color: #cba6f7; }
+:global(.xpe-dark) .db-code :deep(.hljs-string),
+:global(.xpe-dark) .db-code :deep(.hljs-doctag),
+:global(.xpe-dark) .db-code :deep(.hljs-title),
+:global(.xpe-dark) .db-code :deep(.hljs-section),
+:global(.xpe-dark) .db-code :deep(.hljs-attribute),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-string),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-doctag),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-title),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-section),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-attribute) { color: #a6e3a1; }
+:global(.xpe-dark) .db-code :deep(.hljs-number),
+:global(.xpe-dark) .db-code :deep(.hljs-literal),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-number),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-literal) { color: #fab387; }
+:global(.xpe-dark) .db-code :deep(.hljs-type),
+:global(.xpe-dark) .db-code :deep(.hljs-class .hljs-title),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-type),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-class .hljs-title) { color: #f9e2af; }
+:global(.xpe-dark) .db-code :deep(.hljs-function),
+:global(.xpe-dark) .db-code :deep(.hljs-function .hljs-title),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-function),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-function .hljs-title) { color: #89b4fa; }
+:global(.xpe-dark) .db-code :deep(.hljs-params),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-params) { color: #f2cdcd; }
+:global(.xpe-dark) .db-code :deep(.hljs-variable),
+:global(.xpe-dark) .db-code :deep(.hljs-template-variable),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-variable),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-template-variable) { color: #f5c2e7; }
+:global(.xpe-dark) .db-code :deep(.hljs-tag),
+:global(.xpe-dark) .db-code :deep(.hljs-name),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-tag),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-name) { color: #89b4fa; }
+:global(.xpe-dark) .db-code :deep(.hljs-attr),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-attr) { color: #f9e2af; }
+:global(.xpe-dark) .db-code :deep(.hljs-symbol),
+:global(.xpe-dark) .db-code :deep(.hljs-bullet),
+:global(.xpe-dark) .db-code :deep(.hljs-deletion),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-symbol),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-bullet),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-deletion) { color: #f38ba8; }
+:global(.xpe-dark) .db-code :deep(.hljs-meta),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-meta) { color: #fab387; }
+:global(.xpe-dark) .db-code :deep(.hljs-addition),
+:global([data-xpe-theme='dark']) .db-code :deep(.hljs-addition) { color: #a6e3a1; }
 </style>

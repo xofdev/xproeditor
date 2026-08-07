@@ -16,9 +16,15 @@ export const XPE_THEME_VARS = [
   '--xpe-surface-hover',
   '--xpe-ring',
   '--xpe-danger',
+  '--xpe-danger-muted',
   '--xpe-radius',
   '--xpe-shadow',
+  '--xpe-font',
   '--xpe-font-mono',
+  '--xpe-code-bg',
+  '--xpe-code-fg',
+  '--xpe-code-header-bg',
+  '--xpe-code-muted',
 ] as const
 
 /**
@@ -29,6 +35,10 @@ export const XPE_THEME_VARS = [
  * editor, breaking CSS variable inheritance. Call this once the portaled
  * element exists, using any element still inside the themed scope (e.g. the
  * popover trigger, or the editor root) as `source`.
+ *
+ * Also mirrors the source's resolved `font-family` onto `--xpe-font` (and the
+ * target's own `font-family`) so portaled chrome matches the editor even when
+ * the host only set a CSS `font-family` on an ancestor, not `--xpe-font`.
  */
 export function syncThemeVars(source: Element, target: HTMLElement): void {
   const computed = getComputedStyle(source)
@@ -39,6 +49,12 @@ export function syncThemeVars(source: Element, target: HTMLElement): void {
     if (value) {
       target.style.setProperty(name, value)
     }
+  }
+
+  const face = computed.fontFamily.trim()
+  if (face) {
+    target.style.setProperty('--xpe-font', face)
+    target.style.fontFamily = 'var(--xpe-font)'
   }
 }
 
@@ -317,24 +333,78 @@ function caretRangeFromPoint(x: number, y: number): Range | null {
   return range
 }
 
-/** Map pointer coordinates to a block id + text offset inside `rootEl`. */
+function nearestBlockElFromPoint(rootEl: HTMLElement, x: number, y: number): HTMLElement | null {
+  const nodes = rootEl.querySelectorAll('[data-block-id]')
+  let best: HTMLElement | null = null
+  let bestDist = Infinity
+
+  for (const node of nodes) {
+    if (!(node instanceof HTMLElement) || !rootEl.contains(node)) {
+      continue
+    }
+
+    const rect = node.getBoundingClientRect()
+
+    if (rect.width <= 0 && rect.height <= 0) {
+      continue
+    }
+
+    let dist = 0
+
+    if (y < rect.top) {
+      dist = rect.top - y
+    } else if (y > rect.bottom) {
+      dist = y - rect.bottom
+    } else if (x < rect.left) {
+      dist = rect.left - x
+    } else if (x > rect.right) {
+      dist = x - rect.right
+    }
+
+    // Prefer vertically nearer blocks; slight bias for horizontal hits inside.
+    if (dist < bestDist) {
+      bestDist = dist
+      best = node
+    }
+  }
+
+  return best
+}
+
+function blockElFromCaretRange(
+  rootEl: HTMLElement,
+  range: Range | null,
+): HTMLElement | null {
+  if (!range || !rootEl.contains(range.startContainer)) {
+    return null
+  }
+
+  const el = (range.startContainer.nodeType === Node.ELEMENT_NODE
+    ? (range.startContainer as HTMLElement)
+    : range.startContainer.parentElement
+  )?.closest('[data-block-id]')
+
+  if (!el || !(el instanceof HTMLElement) || !rootEl.contains(el)) {
+    return null
+  }
+
+  return el
+}
+
+/**
+ * Map pointer coordinates to a selection point inside `rootEl`.
+ * Text blocks resolve to a caret offset; non-text chrome blocks resolve to
+ * edge offsets (0 = start half, 1 = end half) so drag-select can cover them.
+ */
 export function caretPointFromClient(
   rootEl: HTMLElement,
   x: number,
   y: number,
 ): { blockId: string; offset: number } | null {
   const range = caretRangeFromPoint(x, y)
+  const blockEl = blockElFromCaretRange(rootEl, range) ?? nearestBlockElFromPoint(rootEl, x, y)
 
-  if (!range || !rootEl.contains(range.startContainer)) {
-    return null
-  }
-
-  const blockEl = (range.startContainer.nodeType === Node.ELEMENT_NODE
-    ? (range.startContainer as HTMLElement)
-    : range.startContainer.parentElement
-  )?.closest('[data-block-id]')
-
-  if (!blockEl || !rootEl.contains(blockEl)) {
+  if (!blockEl) {
     return null
   }
 
@@ -346,11 +416,29 @@ export function caretPointFromClient(
 
   const editable = blockEl.querySelector('.etb') as HTMLElement | null
 
-  if (!editable) {
-    return null
+  if (editable) {
+    if (range && editable.contains(range.startContainer)) {
+      return {
+        blockId,
+        offset: positionToOffset(editable, range.startContainer, range.startOffset),
+      }
+    }
+
+    // Pointer landed on text-block chrome (padding/gutter) — map to start/end.
+    const rect = editable.getBoundingClientRect()
+    const length = (editable.textContent?.length ?? 0)
+      + (editable.querySelectorAll('br').length)
+
+    if (y < rect.top + rect.height / 2) {
+      return { blockId, offset: 0 }
+    }
+
+    return { blockId, offset: length }
   }
 
-  const offset = positionToOffset(editable, range.startContainer, range.startOffset)
+  // Non-text block (image, divider, table, code, …): whole-block edge.
+  const rect = blockEl.getBoundingClientRect()
+  const offset = y >= rect.top + rect.height / 2 ? 1 : 0
 
   return { blockId, offset }
 }

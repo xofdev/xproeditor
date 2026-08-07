@@ -25,6 +25,12 @@ const props = withDefaults(
       accept: string[]
       title?: string
     }) => Promise<{ url: string; alt?: string; caption?: string } | null>
+    fetchBookmarkMeta?: (url: string) => Promise<{
+      title?: string
+      description?: string
+      favicon?: string
+      image?: string
+    } | null | undefined>
     editorDir?: 'ltr' | 'rtl'
     readonly?: boolean
     ai?: {
@@ -61,7 +67,7 @@ defineExpose({
     <EditorFormatToolbar
       v-if="showFixedToolbar()"
       :state="formatState"
-      :show-ai="!!ai?.transport"
+      :ai-enabled="typeof props.ai?.transport === 'function'"
       @mark="(mark, value) => editorRef?.applyToolbarMark(mark, value)"
       @turn-into="(type) => editorRef?.turnIntoBlock(type)"
       @indent="() => editorRef?.indentFocusedBlock()"
@@ -79,10 +85,11 @@ defineExpose({
       :model-value="modelValue"
       :upload="upload"
       :pick-media="pickMedia"
+      :fetch-bookmark-meta="fetchBookmarkMeta"
       :editor-dir="editorDir"
       :readonly="readonly"
       :show-bubble-toolbar="showBubbleToolbar()"
-      :ai="ai"
+      :ai="props.ai"
       @change="emit('change')"
       @format-state="formatState = $event"
     />

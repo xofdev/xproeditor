@@ -16,8 +16,10 @@ import {
   patchTableStyle,
   removeTableColumn,
   removeTableRow,
+  cellsInBounds,
   selectionBounds,
   selectionKey,
+  switchTableWidthMode,
   tableCellFromText,
   unmergeCell,
   visibleCellCoords,
@@ -87,6 +89,23 @@ describe('normalizeTableData', () => {
     expect(normalizeTableData({ width: { mode: 'pixel', value: 9999 } }).width).toEqual({ mode: 'pixel', value: 2000 })
   })
 
+  it('switches width mode with defaults instead of carrying a raw value across units', () => {
+    expect(switchTableWidthMode({ mode: 'percent', value: 100 }, 'pixel')).toEqual({
+      mode: 'pixel',
+      value: 640,
+    })
+    expect(switchTableWidthMode({ mode: 'pixel', value: 800 }, 'percent')).toEqual({
+      mode: 'percent',
+      value: 100,
+    })
+  })
+
+  it('lists visible cells inside a rectangular bounds', () => {
+    expect(cellsInBounds(grid(2, 2), { row: 0, col: 0 }, { row: 1, col: 1 })).toEqual(
+      coords([0, 0], [0, 1], [1, 0], [1, 1]),
+    )
+  })
+
   it('ignores an unknown border style and width, keeping the defaults', () => {
     const table = normalizeTableData({
       rows: [['a']],
@@ -129,6 +148,37 @@ describe('row and column operations', () => {
     const table = addTableColumn(grid(3, 2))
 
     expect(table.rows.every((row) => row.length === 3)).toBe(true)
+  })
+
+  it('inserts a row at an index and extends crossing rowspans', () => {
+    let table = grid(2, 2)
+    table = mergeCells(table, coords([0, 0], [1, 0]))
+    table = addTableRow(table, 1)
+
+    expect(table.rows).toHaveLength(3)
+    expect(table.rows[0][0].rowspan).toBe(3)
+    expect(table.rows[1][0].hidden).toBe(true)
+    expect(table.rows[2][0].hidden).toBe(true)
+  })
+
+  it('appends a row without extending a rowspan that ends at the previous last row', () => {
+    let table = grid(2, 2)
+    table = mergeCells(table, coords([0, 0], [1, 0]))
+    table = addTableRow(table)
+
+    expect(table.rows).toHaveLength(3)
+    expect(table.rows[0][0].rowspan).toBe(2)
+    expect(table.rows[2][0].hidden).toBeFalsy()
+  })
+
+  it('inserts a column at an index and extends crossing colspans', () => {
+    let table = grid(2, 2)
+    table = mergeCells(table, coords([0, 0], [0, 1]))
+    table = addTableColumn(table, 1)
+
+    expect(table.rows[0]).toHaveLength(3)
+    expect(table.rows[0][0].colspan).toBe(3)
+    expect(table.rows[0][1].hidden).toBe(true)
   })
 
   it('removes the requested row and leaves the others in order', () => {

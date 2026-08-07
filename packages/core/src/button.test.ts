@@ -2,8 +2,23 @@ import { describe, expect, it } from 'vitest'
 import { blocksToHtmlContent } from './clipboard'
 import { createBlock } from './ops'
 import { blockToPlainText, buildBlocksContent } from './serialize'
+import {
+  BUTTON_ALIGN_OPTIONS,
+  BUTTON_STYLE_OPTIONS,
+  buttonContrastForeground,
+} from './types'
 
 describe('button block model', () => {
+  it('exposes style and align option catalogs for adapters', () => {
+    expect(BUTTON_STYLE_OPTIONS.map((o) => o.id)).toEqual(['primary', 'outline', 'ghost'])
+    expect([...BUTTON_ALIGN_OPTIONS]).toEqual(['left', 'center', 'right'])
+  })
+
+  it('picks a contrasting label color for solid fills', () => {
+    expect(buttonContrastForeground('#111827')).toBe('#ffffff')
+    expect(buttonContrastForeground('#fbbf24')).toBe('#111827')
+  })
+
   it('createBlock defaults url, style, and alignment', () => {
     const block = createBlock('button')
     expect(block.props.url).toBe('')
