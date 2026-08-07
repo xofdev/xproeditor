@@ -1,6 +1,6 @@
 {
   "name": "@xproeditor/vue",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Notion-like block editor for Vue 3 — supports a sticky format toolbar and/or a floating Notion-like bubble toolbar + slash menu.",
   "type": "module",
   "license": "MIT",
@@ -48,7 +48,7 @@
     "vue": "^3.4.0"
   },
   "dependencies": {
-    "@xproeditor/core": "0.3.0",
+    "@xproeditor/core": "0.4.0",
     "highlight.js": "^11.10.0",
     "lucide-vue-next": "^0.469.0"
   },
