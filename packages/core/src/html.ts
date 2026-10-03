@@ -1,4 +1,5 @@
 import { normalizeSpans } from './ops'
+import { sanitizeCssColor, sanitizeLinkUrl } from './sanitize'
 import type { InlineMarks, InlineSpan } from './types'
 
 export function escapeHtml(text: string | null | undefined): string {
@@ -7,6 +8,7 @@ export function escapeHtml(text: string | null | undefined): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 /**
@@ -44,21 +46,26 @@ html = `<s>${html}</s>`
 }
 
       const styles: string[] = []
+      const color = sanitizeCssColor(m.color)
+      const highlight = sanitizeCssColor(m.highlight)
 
-      if (m.color) {
-styles.push(`color:${m.color}`)
+      if (color) {
+styles.push(`color:${color}`)
 }
 
-      if (m.highlight) {
-styles.push(`background-color:${m.highlight}`)
+      if (highlight) {
+styles.push(`background-color:${highlight}`)
 }
 
       if (styles.length) {
-html = `<span style="${styles.join(';')}">${html}</span>`
+html = `<span style="${escapeHtml(styles.join(';'))}">${html}</span>`
 }
 
-      if (m.link) {
-html = `<a href="${escapeHtml(m.link)}" target="_blank" rel="noopener noreferrer">${html}</a>`
+      // Unsafe schemes (javascript:, data:, …) render as plain text.
+      const href = sanitizeLinkUrl(m.link)
+
+      if (href) {
+html = `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${html}</a>`
 }
 
       return html
@@ -117,20 +124,20 @@ marks.code = true
 }
 
     if (tag === 'a') {
-      const href = el.getAttribute('href')
+      const href = sanitizeLinkUrl(el.getAttribute('href'))
 
       if (href) {
 marks.link = href
 }
     }
 
-    const color = el.style?.color
+    const color = sanitizeCssColor(el.style?.color)
 
     if (color) {
 marks.color = color
 }
 
-    const bg = el.style?.backgroundColor
+    const bg = sanitizeCssColor(el.style?.backgroundColor)
 
     if (bg) {
 marks.highlight = bg

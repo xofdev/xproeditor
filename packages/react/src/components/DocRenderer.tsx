@@ -1,10 +1,13 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { sanitizeLinkUrl, sanitizeMediaUrl } from '@xproeditor/core'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
-import hljs from 'highlight.js/lib/common'
 import { Check, ChevronRight, Copy, Link as LinkIcon, X } from 'lucide-react'
 import {
   computeListNumbering,
+  embedFrameHeight,
   escapeHtml,
+  extractHeadings,
+  resolveEmbed,
   formatFileSize,
   headingAnchorIds,
   isAllowedEmbedUrl,
@@ -18,38 +21,66 @@ import {
 } from '@xproeditor/core'
 import type { Block, TableCell } from '@xproeditor/core'
 import { IconValueDisplay } from '../ui'
+import { EditorI18nProvider, useEditorDictionary, type EditorI18nProps } from '../i18n'
+import { highlightCode, isHighlighterReady, loadHighlighter } from '../utils/highlight'
 
 export interface DocRendererProps {
   blocks: Block[]
   /** Fallback direction when block dir is auto and content is empty. */
   editorDir?: 'ltr' | 'rtl'
+  /** UI language for the renderer chrome (`'en'` default, `'fa'` built in). */
+  locale?: EditorI18nProps['locale']
+  /** Override any UI string. */
+  dictionary?: EditorI18nProps['dictionary']
 }
 
 function headingTag(type: string): 'h2' | 'h3' | 'h4' {
   return type === 'heading_1' ? 'h2' : type === 'heading_2' ? 'h3' : 'h4'
 }
 
-function highlightCode(code: string, language?: string): string {
-  try {
-    if (language && language !== 'plaintext' && hljs.getLanguage(language)) {
-      return hljs.highlight(code, { language }).value
-    }
-  } catch {
-    /* fall through */
-  }
-
-  return escapeHtml(code)
-}
-
 function indentVars(indent = 0): CSSProperties {
   return { ['--xpe-block-indent' as string]: indent }
 }
 
-export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
+/** Read-only renderer for a `Block[]` document (blog posts, docs pages, previews). */
+export function DocRenderer({ locale, dictionary, ...props }: DocRendererProps) {
+  return (
+    <EditorI18nProvider locale={locale} dictionary={dictionary}>
+      <DocRendererContent {...props} />
+    </EditorI18nProvider>
+  )
+}
+
+function DocRendererContent({ blocks, editorDir }: Omit<DocRendererProps, 'locale' | 'dictionary'>) {
+  const dict = useEditorDictionary()
+  const headings = useMemo(() => extractHeadings(blocks), [blocks])
   const [toggleOverrides, setToggleOverrides] = useState<Record<number, boolean>>({})
   const [copiedAnchor, setCopiedAnchor] = useState<string | null>(null)
   const [copiedCode, setCopiedCode] = useState<number | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+  const hasCode = useMemo(() => blocks.some((b) => b.type === 'code'), [blocks])
+
+  // Escape closes the image lightbox.
+  useEffect(() => {
+    if (!lightboxUrl) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxUrl(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightboxUrl])
+  const [, setHighlighterReady] = useState(isHighlighterReady)
+
+  useEffect(() => {
+    if (!hasCode || isHighlighterReady()) return
+    let alive = true
+    void loadHighlighter().then(() => {
+      if (alive) setHighlighterReady(true)
+    })
+    return () => {
+      alive = false
+    }
+  }, [hasCode])
 
   function isCollapsed(idx: number, block: Block): boolean {
     return toggleOverrides[idx] ?? block.props.collapsed ?? false
@@ -122,7 +153,8 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
               {anchorId && (
                 <button
                   className="db-anchor-btn"
-                  title={copiedAnchor === anchorId ? 'Copied!' : 'Copy link'}
+                  title={copiedAnchor === anchorId ? dict.renderer.linkCopied : dict.renderer.copyLink}
+                  aria-label={dict.renderer.copyLink}
                   onClick={() => copyAnchor(anchorId)}
                 >
                   <LinkIcon className="w-3.5 h-3.5" />
@@ -267,8 +299,8 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
                 <button
                   type="button"
                   className={`db-code-copy${isCopied ? ' db-code-copy--ok' : ''}`}
-                  title={isCopied ? 'Copied' : 'Copy code'}
-                  aria-label={isCopied ? 'Copied' : 'Copy code'}
+                  title={isCopied ? dict.renderer.codeCopied : dict.renderer.copyCode}
+                  aria-label={isCopied ? dict.renderer.codeCopied : dict.renderer.copyCode}
                   onClick={() => void copyCodeBlock(idx, text)}
                 >
                   {isCopied ? <Check /> : <Copy />}
@@ -292,7 +324,7 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           return (
             <figure key={idx} className="db-figure">
               <img
-                src={block.props.url}
+                src={sanitizeMediaUrl(block.props.url) || undefined}
                 alt={block.props.caption || ''}
                 style={{ width: `${block.props.width ?? 100}%` }}
                 className="db-img"
@@ -323,11 +355,11 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
                     className="aspect-video w-full"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
-                    title="Embedded video"
+                    title={block.props.caption || dict.media.videoEmbedded}
                   />
                 ) : (
                   <video
-                    src={block.props.url}
+                    src={sanitizeMediaUrl(block.props.url) || undefined}
                     className="aspect-video w-full"
                     controls
                     playsInline
@@ -346,7 +378,7 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
             <figure key={idx} className="db-figure">
               <div className="db-audio-wrap">
                 {block.props.name && <div className="db-audio-name">{block.props.name}</div>}
-                <audio src={block.props.url} controls preload="metadata" className="w-full" />
+                <audio src={sanitizeMediaUrl(block.props.url) || undefined} controls preload="metadata" className="w-full" />
               </div>
               {block.props.caption && (
                 <figcaption className="db-caption">{block.props.caption}</figcaption>
@@ -359,11 +391,11 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           return (
             <a
               key={idx}
-              href={block.props.url}
+              href={sanitizeLinkUrl(block.props.url, { allowBlob: true }) || undefined}
               download={block.props.name ?? true}
               className="db-file"
             >
-              <span className="db-file-name">{block.props.name || 'Download file'}</span>
+              <span className="db-file-name">{block.props.name || dict.renderer.downloadFile}</span>
               {block.props.size ? (
                 <span className="db-file-size">{formatFileSize(block.props.size)}</span>
               ) : null}
@@ -375,7 +407,7 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
           const variant = block.props.buttonStyle ?? 'primary'
           const justify =
             block.props.align === 'center' ? 'center' : block.props.align === 'right' ? 'flex-end' : 'flex-start'
-          const label = spansToHtml(block.content) || 'Button'
+          const label = spansToHtml(block.content) || escapeHtml(dict.button.defaultLabel)
           const accent = block.props.color
           const style: CSSProperties | undefined = accent
             ? variant === 'primary'
@@ -389,7 +421,7 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
             <div key={idx} className="db-button-row" style={{ justifyContent: justify }}>
               {block.props.url ? (
                 <a
-                  href={block.props.url}
+                  href={sanitizeLinkUrl(block.props.url, { allowBlob: true }) || undefined}
                   target={block.props.openInNewTab ? '_blank' : undefined}
                   rel={block.props.openInNewTab ? 'noopener noreferrer' : undefined}
                   className={`db-button db-button--${variant}`}
@@ -420,14 +452,14 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
             <a
               key={idx}
               className="db-bookmark"
-              href={block.props.url}
+              href={sanitizeLinkUrl(block.props.url, { allowBlob: true }) || undefined}
               target="_blank"
               rel="noopener noreferrer"
             >
               <div className="db-bookmark__body">
                 <div className="db-bookmark__title">
                   {block.props.favicon ? (
-                    <img src={block.props.favicon} alt="" className="db-bookmark__favicon" />
+                    <img src={sanitizeMediaUrl(block.props.favicon) || undefined} alt="" className="db-bookmark__favicon" />
                   ) : null}
                   <span>{title}</span>
                 </div>
@@ -438,10 +470,52 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
               </div>
               {block.props.image ? (
                 <div className="db-bookmark__media">
-                  <img src={block.props.image} alt="" />
+                  <img src={sanitizeMediaUrl(block.props.image) || undefined} alt="" />
                 </div>
               ) : null}
             </a>
+          )
+        }
+
+        if (block.type === 'embed') {
+          const resolved = resolveEmbed(block.props.url)
+          if (!resolved) return null
+          const height = embedFrameHeight(block.props.height, resolved.height)
+
+          return (
+            <figure key={idx} className="db-figure db-embed">
+              <iframe
+                src={resolved.embedUrl}
+                title={block.props.caption || resolved.provider.name}
+                className="db-embed__frame"
+                style={{ height }}
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-presentation allow-forms"
+              />
+              {block.props.caption && (
+                <figcaption className="db-caption">{block.props.caption}</figcaption>
+              )}
+            </figure>
+          )
+        }
+
+        if (block.type === 'table_of_contents') {
+          if (headings.length === 0) return null
+
+          return (
+            <nav key={idx} className="db-toc" aria-label={dict.toc.title} dir="auto">
+              <p className="db-toc__title">{dict.toc.title}</p>
+              <ul className="db-toc__list">
+                {headings.map((h) => (
+                  <li key={h.id} className={`db-toc__item db-toc__item--${h.level}`}>
+                    <a href={`#${h.id}`}>{h.text}</a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
           )
         }
 
@@ -491,8 +565,12 @@ export function DocRenderer({ blocks, editorDir }: DocRendererProps) {
             className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-6 cursor-zoom-out"
             onClick={() => setLightboxUrl(null)}
           >
-            <img src={lightboxUrl} className="max-w-full max-h-full rounded-lg shadow-2xl" alt="" />
-            <button className="absolute top-4 end-4 text-white/80 hover:text-white">
+            <img src={sanitizeMediaUrl(lightboxUrl) || undefined} className="max-w-full max-h-full rounded-lg shadow-2xl" alt="" />
+            <button
+              type="button"
+              aria-label={dict.common.close}
+              className="absolute top-4 end-4 text-white/80 hover:text-white"
+            >
               <X className="w-6 h-6" />
             </button>
           </div>,

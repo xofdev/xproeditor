@@ -1,8 +1,10 @@
+import { sanitizeMediaUrl } from '@xproeditor/core'
 import { useEffect, useRef, useState } from 'react'
 import { FolderOpen, Link2, Loader2, Music, Upload } from 'lucide-react'
 import type { Block } from '@xproeditor/core'
 import { fileToObjectUrl, formatFileSize, mediaPropsFromFile } from '@xproeditor/core'
 import type { PickMediaFn, UploadFn } from '../types'
+import { useEditorDictionary } from '../i18n'
 
 export interface AudioBlockProps {
   block: Block
@@ -25,8 +27,10 @@ export function AudioBlock({
   onPatch,
   onSelect,
 }: AudioBlockProps) {
+  const t = useEditorDictionary().media
   const [mode, setMode] = useState<InsertMode>('upload')
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(false)
   const [picking, setPicking] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [embedInput, setEmbedInput] = useState('')
@@ -43,10 +47,13 @@ export function AudioBlock({
   async function uploadFile(file: File) {
     if (!file.type.startsWith('audio/')) return
 
+    setUploadError(false)
     setUploading(true)
     try {
       const url = await (upload ?? fileToObjectUrl)(file)
       onPatch(mediaPropsFromFile(file, url))
+    } catch {
+      setUploadError(true)
     } finally {
       setUploading(false)
     }
@@ -57,9 +64,11 @@ export function AudioBlock({
 
     setPicking(true)
     try {
-      const result = await pickMedia({ accept: ['audio/*'], title: 'Choose audio' })
+      const result = await pickMedia({ accept: ['audio/*'], title: t.audioChoose })
       if (result?.url)
         onPatch({ url: result.url, ...(result.caption ? { caption: result.caption } : {}) })
+    } catch {
+      setUploadError(true)
     } finally {
       setPicking(false)
     }
@@ -70,7 +79,7 @@ export function AudioBlock({
     const url = embedInput.trim()
 
     if (!/^https?:\/\//i.test(url)) {
-      setEmbedError('Enter a valid audio file URL')
+      setEmbedError(t.audioInvalidUrl)
       return
     }
 
@@ -117,8 +126,13 @@ export function AudioBlock({
             ) : (
               <Music className="h-5 w-5" />
             )}
-            <span className="text-sm">{busy ? 'Working...' : 'Add audio'}</span>
+            <span className="text-sm">{busy ? t.working : t.audioAdd}</span>
           </div>
+          {uploadError && !busy && (
+            <p className="text-center text-xs text-[var(--xpe-danger)]" role="alert">
+              {t.uploadFailed}
+            </p>
+          )}
 
           {!busy && (
             <div
@@ -128,15 +142,15 @@ export function AudioBlock({
               onPointerDown={stop}
             >
               <button type="button" className={tabClass(mode === 'upload')} onClick={() => setMode('upload')}>
-                Upload
+                {t.upload}
               </button>
               {pickMedia && (
                 <button type="button" className={tabClass(mode === 'library')} onClick={() => setMode('library')}>
-                  Library
+                  {t.library}
                 </button>
               )}
               <button type="button" className={tabClass(mode === 'embed')} onClick={() => setMode('embed')}>
-                Link
+                {t.link}
               </button>
             </div>
           )}
@@ -151,7 +165,7 @@ export function AudioBlock({
                     onClick={() => fileInput.current?.click()}
                   >
                     <Upload className="h-3.5 w-3.5" />
-                    Choose audio file
+                    {t.audioChoose}
                   </button>
                   <input
                     ref={fileInput}
@@ -171,7 +185,7 @@ export function AudioBlock({
                     onClick={pickFromLibrary}
                   >
                     <FolderOpen className="h-3.5 w-3.5" />
-                    Open media library
+                    {t.openLibrary}
                   </button>
                 </div>
               )}
@@ -185,7 +199,7 @@ export function AudioBlock({
                       value={embedInput}
                       type="url"
                       className="min-w-0 flex-1 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-2.5 py-1.5 text-xs text-[var(--xpe-foreground)] outline-none focus:border-[var(--xpe-ring)]"
-                      placeholder="Audio file URL (.mp3, .ogg, ...)"
+                      placeholder={t.audioUrlPlaceholder}
                       onChange={(e) => setEmbedInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
@@ -199,7 +213,7 @@ export function AudioBlock({
                       className="rounded-lg bg-[var(--xpe-primary)] px-2.5 py-1.5 text-xs text-[var(--xpe-primary-foreground)]"
                       onClick={applyEmbed}
                     >
-                      Add
+                      {t.add}
                     </button>
                   </div>
                   {embedError && (
@@ -232,14 +246,15 @@ export function AudioBlock({
               ) : null}
             </div>
           )}
-          <audio src={block.props.url} className="w-full" controls preload="metadata" />
+          <audio src={sanitizeMediaUrl(block.props.url) || undefined} className="w-full" controls preload="metadata" />
         </div>
 
         {!readonly && (
           <div className="absolute end-2 top-2 hidden items-center gap-0.5 rounded-lg bg-black/60 p-0.5 backdrop-blur group-hover/audio:flex">
             <button
               className="rounded-md px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/20"
-              title="Remove audio"
+              title={t.remove}
+              aria-label={t.remove}
               onClick={(e) => {
                 e.stopPropagation()
                 onPatch({ url: '', name: undefined, size: undefined, mime: undefined })
@@ -258,7 +273,7 @@ export function AudioBlock({
           <input
             className="mt-1.5 w-full bg-transparent text-center text-xs text-[var(--xpe-muted-foreground)] outline-none placeholder:opacity-60"
             defaultValue={block.props.caption ?? ''}
-            placeholder="Add caption..."
+            placeholder={t.addCaption}
             readOnly={readonly}
             onFocus={onSelect}
             onChange={(e) => onPatch({ caption: e.target.value })}

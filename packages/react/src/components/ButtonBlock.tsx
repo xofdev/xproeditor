@@ -27,6 +27,7 @@ import {
 } from '@xproeditor/core'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui'
 import { TextBlock, type TextBlockHandle } from './TextBlock'
+import { useEditorDictionary } from '../i18n'
 
 export interface ButtonBlockProps {
   block: Block
@@ -77,6 +78,8 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
   { block, readonly, onPatch, onSelect, ...textEvents },
   ref,
 ) {
+  const dict = useEditorDictionary()
+  const t = dict.button
   const textRef = useRef<TextBlockHandle>(null)
   const urlInputRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
@@ -186,7 +189,7 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
           ref={textRef}
           block={block}
           readonly={readonly}
-          placeholder="Button"
+          placeholder={t.defaultLabel}
           className="min-w-0 text-center outline-none"
           {...textEvents}
         />
@@ -198,8 +201,8 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
             <button
               type="button"
               className={`xpe-btn-settings-trigger${open ? ' xpe-btn-settings-trigger--open' : ''}`}
-              title="Button settings"
-              aria-label="Button settings"
+              title={t.settings}
+              aria-label={t.settings}
               aria-expanded={open}
             >
               <Settings2 className="h-3.5 w-3.5" />
@@ -210,12 +213,12 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
               <span className="xpe-menu-brand" aria-hidden>
                 <Settings2 />
               </span>
-              <span className="xpe-button-settings__title">Button</span>
+              <span className="xpe-button-settings__title">{dict.blockTypes.button}</span>
             </div>
 
             <div className="xpe-button-settings__body">
               <div className="xpe-button-settings__field">
-                <span className="xpe-button-settings__label">Link</span>
+                <span className="xpe-button-settings__label">{t.link}</span>
                 <div className="xpe-button-settings__input-wrap">
                   <Link2 className="xpe-button-settings__input-icon" />
                   <input
@@ -237,11 +240,13 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
                 <button
                   type="button"
                   className="xpe-button-settings__toggle"
+                  role="switch"
+                  aria-checked={!!openInNewTab}
                   onClick={() => onPatch({ openInNewTab: !openInNewTab })}
                 >
                   <span className="xpe-button-settings__toggle-meta">
                     <SquareArrowOutUpRight />
-                    Open in new tab
+                    {t.openInNewTab}
                   </span>
                   <span
                     className={`xpe-button-settings__switch${openInNewTab ? ' xpe-button-settings__switch--on' : ''}`}
@@ -251,13 +256,13 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
               </div>
 
               <div className="xpe-button-settings__field">
-                <span className="xpe-button-settings__label">Label</span>
+                <span className="xpe-button-settings__label">{t.label}</span>
                 <div className="xpe-button-settings__input-wrap">
                   <input
                     type="text"
                     className="xpe-button-settings__input"
                     style={{ paddingInlineStart: 10 }}
-                    placeholder="Button"
+                    placeholder={t.defaultLabel}
                     value={labelDraft}
                     onChange={(e) => setLabelDraft(e.target.value)}
                     onBlur={commitLabel}
@@ -272,8 +277,8 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
               </div>
 
               <div className="xpe-button-settings__field">
-                <span className="xpe-button-settings__label">Style</span>
-                <div className="xpe-button-settings__seg" role="group" aria-label="Style">
+                <span className="xpe-button-settings__label">{t.style}</span>
+                <div className="xpe-button-settings__seg" role="group" aria-label={t.style}>
                   {BUTTON_STYLE_OPTIONS.map((s) => (
                     <button
                       key={s.id}
@@ -281,15 +286,15 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
                       className={`xpe-button-settings__seg-item${activeStyle === s.id ? ' xpe-button-settings__seg-item--active' : ''}`}
                       onClick={() => onPatch({ buttonStyle: s.id })}
                     >
-                      {s.label}
+                      {s.id === 'outline' ? t.outline : s.id === 'ghost' ? t.ghost : t.fill}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="xpe-button-settings__field">
-                <span className="xpe-button-settings__label">Align</span>
-                <div className="xpe-button-settings__seg" role="group" aria-label="Align">
+                <span className="xpe-button-settings__label">{t.align}</span>
+                <div className="xpe-button-settings__seg" role="group" aria-label={t.align}>
                   {BUTTON_ALIGN_OPTIONS.map((a) => {
                     const Icon = ALIGN_ICONS[a]
                     return (
@@ -298,7 +303,8 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
                         type="button"
                         className={`xpe-button-settings__seg-item${activeAlign === a ? ' xpe-button-settings__seg-item--active' : ''}`}
                         onClick={() => onPatch({ align: a })}
-                        aria-label={a}
+                        aria-label={a === 'left' ? dict.toolbar.alignLeft : a === 'center' ? dict.toolbar.alignCenter : dict.toolbar.alignRight}
+                        aria-pressed={activeAlign === a}
                       >
                         <Icon />
                       </button>
@@ -308,12 +314,12 @@ export const ButtonBlock = forwardRef<TextBlockHandle, ButtonBlockProps>(functio
               </div>
 
               <div className="xpe-button-settings__field">
-                <span className="xpe-button-settings__label">Color</span>
+                <span className="xpe-button-settings__label">{t.color}</span>
                 <div className="xpe-button-settings__swatches">
                   <button
                     type="button"
-                    title="Theme default"
-                    aria-label="Theme default"
+                    title={t.themeDefault}
+                    aria-label={t.themeDefault}
                     className={`xpe-button-settings__swatch${!accent ? ' xpe-button-settings__swatch--active' : ''}`}
                     style={{ background: 'var(--xpe-primary, #4f46e5)' }}
                     onClick={() => onPatch({ color: undefined })}

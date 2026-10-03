@@ -1,12 +1,17 @@
 import {
+  AppWindow,
   Blocks,
   ClipboardPaste,
+  Gauge,
   Keyboard,
+  Languages,
   Layers,
   MousePointerClick,
   Palette,
+  ShieldCheck,
   Sparkles,
   Table2,
+  Zap,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -54,6 +59,36 @@ const FEATURES: { icon: LucideIcon; title: string; desc: string; points: string[
     points: ['--xpe-primary', 'Dark via .xpe-dark', 'RTL ready'],
   },
   {
+    icon: Zap,
+    title: 'Markdown & keyboard shortcuts',
+    desc: 'Type **bold**, `code`, # headings, - lists or [x] to-dos and they convert as you type. Turn into, move and duplicate blocks from the keyboard.',
+    points: ['**bold** / `code`', '⌘⌥1 heading', '⌘⇧↑ move block'],
+  },
+  {
+    icon: Languages,
+    title: 'Any language, RTL first-class',
+    desc: 'Every label, tooltip and placeholder comes from one dictionary. English and Persian ship built in; override any string or add a language.',
+    points: ['locale="fa"', 'dictionary={{ … }}', 'Per-block auto direction'],
+  },
+  {
+    icon: AppWindow,
+    title: 'Embeds & table of contents',
+    desc: 'Allow-listed embeds for YouTube, Vimeo, Loom, Figma, CodePen, CodeSandbox, Spotify, SoundCloud and Maps — plus a live, linked table of contents.',
+    points: ['/embed', '/table of contents', 'Anchored headings'],
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Secure by default',
+    desc: 'Links, media sources, colours and pasted HTML/JSON are sanitized in core, so stored or pasted content can’t inject script — in the editor or the renderer.',
+    points: ['javascript: blocked', 'Sanitized HTML export', 'Validated clipboard'],
+  },
+  {
+    icon: Gauge,
+    title: 'Fast on long documents',
+    desc: 'Only the block you type in re-renders, the highlighter loads on demand, and a full document API (getBlocks, setBlocks, getMarkdown, getStats…) is on the ref.',
+    points: ['Memoised rows', 'Lazy highlight.js', 'ref.getMarkdown()'],
+  },
+  {
     icon: Blocks,
     title: 'Toggles & structure',
     desc: 'Collapsible toggles and toggle headings (H1–H3) nest content cleanly for docs, FAQs, and long posts.',
@@ -74,7 +109,9 @@ export function Features() {
         </div>
 
         <div className="capability-strip" aria-label="Quick capabilities">
-          <span>18 blocks</span>
+          <span>24 blocks</span>
+          <span>English + فارسی</span>
+          <span>Markdown shortcuts</span>
           <span>Context menu</span>
           <span>Multi-select</span>
           <span>Tables &amp; bookmarks</span>

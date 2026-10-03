@@ -25,6 +25,7 @@ import {
   Type,
 } from 'lucide-react'
 import { syncThemeVars, type BlockType } from '@xproeditor/core'
+import { useEditorDictionary } from '../i18n'
 
 export interface BlockContextMenuProps {
   position: { x: number; y: number }
@@ -65,10 +66,6 @@ const TURN_INTO: Array<{ type: BlockType; label: string; icon: typeof Type; keyw
   { type: 'button', label: 'Button', icon: SquareMousePointer, keywords: ['button', 'cta'] },
   { type: 'bookmark', label: 'Web bookmark', icon: Bookmark, keywords: ['bookmark', 'link', 'url'] },
 ]
-
-const BLOCK_LABELS: Partial<Record<BlockType, string>> = Object.fromEntries(
-  TURN_INTO.map((t) => [t.type, t.label]),
-)
 
 type ActionItem = {
   id: string
@@ -116,14 +113,16 @@ export function BlockContextMenu({
   const [placed, setPlaced] = useState({ left: position.x, top: position.y })
   const mod = isMacPlatform() ? '⌘' : 'Ctrl+'
   const q = query.trim().toLowerCase()
-  const blockLabel = BLOCK_LABELS[blockType] ?? blockType.replace(/_/g, ' ')
+  const dict = useEditorDictionary()
+  const t = dict.blockMenu
+  const blockLabel = dict.blockTypes[blockType] ?? blockType.replace(/_/g, ' ')
 
   const sections = useMemo(() => {
     const transform: ActionItem[] = []
     if (canTurnInto) {
       transform.push({
         id: 'turn-into',
-        label: 'Turn into',
+        label: t.turnInto,
         icon: Type,
         chevron: true,
         keywords: ['turn', 'convert', 'type'],
@@ -133,7 +132,7 @@ export function BlockContextMenu({
     if (colorPresets?.length) {
       transform.push({
         id: 'color',
-        label: 'Color',
+        label: t.color,
         icon: Palette,
         chevron: true,
         keywords: ['color', 'background'],
@@ -144,7 +143,7 @@ export function BlockContextMenu({
     const manage: ActionItem[] = [
       {
         id: 'duplicate',
-        label: 'Duplicate',
+        label: t.duplicate,
         icon: Copy,
         shortcut: `${mod}D`,
         keywords: ['duplicate', 'clone'],
@@ -155,7 +154,7 @@ export function BlockContextMenu({
       },
       {
         id: 'copy',
-        label: 'Copy',
+        label: t.copy,
         icon: ClipboardCopy,
         shortcut: `${mod}C`,
         keywords: ['copy'],
@@ -166,7 +165,7 @@ export function BlockContextMenu({
       },
       {
         id: 'cut',
-        label: 'Cut',
+        label: t.cut,
         icon: Scissors,
         shortcut: `${mod}X`,
         keywords: ['cut'],
@@ -177,7 +176,7 @@ export function BlockContextMenu({
       },
       {
         id: 'delete',
-        label: 'Delete',
+        label: t.delete,
         icon: Trash2,
         shortcut: 'Del',
         danger: true,
@@ -192,7 +191,7 @@ export function BlockContextMenu({
     const insert: ActionItem[] = [
       {
         id: 'insert-below',
-        label: 'Insert below',
+        label: t.insertBelow,
         icon: ArrowDownToLine,
         keywords: ['insert', 'below', 'add'],
         run: () => {
@@ -207,7 +206,7 @@ export function BlockContextMenu({
         ? [
             {
               id: 'ask-ai',
-              label: 'Ask AI',
+              label: t.askAI,
               icon: Sparkles,
               keywords: ['ai', 'ask', 'gpt'],
               run: () => {
@@ -219,7 +218,7 @@ export function BlockContextMenu({
         : []
 
     return [transform, manage, insert, ai]
-      .map((section) => section.filter((item) => matchQuery([item.label, ...item.keywords], q)))
+      .map((section) => section.filter((item) => matchQuery([item.label, item.id, ...item.keywords], q)))
       .filter((section) => section.length > 0)
   }, [
     aiEnabled,
@@ -234,11 +233,14 @@ export function BlockContextMenu({
     onDuplicate,
     onInsertBelow,
     q,
+    t,
   ])
 
   const turnIntoItems = useMemo(() => {
-    return TURN_INTO.filter((t) => matchQuery([t.label, t.type, ...t.keywords], q))
-  }, [q])
+    return TURN_INTO.filter((item) =>
+      matchQuery([dict.blockTypes[item.type], item.label, item.type, ...item.keywords], q),
+    )
+  }, [q, dict])
 
   useLayoutEffect(() => {
     const el = menuRef.current
@@ -290,7 +292,7 @@ export function BlockContextMenu({
         <input
           ref={searchRef}
           className="xpe-menu-search__input"
-          placeholder="Search actions…"
+          placeholder={t.searchActions}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -300,7 +302,7 @@ export function BlockContextMenu({
         <>
           <p className="xpe-ctx-menu__type">{blockLabel}</p>
           {sections.length === 0 ? (
-            <p className="xpe-menu-empty">No matching actions</p>
+            <p className="xpe-menu-empty">{t.noMatches}</p>
           ) : (
             sections.map((section, si) => (
               <div key={si} className="xpe-ctx-menu__section">
@@ -337,26 +339,26 @@ export function BlockContextMenu({
             }}
           >
             <ChevronLeft />
-            Turn into
+            {t.turnInto}
           </button>
           <div className="xpe-ctx-menu__section">
-            {turnIntoItems.map((t) => {
-              const Icon = t.icon
-              const selected = t.type === blockType
+            {turnIntoItems.map((item) => {
+              const Icon = item.icon
+              const selected = item.type === blockType
               return (
                 <button
-                  key={t.type}
+                  key={item.type}
                   type="button"
                   className={`xpe-menu-item${selected ? ' xpe-menu-item--selected' : ''}`}
                   onClick={() => {
-                    onTurnInto?.(t.type)
+                    onTurnInto?.(item.type)
                     onClose()
                   }}
                 >
                   <span className="xpe-menu-item__icon">
                     <Icon />
                   </span>
-                  <span className="xpe-menu-item__label">{t.label}</span>
+                  <span className="xpe-menu-item__label">{dict.blockTypes[item.type]}</span>
                   {selected && <Check className="xpe-menu-item__meta" />}
                 </button>
               )
@@ -376,12 +378,12 @@ export function BlockContextMenu({
             }}
           >
             <ChevronLeft />
-            Color
+            {t.color}
           </button>
           <div className="xpe-ctx-menu__swatches">
             <button
               type="button"
-              title="Default"
+              title={t.defaultColor}
               className={`xpe-ctx-menu__swatch${!currentColor ? ' xpe-ctx-menu__swatch--active' : ''}`}
               style={{ background: 'var(--xpe-muted, #f3f4f6)' }}
               onClick={() => {

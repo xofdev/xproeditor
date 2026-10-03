@@ -3,10 +3,12 @@ import {
   Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
   ChevronRight, Quote, Lightbulb, Code2, Minus, Image as ImageIcon, Video, Table2,
   Smile, Music, Paperclip, SearchX, SquareMousePointer, Bookmark, Sparkles,
+  AppWindow, ListTree,
 } from 'lucide-vue-next'
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { lockPageScroll, syncThemeVars } from '@xproeditor/core'
-import type { BlockType } from '@xproeditor/core'
+import type { BlockType, EditorDictionary } from '@xproeditor/core'
+import { useEditorDictionary } from '../i18n'
 
 export type SlashGroup = 'basic' | 'lists' | 'media' | 'advanced' | 'ai'
 
@@ -24,12 +26,11 @@ export interface SlashItem {
   action?: 'ai' | 'emoji'
 }
 
-const GROUP_LABELS: Record<SlashGroup, string> = {
-  basic: 'Basic blocks',
-  lists: 'Lists & tasks',
-  media: 'Media',
-  advanced: 'Advanced',
-  ai: 'AI',
+/** Localized label + description (English `label`/`description` stay searchable too). */
+function slashItemText(item: SlashItem, dict: EditorDictionary): { label: string; description: string } {
+  if (item.action === 'ai') return { label: dict.slash.askAI, description: dict.slash.askAIDescription }
+  if (item.action === 'emoji') return { label: dict.slash.emoji, description: dict.slash.emojiDescription }
+  return { label: dict.blockTypes[item.type], description: dict.blockDescriptions[item.type] }
 }
 
 const ITEMS: SlashItem[] = [
@@ -51,6 +52,7 @@ const ITEMS: SlashItem[] = [
   { id: 'audio', type: 'audio', label: 'Audio', description: 'Upload or link audio', keywords: ['audio', 'music', 'song', 'sound', 'mp3'], icon: Music, group: 'media' },
   { id: 'file', type: 'file', label: 'File', description: 'Attach a downloadable file', keywords: ['file', 'attachment', 'pdf', 'document', 'download'], icon: Paperclip, group: 'media' },
   { id: 'bookmark', type: 'bookmark', label: 'Web bookmark', description: 'Visual bookmark from a link', keywords: ['bookmark', 'link', 'url', 'web', 'embed', 'og'], icon: Bookmark, group: 'media' },
+  { id: 'embed', type: 'embed', label: 'Embed', description: 'YouTube, Figma, CodePen, Loom, Maps…', keywords: ['embed', 'iframe', 'youtube', 'figma', 'codepen', 'loom', 'spotify', 'map', 'codesandbox'], icon: AppWindow, group: 'media' },
   { id: 'quote', type: 'quote', label: 'Quote', description: 'Capture a quote', keywords: ['quote', 'blockquote'], icon: Quote, group: 'advanced' },
   { id: 'callout', type: 'callout', label: 'Callout', description: 'Highlighted note with emoji or icon', keywords: ['callout', 'note', 'info', 'warning', 'icon'], icon: Lightbulb, group: 'advanced', pickIcon: 'emoji' },
   { id: 'emoji', type: 'paragraph', label: 'Emoji', description: 'Insert an emoji', keywords: ['emoji', 'emoticon', 'smile'], icon: Smile, group: 'advanced', action: 'emoji' },
@@ -58,6 +60,7 @@ const ITEMS: SlashItem[] = [
   { id: 'divider', type: 'divider', label: 'Divider', description: 'Horizontal line', keywords: ['divider', 'hr', 'separator', 'line'], icon: Minus, group: 'advanced' },
   { id: 'table', type: 'table', label: 'Table', description: 'Simple table', keywords: ['table', 'grid'], icon: Table2, group: 'advanced' },
   { id: 'button', type: 'button', label: 'Button', description: 'A clickable link styled as a button', keywords: ['button', 'link', 'cta', 'action'], icon: SquareMousePointer, group: 'advanced' },
+  { id: 'table_of_contents', type: 'table_of_contents', label: 'Table of contents', description: 'Linked list of the headings', keywords: ['toc', 'contents', 'outline', 'headings', 'index'], icon: ListTree, group: 'advanced' },
 ]
 
 const props = defineProps<{
@@ -85,17 +88,23 @@ const listEl = ref<HTMLElement | null>(null)
 const menuEl = ref<HTMLElement | null>(null)
 const placed = ref<{ left: number; top: number }>({ left: props.position.x, top: props.position.y })
 
+const dict = useEditorDictionary()
+
 const filtered = computed(() => {
   const base = props.aiEnabled ? ITEMS : ITEMS.filter(item => item.action !== 'ai')
   const q = props.query.toLowerCase().trim()
 
   if (!q) return base
 
-  return base.filter(item =>
-    item.label.toLowerCase().includes(q)
-    || item.description.toLowerCase().includes(q)
-    || item.keywords.some(k => k.includes(q)),
-  )
+  return base.filter((item) => {
+    const text = slashItemText(item, dict.value)
+
+    return text.label.toLowerCase().includes(q)
+      || text.description.toLowerCase().includes(q)
+      || item.label.toLowerCase().includes(q)
+      || item.description.toLowerCase().includes(q)
+      || item.keywords.some(k => k.includes(q))
+  })
 })
 
 /** Same items, annotated with a group header wherever the group changes. */
@@ -103,7 +112,8 @@ const grouped = computed(() =>
   filtered.value.map((item, idx) => ({
     item,
     idx,
-    headerLabel: idx === 0 || filtered.value[idx - 1].group !== item.group ? GROUP_LABELS[item.group] : null,
+    text: slashItemText(item, dict.value),
+    headerLabel: idx === 0 || filtered.value[idx - 1].group !== item.group ? dict.value.slash.groups[item.group] : null,
   })),
 )
 
@@ -203,7 +213,7 @@ defineExpose({ move, confirm })
     >
       <p v-if="filtered.length === 0" class="xpe-menu-empty">
         <SearchX class="w-4 h-4" />
-        No results for “{{ query }}”
+        {{ dict.slash.noResults }} “{{ query }}”
       </p>
       <div ref="listEl" class="xpe-menu-list">
         <template v-for="entry in grouped" :key="entry.item.id">
@@ -225,8 +235,8 @@ defineExpose({ move, confirm })
               <component :is="entry.item.icon" />
             </span>
             <span class="xpe-menu-item__text">
-              <span class="xpe-menu-item__label">{{ entry.item.label }}</span>
-              <span class="xpe-menu-item__desc">{{ entry.item.description }}</span>
+              <span class="xpe-menu-item__label">{{ entry.text.label }}</span>
+              <span class="xpe-menu-item__desc">{{ entry.text.description }}</span>
             </span>
           </button>
         </template>

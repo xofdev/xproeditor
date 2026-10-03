@@ -27,6 +27,36 @@ export type BlockType =
   | 'table'
   | 'button'
   | 'bookmark'
+  | 'embed'
+  | 'table_of_contents'
+
+/** Every block type this version of the editor can render, in slash-menu order. */
+export const BLOCK_TYPES: readonly BlockType[] = [
+  'paragraph',
+  'heading_1',
+  'heading_2',
+  'heading_3',
+  'bulleted_list_item',
+  'numbered_list_item',
+  'to_do',
+  'toggle',
+  'toggle_heading_1',
+  'toggle_heading_2',
+  'toggle_heading_3',
+  'quote',
+  'callout',
+  'code',
+  'divider',
+  'image',
+  'video',
+  'audio',
+  'file',
+  'table',
+  'button',
+  'bookmark',
+  'embed',
+  'table_of_contents',
+]
 
 export interface InlineMarks {
   bold?: boolean
@@ -103,7 +133,7 @@ export interface BlockProps {
   code?: string
   /** code: soft-wrap long lines */
   wrap?: boolean
-  /** image / video / audio / file / button / bookmark */
+  /** image / video / audio / file / button / bookmark / embed */
   url?: string
   caption?: string
   /** audio / file: original file name */
@@ -114,8 +144,10 @@ export interface BlockProps {
   mime?: string
   /** image width percent (10-100) */
   width?: number
-  /** video */
-  provider?: 'file' | 'youtube' | 'vimeo'
+  /** video: source kind. embed: detected provider id (see `EMBED_PROVIDERS`). */
+  provider?: 'file' | 'youtube' | 'vimeo' | (string & {})
+  /** embed: frame height in px (default per provider) */
+  height?: number
   /** callout icon */
   icon?: string
   /** callout background, or button accent/background color */

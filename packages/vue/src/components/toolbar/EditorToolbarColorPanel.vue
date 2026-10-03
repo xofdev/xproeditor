@@ -15,6 +15,10 @@ import {
 } from '../../ui';
 import { cn } from '../../utils/cn';
 import { useDebounceFn } from '../../utils/debounce';
+import { useEditorDictionary } from '../../i18n';
+
+const dictionary = useEditorDictionary();
+const t = computed(() => dictionary.value.toolbar);
 
 const props = defineProps<{
     open?: boolean;
@@ -121,8 +125,8 @@ function isPresetActive(color: string, active: string | null): boolean {
 <template>
     <Tabs v-model="activeTab" class="w-[280px]">
         <TabsList class="mb-2 grid w-full grid-cols-2">
-            <TabsTrigger value="text" class="text-xs">Text</TabsTrigger>
-            <TabsTrigger value="highlight" class="text-xs">Highlight</TabsTrigger>
+            <TabsTrigger value="text" class="text-xs">{{ t.textColor }}</TabsTrigger>
+            <TabsTrigger value="highlight" class="text-xs">{{ t.highlight }}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="text" class="mt-0 space-y-3">
@@ -152,7 +156,7 @@ function isPresetActive(color: string, active: string | null): boolean {
 
             <div class="border-t border-[var(--xpe-border)] pt-3">
                 <p class="xpe-menu-heading mb-2">
-                    Custom
+                    {{ t.customColor }}
                 </p>
                 <div @focusin="onPickerFocus">
                     <ColorPickerPanel
@@ -173,7 +177,7 @@ function isPresetActive(color: string, active: string | null): boolean {
                 class="h-7 w-full text-xs text-[var(--xpe-muted-foreground)]"
                 @click="resetCurrent"
             >
-                Reset text color
+                {{ t.resetTextColor }}
             </Button>
         </TabsContent>
 
@@ -203,7 +207,7 @@ function isPresetActive(color: string, active: string | null): boolean {
 
             <div class="border-t border-[var(--xpe-border)] pt-3">
                 <p class="xpe-menu-heading mb-2">
-                    Custom
+                    {{ t.customColor }}
                 </p>
                 <div @focusin="onPickerFocus">
                     <ColorPickerPanel
@@ -225,7 +229,7 @@ function isPresetActive(color: string, active: string | null): boolean {
                 @click="resetCurrent"
             >
                 <Highlighter class="me-1.5 size-3" />
-                Remove highlight
+                {{ t.removeHighlight }}
             </Button>
         </TabsContent>
     </Tabs>

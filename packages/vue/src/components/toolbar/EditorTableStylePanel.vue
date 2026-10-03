@@ -20,6 +20,10 @@ import {
 } from '../../ui';
 import { cn } from '../../utils/cn';
 import { useDebounceFn } from '../../utils/debounce';
+import { useEditorDictionary } from '../../i18n';
+
+const dictionary = useEditorDictionary();
+const t = computed(() => dictionary.value.table);
 
 const props = defineProps<{
     open?: boolean;
@@ -156,14 +160,14 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
 <template>
     <Tabs v-model="activeTab" class="w-[300px]">
         <TabsList class="mb-2 grid w-full grid-cols-4">
-            <TabsTrigger value="text" class="text-[10px]">Text</TabsTrigger>
-            <TabsTrigger value="cell" class="text-[10px]">Cell</TabsTrigger>
-            <TabsTrigger value="table" class="text-[10px]">Table</TabsTrigger>
-            <TabsTrigger value="border" class="text-[10px]">Border</TabsTrigger>
+            <TabsTrigger value="text" class="text-[10px]">{{ t.text }}</TabsTrigger>
+            <TabsTrigger value="cell" class="text-[10px]">{{ t.cell }}</TabsTrigger>
+            <TabsTrigger value="table" class="text-[10px]">{{ t.table }}</TabsTrigger>
+            <TabsTrigger value="border" class="text-[10px]">{{ t.border }}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="text" class="mt-0 space-y-3">
-            <p class="xpe-menu-heading">Text color</p>
+            <p class="xpe-menu-heading">{{ t.textColor }}</p>
             <div class="grid grid-cols-5 gap-1.5">
                 <button
                     v-for="color in TEXT_COLOR_PRESETS"
@@ -182,7 +186,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 </button>
             </div>
 
-            <p class="xpe-menu-heading">Highlight</p>
+            <p class="xpe-menu-heading">{{ t.highlight }}</p>
             <div class="grid grid-cols-4 gap-1.5">
                 <button
                     v-for="color in HIGHLIGHT_PRESETS"
@@ -208,10 +212,10 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
 
             <div class="flex gap-2">
                 <Button v-if="currentColor" type="button" variant="ghost" size="sm" class="h-7 flex-1 text-xs" @click="resetTextColor">
-                    Reset text
+                    {{ t.resetText }}
                 </Button>
                 <Button v-if="currentHighlight" type="button" variant="ghost" size="sm" class="h-7 flex-1 text-xs" @click="resetHighlight">
-                    Reset highlight
+                    {{ t.resetHighlight }}
                 </Button>
             </div>
         </TabsContent>
@@ -237,12 +241,12 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 @focusin="onPickerFocus"
             />
             <Button v-if="cellBackground" type="button" variant="ghost" size="sm" class="h-7 w-full text-xs" @click="resetCellBackground">
-                Reset cell background
+                {{ t.resetCellBackground }}
             </Button>
         </TabsContent>
 
         <TabsContent value="table" class="mt-0 space-y-3">
-            <p class="xpe-menu-heading">Table background</p>
+            <p class="xpe-menu-heading">{{ t.tableBackground }}</p>
             <div class="grid grid-cols-5 gap-1.5">
                 <button
                     v-for="color in TABLE_BG_PRESETS"
@@ -255,7 +259,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 />
             </div>
 
-            <p class="xpe-menu-heading">Header background</p>
+            <p class="xpe-menu-heading">{{ t.headerBackground }}</p>
             <div class="grid grid-cols-5 gap-1.5">
                 <button
                     v-for="color in TABLE_BG_PRESETS"
@@ -269,10 +273,10 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
             </div>
 
             <Button type="button" variant="ghost" size="sm" class="h-7 w-full text-xs" @click="resetTableBackground">
-                Reset table background
+                {{ t.resetTableBackground }}
             </Button>
             <Button type="button" variant="ghost" size="sm" class="h-7 w-full text-xs" @click="resetHeaderBackground">
-                Reset header background
+                {{ t.resetHeaderBackground }}
             </Button>
         </TabsContent>
 
@@ -281,7 +285,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 class="rounded-md border bg-[var(--xpe-surface)] p-3"
                 :style="{ border: `${resolvedBorder.width}px ${resolvedBorder.style} ${resolvedBorder.color}` }"
             >
-                <div class="text-xs text-[var(--xpe-muted-foreground)]">Preview</div>
+                <div class="text-xs text-[var(--xpe-muted-foreground)]">{{ t.preview }}</div>
             </div>
 
             <div class="grid grid-cols-4 gap-1.5">
@@ -296,7 +300,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 />
             </div>
 
-            <p class="xpe-menu-heading">Width</p>
+            <p class="xpe-menu-heading">{{ t.width }}</p>
             <div class="flex flex-wrap gap-1">
                 <button
                     v-for="width in TABLE_BORDER_WIDTHS"
@@ -310,7 +314,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
                 </button>
             </div>
 
-            <p class="xpe-menu-heading">Style</p>
+            <p class="xpe-menu-heading">{{ t.style }}</p>
             <div class="flex flex-wrap gap-1">
                 <button
                     v-for="style in TABLE_BORDER_STYLES"
@@ -334,7 +338,7 @@ function selectBorderStyle(style: TableBorderStyleKind): void {
             />
 
             <Button type="button" variant="ghost" size="sm" class="h-7 w-full text-xs" @click="resetBorder">
-                Reset border
+                {{ t.resetBorder }}
             </Button>
         </TabsContent>
     </Tabs>

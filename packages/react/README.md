@@ -3,11 +3,17 @@
 A Notion-like block editor for React — contentEditable-based, with a flat
 block model (paragraphs, headings, lists, to-dos, toggles & toggle headings,
 quotes, callouts, code, dividers, buttons, images, video, audio, file
-attachments, tables, web bookmarks) and two editing styles built in:
+attachments, tables, web bookmarks, embeds, table of contents) and two
+editing styles built in:
 
 - **Fixed toolbar** — a sticky top toolbar, classic WYSIWYG feel.
 - **Floating (Notion-like)** — a bubble toolbar on text selection plus a `/`
   slash command menu.
+
+Markdown-as-you-type (`**bold**`, `# `, `- [ ] `…), keyboard shortcuts for
+every block action, a full document API on the ref, built-in English and
+Persian UI (any language via a dictionary), and sanitized rendering of
+untrusted content come standard.
 
 No Tailwind or Radix required in your app — styles ship as a single
 precompiled stylesheet, themeable via CSS variables. Built on top of
@@ -47,7 +53,21 @@ export function Editor() {
 doesn't play well with React's controlled-value model. It owns the block
 array internally and calls `onChange(blocks)` whenever it changes (debounced
 while typing, immediate for structural edits). To load different content,
-change the component's `key` to remount it.
+call `ref.current.setBlocks(blocks, { history: 'reset' })` — or change the
+component's `key` to remount it.
+
+### The editor ref
+
+```tsx
+const editor = useRef<ProEditorHandle>(null)
+
+editor.current?.getMarkdown()        // export
+editor.current?.getStats()           // { words, characters, readingTimeMinutes, … }
+editor.current?.insertBlocks([createBlock('callout', { content: [{ text: 'Note' }] })])
+editor.current?.setBlocks(loaded, { history: 'reset' })
+```
+
+Full reference: [`docs/api.md`](../../docs/api.md).
 
 ### Composing it yourself
 
@@ -92,11 +112,22 @@ block rendering entirely.
 | `toolbar` | `'fixed' \| 'floating' \| 'both' \| 'none'` | `'floating'` | Which toolbar UI to render |
 | `upload` | `(file: File) => Promise<string>` | — | Called for drag/drop/paste of images, video, audio & files |
 | `pickMedia` | `(opts: { accept: string[]; title?: string }) => Promise<{url, alt?, caption?} \| null>` | — | Hook up your media library picker |
+| `fetchBookmarkMeta` | `(url: string) => Promise<BookmarkMeta \| null>` | — | OG metadata for `/bookmark` cards |
 | `editorDir` | `'ltr' \| 'rtl'` | `'ltr'` | Default direction for new blocks |
 | `readonly` | `boolean` | `false` | Disable editing |
+| `locale` | `string` | `'en'` | UI language — `'en'` or `'fa'` built in ([i18n](../../docs/i18n.md)) |
+| `dictionary` | `EditorDictionaryOverrides` | — | Override any UI string |
+| `placeholder` | `string` | localized | Placeholder of the focused empty line |
+| `spellCheck` | `boolean` | `true` | Browser spellcheck in text blocks |
+| `autofocus` | `boolean \| 'start' \| 'end'` | `false` | Focus on mount |
+| `ai` | `{ transport: AITransport; commands?: AICommand[] }` | — | Pluggable Ask AI |
 | `onChange` | `(blocks: Block[]) => void` | — | Called on every persisted change |
+| `onUploadError` | `(error: unknown, file: File) => void` | — | `upload` rejected for a pasted/dropped file |
 
-`ref` exposes: `undo`, `redo`, `focusFirst`, `focusEnd`.
+`ref` exposes the [document API](../../docs/api.md) (`getBlocks`,
+`setBlocks`, `insertBlocks`, `updateBlock`, `removeBlocks`, `focus`,
+`getMarkdown`, `getHTML`, `getText`, `getStats`) plus `undo`, `redo`,
+`openAIMenu`, `focusFirst`, `focusEnd`.
 
 ## `<BlockEditor>` (lower-level)
 
@@ -105,7 +136,14 @@ Same props as above (minus `toolbar`) plus `showBubbleToolbar?: boolean` and
 `undo`, `redo`, `canUndo`, `canRedo`, `applyToolbarMark`, `turnIntoBlock`,
 `indentFocusedBlock`, `outdentFocusedBlock`, `setFocusedAlign`, `setFocusedDir`,
 `setFocusedCalloutIcon`, `patchTableStyle`, `patchTableCellBackground`,
-`focusFirst`, `focusEnd`.
+`focusFirst`, `focusEnd`, and the same document API.
+
+## Shortcuts
+
+Type `# `, `- `, `1. `, `[x] `, `> ` at the start of a line, or `**bold**`,
+`` `code` ``, `~~strike~~` inline. `Mod+Alt+1…3` makes headings,
+`Mod+Shift+↑/↓` moves blocks, `Mod+D` duplicates, `Mod+K` links. Full list:
+[`docs/keyboard-shortcuts.md`](../../docs/keyboard-shortcuts.md).
 
 ## Read-only rendering
 
@@ -115,8 +153,12 @@ docs pages, previews) — no contentEditable, no editor JS:
 ```tsx
 import { DocRenderer } from '@xproeditor/react'
 
-<DocRenderer blocks={post.content.blocks} editorDir="ltr" />
+<DocRenderer blocks={post.content.blocks} editorDir="ltr" locale="en" />
 ```
+
+Headings get anchor ids, code is highlighted (highlight.js loads on demand),
+embeds and the table of contents render, and every link and media URL is
+sanitized — see [`docs/security.md`](../../docs/security.md).
 
 ## Theming
 

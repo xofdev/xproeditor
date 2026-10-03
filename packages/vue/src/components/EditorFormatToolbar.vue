@@ -30,7 +30,7 @@ import {
     Sparkles,
     Underline,
 } from 'lucide-vue-next';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { BlockType, MarkName, TableStyle } from '@xproeditor/core';
 import { Button, IconEmojiPicker, IconValueDisplay, Input } from '../ui';
 import EditorTableStylePanel from './toolbar/EditorTableStylePanel.vue';
@@ -38,6 +38,8 @@ import EditorToolbarButton from './toolbar/EditorToolbarButton.vue';
 import EditorToolbarColorPanel from './toolbar/EditorToolbarColorPanel.vue';
 import EditorToolbarPopover from './toolbar/EditorToolbarPopover.vue';
 import EditorToolbarSeparator from './toolbar/EditorToolbarSeparator.vue';
+import { useEditorDictionary } from '../i18n';
+import { withShortcut } from '../utils/shortcut';
 
 export type FormatToolbarAlign = 'left' | 'center' | 'right' | 'justify';
 
@@ -56,6 +58,8 @@ export type FormatToolbarState = {
     calloutIcon?: string | null;
     tableStyle?: TableStyle;
     cellBackground?: string | null;
+    /** Increments when the user presses Mod+K — open the link editor. */
+    linkRequest?: number;
 };
 
 const props = defineProps<{
@@ -113,8 +117,11 @@ watch(
     },
 );
 
+const dict = useEditorDictionary();
+const t = computed(() => dict.value.toolbar);
+
 function turnIntoLabel(): string {
-    return TURN_INTO.find((t) => t.type === props.state?.blockType)?.label ?? 'Paragraph';
+    return dict.value.blockTypes[props.state?.blockType ?? 'paragraph'] ?? dict.value.blockTypes.paragraph;
 }
 
 function openLinkPopover(open: boolean): void {
@@ -126,6 +133,22 @@ function openLinkPopover(open: boolean): void {
 
     linkOpen.value = open;
 }
+
+// Mod+K from the editor opens the link popover.
+let handledLinkRequest = props.state?.linkRequest ?? 0;
+
+watch(
+    () => props.state?.linkRequest ?? 0,
+    (request) => {
+        if (!request || request === handledLinkRequest) {
+            return;
+        }
+
+        handledLinkRequest = request;
+        openLinkPopover(true);
+        requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-xpe-link-input]')?.focus());
+    },
+);
 
 function applyLink(): void {
     const url = linkInput.value.trim();
@@ -182,25 +205,25 @@ const tableActionsDisabled = () => disabled() || !isTable();
                     </EditorToolbarButton>
                 </template>
                 <button
-                    v-for="t in TURN_INTO"
-                    :key="t.type"
+                    v-for="entry in TURN_INTO"
+                    :key="entry.type"
                     type="button"
                     class="xpe-menu-item"
-                    :class="{ 'xpe-menu-item--selected': t.type === state?.blockType }"
-                    @click="emit('turnInto', t.type); turnIntoOpen = false"
+                    :class="{ 'xpe-menu-item--selected': entry.type === state?.blockType }"
+                    @click="emit('turnInto', entry.type); turnIntoOpen = false"
                 >
                     <span class="xpe-menu-item__icon">
-                      <component :is="t.icon" />
+                      <component :is="entry.icon" />
                     </span>
-                    <span class="xpe-menu-item__label">{{ t.label }}</span>
+                    <span class="xpe-menu-item__label">{{ dict.blockTypes[entry.type] }}</span>
                     <Check
-                        v-if="t.type === state?.blockType"
+                        v-if="entry.type === state?.blockType"
                         class="xpe-menu-item__meta"
                     />
                 </button>
             </EditorToolbarPopover>
 
-            <EditorToolbarButton v-if="aiEnabled" title="Ask AI" @click="emit('askAI')">
+            <EditorToolbarButton v-if="aiEnabled" :title="t.askAI" @click="emit('askAI')">
                 <Sparkles class="size-3.5" />
             </EditorToolbarButton>
 
@@ -209,7 +232,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="!!state?.activeMarks.bold"
                 :disabled="disabled() || !state?.hasSelection"
-                title="Bold"
+                :title="withShortcut(t.bold, 'B')"
                 @click="emit('mark', 'bold', !state?.activeMarks.bold)"
             >
                 <Bold class="size-3.5" />
@@ -217,7 +240,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="!!state?.activeMarks.italic"
                 :disabled="disabled() || !state?.hasSelection"
-                title="Italic"
+                :title="withShortcut(t.italic, 'I')"
                 @click="emit('mark', 'italic', !state?.activeMarks.italic)"
             >
                 <Italic class="size-3.5" />
@@ -225,7 +248,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="!!state?.activeMarks.underline"
                 :disabled="disabled() || !state?.hasSelection"
-                title="Underline"
+                :title="withShortcut(t.underline, 'U')"
                 @click="emit('mark', 'underline', !state?.activeMarks.underline)"
             >
                 <Underline class="size-3.5" />
@@ -233,7 +256,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="!!state?.activeMarks.strikethrough"
                 :disabled="disabled() || !state?.hasSelection"
-                title="Strikethrough"
+                :title="withShortcut(t.strikethrough, 'Shift+S')"
                 @click="emit('mark', 'strikethrough', !state?.activeMarks.strikethrough)"
             >
                 <Strikethrough class="size-3.5" />
@@ -241,7 +264,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="!!state?.activeMarks.code"
                 :disabled="disabled() || !state?.hasSelection"
-                title="Inline code"
+                :title="withShortcut(t.code, 'E')"
                 @click="emit('mark', 'code', !state?.activeMarks.code)"
             >
                 <Code class="size-3.5" />
@@ -252,14 +275,14 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarPopover
                 v-model:open="linkOpen"
                 content-class="p-2"
-                title="Link"
+                :title="withShortcut(t.link, 'K')"
                 @update:open="openLinkPopover"
             >
                 <template #trigger>
                     <EditorToolbarButton
                         :active="linkOpen || !!state?.currentLink"
                         :disabled="disabled() || !state?.hasSelection"
-                        title="Link"
+                        :title="withShortcut(t.link, 'K')"
                     >
                         <Link2 class="size-3.5" />
                     </EditorToolbarButton>
@@ -268,12 +291,13 @@ const tableActionsDisabled = () => disabled() || !isTable();
                     <Input
                         v-model="linkInput"
                         class="h-8 flex-1 text-xs"
-                        placeholder="https://..."
+                        :placeholder="t.linkPlaceholder"
+                        data-xpe-link-input=""
                         @keydown.enter.prevent="applyLink"
                         @keydown.escape="linkOpen = false"
                     />
                     <Button type="button" size="sm" class="h-8 px-3 text-xs" @click="applyLink">
-                        Set
+                        {{ dict.common.set }}
                     </Button>
                     <Button
                         v-if="state?.currentLink"
@@ -283,7 +307,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
                         class="h-8 px-2 text-xs text-[var(--xpe-danger)] hover:bg-[var(--xpe-danger-muted)]"
                         @click="emit('mark', 'link', null); linkOpen = false"
                     >
-                        Remove
+                        {{ dict.common.remove }}
                     </Button>
                 </div>
             </EditorToolbarPopover>
@@ -297,7 +321,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
                     <EditorToolbarButton
                         :active="colorOpen || !!state?.currentColor || !!state?.currentHighlight"
                         :disabled="disabled() || !state?.hasSelection"
-                        title="Color"
+                        :title="t.color"
                     >
                         <Paintbrush class="size-3.5" />
                     </EditorToolbarButton>
@@ -310,7 +334,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
                 />
             </EditorToolbarPopover>
 
-            <EditorToolbarButton :disabled="blockActionsDisabled()" title="Quote" @click="emit('turnInto', 'quote')">
+            <EditorToolbarButton :disabled="blockActionsDisabled()" :title="dict.blockTypes.quote" @click="emit('turnInto', 'quote')">
                 <Quote class="size-3.5" />
             </EditorToolbarButton>
 
@@ -326,7 +350,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
                         <EditorToolbarButton
                             wide
                             :disabled="blockActionsDisabled()"
-                            title="Callout icon"
+                            :title="t.calloutIcon"
                             @click.stop="toggle"
                             @pointerdown.stop
                         >
@@ -342,7 +366,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="state?.blockType === 'bulleted_list_item'"
                 :disabled="blockActionsDisabled()"
-                title="Bulleted list"
+                :title="dict.blockTypes.bulleted_list_item"
                 @click="emit('turnInto', 'bulleted_list_item')"
             >
                 <List class="size-3.5" />
@@ -350,7 +374,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="state?.blockType === 'numbered_list_item'"
                 :disabled="blockActionsDisabled()"
-                title="Numbered list"
+                :title="dict.blockTypes.numbered_list_item"
                 @click="emit('turnInto', 'numbered_list_item')"
             >
                 <ListOrdered class="size-3.5" />
@@ -359,7 +383,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="state?.align === 'left'"
                 :disabled="blockActionsDisabled()"
-                title="Align left"
+                :title="t.alignLeft"
                 @click="emit('align', 'left')"
             >
                 <AlignLeft class="size-3.5" />
@@ -367,7 +391,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="state?.align === 'center'"
                 :disabled="blockActionsDisabled()"
-                title="Align center"
+                :title="t.alignCenter"
                 @click="emit('align', 'center')"
             >
                 <AlignCenter class="size-3.5" />
@@ -375,7 +399,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="state?.align === 'right'"
                 :disabled="blockActionsDisabled()"
-                title="Align right"
+                :title="t.alignRight"
                 @click="emit('align', 'right')"
             >
                 <AlignRight class="size-3.5" />
@@ -384,7 +408,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
                 v-if="isTable()"
                 :active="state?.align === 'justify'"
                 :disabled="tableActionsDisabled()"
-                title="Justify"
+                :title="t.justify"
                 @click="emit('align', 'justify')"
             >
                 <AlignJustify class="size-3.5" />
@@ -400,7 +424,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
                     <EditorToolbarButton
                         :active="tableStyleOpen"
                         :disabled="tableActionsDisabled()"
-                        title="Table style"
+                        :title="t.tableStyle"
                     >
                         <Paintbrush class="size-3.5" />
                     </EditorToolbarButton>
@@ -422,7 +446,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="state?.dir === 'auto'"
                 :disabled="blockActionsDisabled() || isTable()"
-                title="Auto direction"
+                :title="t.autoDirection"
                 @click="emit('dir', 'auto')"
             >
                 <Languages class="size-3.5" />
@@ -430,7 +454,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="state?.dir === 'ltr'"
                 :disabled="blockActionsDisabled() || isTable()"
-                title="Left-to-right"
+                :title="t.leftToRight"
                 @click="emit('dir', 'ltr')"
             >
                 <span class="text-[10px] font-bold">LTR</span>
@@ -438,7 +462,7 @@ const tableActionsDisabled = () => disabled() || !isTable();
             <EditorToolbarButton
                 :active="state?.dir === 'rtl'"
                 :disabled="blockActionsDisabled() || isTable()"
-                title="Right-to-left"
+                :title="t.rightToLeft"
                 @click="emit('dir', 'rtl')"
             >
                 <span class="text-[10px] font-bold">RTL</span>
@@ -446,14 +470,14 @@ const tableActionsDisabled = () => disabled() || !isTable();
 
             <EditorToolbarButton
                 :disabled="blockActionsDisabled() || isTable() || (state?.indent ?? 0) <= 0"
-                title="Decrease indent"
+                :title="t.decreaseIndent"
                 @click="emit('outdent')"
             >
                 <IndentDecrease class="size-3.5" />
             </EditorToolbarButton>
             <EditorToolbarButton
                 :disabled="blockActionsDisabled() || isTable() || (state?.indent ?? 0) >= 6"
-                title="Increase indent"
+                :title="t.increaseIndent"
                 @click="emit('indent')"
             >
                 <IndentIncrease class="size-3.5" />

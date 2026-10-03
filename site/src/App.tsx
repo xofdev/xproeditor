@@ -1,3 +1,4 @@
+import { Changelog } from './components/Changelog'
 import { Features } from './components/Features'
 import { BlocksShowcase } from './components/BlocksShowcase'
 import { Footer } from './components/Footer'
@@ -23,6 +24,7 @@ export default function App() {
         <Features />
         <InstallTabs />
         <Packages />
+        <Changelog />
       </main>
       <Footer />
     </div>

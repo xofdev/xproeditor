@@ -1,12 +1,14 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { GripVertical, Plus, ChevronRight } from 'lucide-react'
 import { BUTTON_COLOR_PRESETS, isTextBlock, resolveBlockDirection } from '@xproeditor/core'
-import type { Block, BlockType, InlineSpan, MarkName, TableCellCoord } from '@xproeditor/core'
+import type { Block, BlockType, DocHeading, InlineSpan, MarkName, TableCellCoord } from '@xproeditor/core'
 import { IconEmojiPicker } from '../ui'
 import { CodeBlock, type CodeBlockHandle } from './CodeBlock'
 import { AudioBlock } from './AudioBlock'
 import { BlockContextMenu } from './BlockContextMenu'
 import { BookmarkBlock } from './BookmarkBlock'
+import { EmbedBlock } from './EmbedBlock'
+import { TableOfContentsBlock } from './TableOfContentsBlock'
 import { ButtonBlock } from './ButtonBlock'
 import { FileBlock } from './FileBlock'
 import { ImageBlock } from './ImageBlock'
@@ -14,6 +16,7 @@ import { SelectionHighlight } from './SelectionHighlight'
 import { TableBlock, type TableBlockHandle } from './TableBlock'
 import { TextBlock, type TextBlockHandle } from './TextBlock'
 import { VideoBlock } from './VideoBlock'
+import { useEditorDictionary } from '../i18n'
 import type { BlockItemHandle, FetchBookmarkMetaFn, PickMediaFn, UploadFn } from '../types'
 
 const CALLOUT_COLORS = ['#f8fafc', '#fefce8', '#fff7ed', '#fef2f2', '#f0fdf4', '#eff6ff', '#faf5ff']
@@ -44,6 +47,12 @@ export interface BlockItemProps {
   themeSource?: HTMLElement | null
   iconPickerRequest?: { tab: 'emoji' | 'icon' } | null
   aiEnabled?: boolean
+  /** Browser spellcheck in text blocks (default `true`). */
+  spellCheck?: boolean
+  /** Document headings — only needed by `table_of_contents` blocks. */
+  tocHeadings?: DocHeading[]
+  /** Jump to another block (table of contents links). */
+  onNavigateToBlock?: (blockId: string) => void
   onInput: (spans: InlineSpan[], caret: number | null) => void
   onEnter: (offsets: { start: number; end: number }) => void
   onBackspaceStart: () => void
@@ -106,6 +115,9 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
       themeSource,
       iconPickerRequest,
       aiEnabled,
+      spellCheck = true,
+      tocHeadings,
+      onNavigateToBlock,
       onInput,
       onEnter,
       onBackspaceStart,
@@ -137,6 +149,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
       onTableCellSelectionChange,
     } = props
 
+    const dict = useEditorDictionary()
     const innerRef = useRef<TextBlockHandle | CodeBlockHandle | TableBlockHandle | null>(null)
     const calloutIconPickerRef = useRef<{ open: (tab?: 'emoji' | 'icon') => void } | null>(null)
     const [showCalloutColors, setShowCalloutColors] = useState(false)
@@ -225,6 +238,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
           block={block}
           readonly={readonly}
           placeholder={extraPlaceholder ?? placeholder}
+          spellCheck={spellCheck}
           className={extraClassName}
           onInput={onInput}
           onEnter={onEnter}
@@ -271,7 +285,8 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
             >
               <button
                 className="ebi-gutter-btn"
-                title="Add block below"
+                title={dict.blockMenu.addBelow}
+                aria-label={dict.blockMenu.addBelow}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={onAddBelow}
               >
@@ -280,7 +295,8 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
               <button
                 type="button"
                 className="ebi-gutter-btn ebi-reorder-handle cursor-grab active:cursor-grabbing"
-                title="Drag to move, click for menu"
+                title={dict.blockMenu.dragHandle}
+                aria-label={dict.blockMenu.dragHandle}
                 draggable
                 onPointerDown={(e) => e.stopPropagation()}
                 onDragStart={onDragHandleStart}
@@ -294,7 +310,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
           <div className="ebi-body">
             {block.type === 'quote' ? (
               <div className="flex gap-3 border-s-[3px] border-[var(--xpe-foreground)] ps-3.5">
-                {renderTextBlock('flex-1', 'Quote')}
+                {renderTextBlock('flex-1', dict.placeholders.quote)}
               </div>
             ) : block.type === 'callout' ? (
               <div
@@ -319,7 +335,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                       <button
                         type="button"
                         aria-label="Change callout icon"
-                        title="Change callout icon"
+                        title={dict.blockMenu.changeCalloutIcon}
                         className={`mt-0.5 text-lg leading-none transition-transform${!readonly ? ' hover:scale-110' : ''}`}
                         disabled={readonly}
                         onClick={(e) => {
@@ -335,11 +351,11 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                   {!readonly && (
                     <button
                       type="button"
-                      title="Change callout color"
+                      title={dict.blockMenu.changeCalloutColor}
                       className={`mt-1 block w-full text-[10px] text-[var(--xpe-muted-foreground)] transition-opacity hover:text-[var(--xpe-foreground)] focus-visible:opacity-100 ${showCalloutColors ? 'opacity-100' : 'opacity-0 group-hover/block:opacity-100'}`}
                       onClick={() => setShowCalloutColors((v) => !v)}
                     >
-                      Color
+                      {dict.blockMenu.color}
                     </button>
                   )}
                   {showCalloutColors && !readonly && (
@@ -360,7 +376,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                     </div>
                   )}
                 </div>
-                {renderTextBlock('flex-1', 'Type something...')}
+                {renderTextBlock('flex-1', dict.placeholders.callout)}
               </div>
             ) : LIST_LIKE.includes(block.type) ? (
               <div className="ebi-list-row">
@@ -379,7 +395,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                     <button
                       type="button"
                       role="checkbox"
-                      aria-label="Toggle to-do"
+                      aria-label={dict.blockMenu.toggleToDo}
                       aria-checked={!!block.props.checked}
                       className={`ebi-todo${block.props.checked ? ' ebi-todo--checked' : ''}`}
                       disabled={readonly}
@@ -403,7 +419,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                   {TOGGLE_LIKE.includes(block.type) && (
                     <button
                       type="button"
-                      aria-label={block.props.collapsed ? 'Expand toggle' : 'Collapse toggle'}
+                      aria-label={block.props.collapsed ? dict.blockMenu.expandToggle : dict.blockMenu.collapseToggle}
                       aria-expanded={!block.props.collapsed}
                       className="ebi-toggle-btn"
                       disabled={readonly}
@@ -421,16 +437,16 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                     ? 'flex-1 min-w-0 line-through !text-[var(--xpe-muted-foreground)]'
                     : 'flex-1 min-w-0',
                   block.type === 'to_do'
-                    ? 'To-do'
+                    ? dict.placeholders.toDo
                     : block.type === 'toggle'
-                      ? 'Toggle'
+                      ? dict.placeholders.toggle
                       : block.type === 'toggle_heading_1'
-                        ? 'Heading 1'
+                        ? dict.placeholders.heading1
                         : block.type === 'toggle_heading_2'
-                          ? 'Heading 2'
+                          ? dict.placeholders.heading2
                           : block.type === 'toggle_heading_3'
-                            ? 'Heading 3'
-                            : 'List item',
+                            ? dict.placeholders.heading3
+                            : dict.placeholders.listItem,
                 )}
               </div>
             ) : block.type === 'code' ? (
@@ -519,6 +535,21 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                 onSelectionPointerDown={onSelectionPointerDown}
                 onPatch={onPatch}
                 onSelect={onSelect}
+              />
+            ) : block.type === 'embed' ? (
+              <EmbedBlock
+                block={block}
+                selected={selected}
+                readonly={readonly}
+                onPatch={onPatch}
+                onSelect={onSelect}
+              />
+            ) : block.type === 'table_of_contents' ? (
+              <TableOfContentsBlock
+                headings={tocHeadings ?? []}
+                selected={selected}
+                onSelect={onSelect}
+                onNavigate={(id) => onNavigateToBlock?.(id)}
               />
             ) : block.type === 'bookmark' ? (
               <BookmarkBlock

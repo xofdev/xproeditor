@@ -69,6 +69,9 @@ export function Nav() {
         <a className="nav-link" href="#packages">
           Packages
         </a>
+        <a className="nav-link" href="#changelog">
+          Changelog
+        </a>
         <a
           className="nav-link"
           href={`${REPO_URL}/tree/main/docs`}

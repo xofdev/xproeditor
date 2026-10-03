@@ -32,15 +32,18 @@ import {
   SquareMousePointer,
   Bookmark,
   Sparkles,
+  AppWindow,
+  ListTree,
 } from 'lucide-react'
-import type { SlashGroup, SlashItem } from '../types'
+import type { EditorDictionary } from '@xproeditor/core'
+import { useEditorDictionary } from '../i18n'
+import type { SlashItem } from '../types'
 
-const GROUP_LABELS: Record<SlashGroup, string> = {
-  basic: 'Basic blocks',
-  lists: 'Lists & tasks',
-  media: 'Media',
-  advanced: 'Advanced',
-  ai: 'AI',
+/** Localized label + description (English `label`/`description` stay searchable too). */
+function slashItemText(item: SlashItem, dict: EditorDictionary): { label: string; description: string } {
+  if (item.action === 'ai') return { label: dict.slash.askAI, description: dict.slash.askAIDescription }
+  if (item.action === 'emoji') return { label: dict.slash.emoji, description: dict.slash.emojiDescription }
+  return { label: dict.blockTypes[item.type], description: dict.blockDescriptions[item.type] }
 }
 
 const ITEMS: SlashItem[] = [
@@ -200,6 +203,15 @@ const ITEMS: SlashItem[] = [
     group: 'media',
   },
   {
+    id: 'embed',
+    type: 'embed',
+    label: 'Embed',
+    description: 'YouTube, Figma, CodePen, Loom, Maps…',
+    keywords: ['embed', 'iframe', 'youtube', 'figma', 'codepen', 'loom', 'spotify', 'map', 'codesandbox'],
+    icon: AppWindow,
+    group: 'media',
+  },
+  {
     id: 'quote',
     type: 'quote',
     label: 'Quote',
@@ -264,6 +276,15 @@ const ITEMS: SlashItem[] = [
     icon: SquareMousePointer,
     group: 'advanced',
   },
+  {
+    id: 'table_of_contents',
+    type: 'table_of_contents',
+    label: 'Table of contents',
+    description: 'Linked list of the headings',
+    keywords: ['toc', 'contents', 'outline', 'headings', 'index'],
+    icon: ListTree,
+    group: 'advanced',
+  },
 ]
 
 export interface SlashMenuHandle {
@@ -296,18 +317,23 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
   })
   const listRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const dict = useEditorDictionary()
 
   const filtered = useMemo(() => {
     const base = aiEnabled ? ITEMS : ITEMS.filter((item) => item.action !== 'ai')
     const q = query.toLowerCase().trim()
     if (!q) return base
-    return base.filter(
-      (item) =>
-        item.label.toLowerCase().includes(q)
+    return base.filter((item) => {
+      const text = slashItemText(item, dict)
+      return (
+        text.label.toLowerCase().includes(q)
+        || text.description.toLowerCase().includes(q)
+        || item.label.toLowerCase().includes(q)
         || item.description.toLowerCase().includes(q)
-        || item.keywords.some((k) => k.includes(q)),
-    )
-  }, [query, aiEnabled])
+        || item.keywords.some((k) => k.includes(q))
+      )
+    })
+  }, [query, aiEnabled, dict])
 
   useEffect(() => setActiveIndex(0), [query])
 
@@ -388,19 +414,20 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
       {filtered.length === 0 && (
         <p className="xpe-menu-empty">
           <SearchX className="w-4 h-4" />
-          No results for “{query}”
+          {dict.slash.noResults} “{query}”
         </p>
       )}
       <div ref={listRef} className="xpe-menu-list">
         {filtered.map((item, idx) => {
           const Icon = item.icon
+          const text = slashItemText(item, dict)
           const showHeader = idx === 0 || filtered[idx - 1].group !== item.group
           const active = idx === activeIndex
           return (
             <div key={item.id}>
               {showHeader && (
                 <p className="xpe-menu-heading px-2 pt-2.5 pb-1 first:pt-1">
-                  {GROUP_LABELS[item.group]}
+                  {dict.slash.groups[item.group]}
                 </p>
               )}
               <button
@@ -414,8 +441,8 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
                   <Icon />
                 </span>
                 <span className="xpe-menu-item__text">
-                  <span className="xpe-menu-item__label">{item.label}</span>
-                  <span className="xpe-menu-item__desc">{item.description}</span>
+                  <span className="xpe-menu-item__label">{text.label}</span>
+                  <span className="xpe-menu-item__desc">{text.description}</span>
                 </span>
               </button>
             </div>

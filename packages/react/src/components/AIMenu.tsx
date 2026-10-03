@@ -25,6 +25,7 @@ import {
   type AITransport,
   type Block,
 } from '@xproeditor/core'
+import { useEditorDictionary } from '../i18n'
 
 export interface AIMenuProps {
   open: boolean
@@ -75,6 +76,7 @@ export function AIMenu({
   onApply,
   onClose,
 }: AIMenuProps) {
+  const t = useEditorDictionary().ai
   const [status, setStatus] = useState<AIAgentStatus>('user-input')
   const [prompt, setPrompt] = useState('')
   const [streamText, setStreamText] = useState('')
@@ -196,7 +198,7 @@ export function AIMenu({
 
       const parsed = parseAIResponseToBlocks({ text: accumulated, blocks: structured })
       if (!parsed.length) {
-        setError('No response from AI')
+        setError(t.noResponse)
         setStatus('error')
         return
       }
@@ -210,7 +212,7 @@ export function AIMenu({
       setStatus('user-reviewing')
     } catch (err) {
       if ((err as Error)?.name === 'AbortError') return
-      setError(err instanceof Error ? err.message : 'AI request failed')
+      setError(err instanceof Error ? err.message : t.failed)
       setStatus('error')
     }
   }
@@ -242,7 +244,7 @@ export function AIMenu({
   function submitCustom() {
     if (!canSubmit) return
     void run(
-      activeCommand ?? { id: 'ask', label: 'Ask', kind: hasSelection ? 'update' : 'add' },
+      activeCommand ?? { id: 'ask', label: t.ask, kind: hasSelection ? 'update' : 'add' },
       prompt,
     )
   }
@@ -290,15 +292,15 @@ export function AIMenu({
       className="xpe-ai-menu"
       style={{ left: coords.left, top: coords.top }}
       role="dialog"
-      aria-label="Ask AI"
+      aria-label={t.askAI}
     >
       <div className="xpe-ai-menu__head">
         <span className="xpe-ai-menu__brand" aria-hidden>
           <Sparkles />
         </span>
-        <span className="xpe-ai-menu__title">Ask AI</span>
-        {hasSelection && <span className="xpe-ai-menu__badge">Selection</span>}
-        <button type="button" className="xpe-ai-menu__icon-btn" onClick={onClose} aria-label="Close">
+        <span className="xpe-ai-menu__title">{t.askAI}</span>
+        {hasSelection && <span className="xpe-ai-menu__badge">{t.selection}</span>}
+        <button type="button" className="xpe-ai-menu__icon-btn" onClick={onClose} aria-label={t.close}>
           <X />
         </button>
       </div>
@@ -310,7 +312,7 @@ export function AIMenu({
               <input
                 ref={inputRef}
                 className="xpe-ai-menu__input"
-                placeholder={hasSelection ? 'Edit selection with AI…' : 'Ask AI to write…'}
+                placeholder={hasSelection ? t.editSelectionPlaceholder : t.writePlaceholder}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={onInputKeyDown}
@@ -320,7 +322,7 @@ export function AIMenu({
                 className="xpe-ai-menu__send"
                 disabled={!canSubmit}
                 onClick={submitCustom}
-                aria-label="Send"
+                aria-label={t.send}
               >
                 <ArrowUp />
               </button>
@@ -329,7 +331,7 @@ export function AIMenu({
             {status === 'user-input' && (
               <>
                 {visibleCommands.length > 0 ? (
-                  <div className="xpe-ai-menu__cmds" role="listbox" aria-label="AI commands">
+                  <div className="xpe-ai-menu__cmds" role="listbox" aria-label={t.commands}>
                     {visibleCommands.map((cmd, i) => {
                       const Icon = CMD_ICONS[cmd.id] ?? Sparkles
                       return (
@@ -356,7 +358,7 @@ export function AIMenu({
                     })}
                   </div>
                 ) : (
-                  <p className="xpe-ai-menu__hint">No matching commands — press Enter to run your prompt.</p>
+                  <p className="xpe-ai-menu__hint">{t.noMatching}</p>
                 )}
               </>
             )}
@@ -367,16 +369,16 @@ export function AIMenu({
           <div className="xpe-ai-menu__stream">
             <div className="xpe-ai-menu__stream-meta">
               <Loader2 className="xpe-ai-menu__spin" />
-              Writing…
+              {t.writing}
             </div>
-            {streamText || 'Thinking…'}
+            {streamText || t.thinking}
           </div>
         )}
 
         {isBusy && (
           <div className="xpe-ai-menu__actions">
             <button type="button" className="xpe-ai-menu__btn xpe-ai-menu__btn--danger" onClick={stop}>
-              Stop
+              {t.stop}
             </button>
           </div>
         )}
@@ -390,10 +392,10 @@ export function AIMenu({
                 className="xpe-ai-menu__btn xpe-ai-menu__btn--primary"
                 onClick={() => void run(activeCommand, prompt)}
               >
-                Retry
+                {t.retry}
               </button>
               <button type="button" className="xpe-ai-menu__btn xpe-ai-menu__btn--ghost" onClick={onClose}>
-                Cancel
+                {t.cancel}
               </button>
             </div>
           </>
@@ -406,10 +408,10 @@ export function AIMenu({
             </div>
             <div className="xpe-ai-menu__actions">
               <button type="button" className="xpe-ai-menu__btn xpe-ai-menu__btn--primary" onClick={accept}>
-                <Check /> Accept
+                <Check /> {t.accept}
               </button>
               <button type="button" className="xpe-ai-menu__btn xpe-ai-menu__btn--ghost" onClick={reject}>
-                Discard
+                {t.discard}
               </button>
             </div>
           </>

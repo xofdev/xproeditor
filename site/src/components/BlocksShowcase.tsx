@@ -1,4 +1,6 @@
 import {
+  AppWindow,
+  ListTree,
   Bookmark,
   CheckSquare,
   Code2,
@@ -34,7 +36,7 @@ const BLOCKS: BlockInfo[] = [
   { icon: Lightbulb, name: 'Callout', slash: '/callout', tip: 'Icon + color presets', group: 'Text' },
   { icon: List, name: 'Bulleted list', slash: '/bullet', tip: 'Or - then space', group: 'Lists' },
   { icon: ListOrdered, name: 'Numbered list', slash: '/number', tip: 'Or 1. then space', group: 'Lists' },
-  { icon: CheckSquare, name: 'To-do', slash: '/todo', tip: 'Or [] then space', group: 'Lists' },
+  { icon: CheckSquare, name: 'To-do', slash: '/todo', tip: 'Or [] / [x] then space', group: 'Lists' },
   { icon: ChevronRight, name: 'Toggle', slash: '/toggle', tip: 'Collapsible list item', group: 'Lists' },
   { icon: Heading1, name: 'Toggle heading', slash: '/toggle heading', tip: 'H1–H3 collapsible sections', group: 'Lists' },
   { icon: ImageIcon, name: 'Image', slash: '/image', tip: 'Upload, library, or URL', group: 'Media' },
@@ -42,10 +44,12 @@ const BLOCKS: BlockInfo[] = [
   { icon: Music, name: 'Audio', slash: '/audio', tip: 'Upload or link', group: 'Media' },
   { icon: Paperclip, name: 'File', slash: '/file', tip: 'Downloadable attachment', group: 'Media' },
   { icon: Bookmark, name: 'Web bookmark', slash: '/bookmark', tip: 'Link card with title & preview', group: 'Media' },
+  { icon: AppWindow, name: 'Embed', slash: '/embed', tip: 'YouTube, Figma, CodePen, Loom, Maps…', group: 'Media' },
   { icon: Code2, name: 'Code', slash: '/code', tip: 'Language, wrap, and copy', group: 'Advanced' },
   { icon: Table2, name: 'Table', slash: '/table', tip: 'Width, drag-select cells, merge', group: 'Advanced' },
   { icon: SquareMousePointer, name: 'Button', slash: '/button', tip: 'Label, link, color, style', group: 'Advanced' },
   { icon: Minus, name: 'Divider', slash: '/divider', tip: 'Or type ---', group: 'Advanced' },
+  { icon: ListTree, name: 'Table of contents', slash: '/toc', tip: 'Live, linked list of headings', group: 'Advanced' },
   { icon: FileText, name: 'Ask AI', slash: '/ai', tip: 'Generate or rewrite — Accept / Reject', group: 'Advanced' },
 ]
 
@@ -59,7 +63,7 @@ export function BlocksShowcase() {
           <span className="eyebrow">Block types</span>
           <h2 id="blocks-heading">Everything you can insert with /</h2>
           <p>
-            Eighteen block types in the document model — plus Ask AI as an agent overlay, not a
+            Twenty-four block types in the document model — plus Ask AI as an agent overlay, not a
             block. Open the demo and type <code>/</code> to try any of these.
           </p>
         </div>

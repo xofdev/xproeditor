@@ -20,6 +20,10 @@ import {
 } from '@xproeditor/core'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui'
 import EditorTextBlock from './EditorTextBlock.vue'
+import { useEditorDictionary } from '../i18n'
+
+const dict = useEditorDictionary()
+const t = computed(() => dict.value.button)
 
 const props = defineProps<{
   block: Block
@@ -156,7 +160,7 @@ defineExpose({
         ref="textRef"
         :block="block"
         :readonly="readonly"
-        placeholder="Button"
+        :placeholder="t.defaultLabel"
         class="min-w-0 text-center outline-none"
         @input="(s, c) => emit('input', s, c)"
         @enter="o => emit('enter', o)"
@@ -178,8 +182,8 @@ defineExpose({
           type="button"
           class="xpe-btn-settings-trigger"
           :class="{ 'xpe-btn-settings-trigger--open': open }"
-          title="Button settings"
-          aria-label="Button settings"
+          :title="t.settings"
+          :aria-label="t.settings"
           :aria-expanded="open"
         >
           <Settings2 class="h-3.5 w-3.5" />
@@ -190,12 +194,12 @@ defineExpose({
           <span class="xpe-menu-brand" aria-hidden="true">
             <Settings2 />
           </span>
-          <span class="xpe-button-settings__title">Button</span>
+          <span class="xpe-button-settings__title">{{ dict.blockTypes.button }}</span>
         </div>
 
         <div class="xpe-button-settings__body">
           <div class="xpe-button-settings__field">
-            <span class="xpe-button-settings__label">Link</span>
+            <span class="xpe-button-settings__label">{{ t.link }}</span>
             <div class="xpe-button-settings__input-wrap">
               <Link2 class="xpe-button-settings__input-icon" />
               <input
@@ -211,11 +215,13 @@ defineExpose({
             <button
               type="button"
               class="xpe-button-settings__toggle"
+              role="switch"
+              :aria-checked="!!openInNewTab"
               @click="emit('patch', { openInNewTab: !openInNewTab })"
             >
               <span class="xpe-button-settings__toggle-meta">
                 <SquareArrowOutUpRight />
-                Open in new tab
+                {{ t.openInNewTab }}
               </span>
               <span
                 class="xpe-button-settings__switch"
@@ -226,13 +232,13 @@ defineExpose({
           </div>
 
           <div class="xpe-button-settings__field">
-            <span class="xpe-button-settings__label">Label</span>
+            <span class="xpe-button-settings__label">{{ t.label }}</span>
             <div class="xpe-button-settings__input-wrap">
               <input
                 type="text"
                 class="xpe-button-settings__input"
                 style="padding-inline-start: 10px"
-                placeholder="Button"
+                :placeholder="t.defaultLabel"
                 v-model="labelDraft"
                 @blur="commitLabel"
                 @keydown.enter.prevent="commitLabel"
@@ -241,8 +247,8 @@ defineExpose({
           </div>
 
           <div class="xpe-button-settings__field">
-            <span class="xpe-button-settings__label">Style</span>
-            <div class="xpe-button-settings__seg" role="group" aria-label="Style">
+            <span class="xpe-button-settings__label">{{ t.style }}</span>
+            <div class="xpe-button-settings__seg" role="group" :aria-label="t.style">
               <button
                 v-for="s in BUTTON_STYLE_OPTIONS"
                 :key="s.id"
@@ -251,21 +257,22 @@ defineExpose({
                 :class="{ 'xpe-button-settings__seg-item--active': activeStyle === s.id }"
                 @click="emit('patch', { buttonStyle: s.id })"
               >
-                {{ s.label }}
+                {{ s.id === 'outline' ? t.outline : s.id === 'ghost' ? t.ghost : t.fill }}
               </button>
             </div>
           </div>
 
           <div class="xpe-button-settings__field">
-            <span class="xpe-button-settings__label">Align</span>
-            <div class="xpe-button-settings__seg" role="group" aria-label="Align">
+            <span class="xpe-button-settings__label">{{ t.align }}</span>
+            <div class="xpe-button-settings__seg" role="group" :aria-label="t.align">
               <button
                 v-for="a in BUTTON_ALIGN_OPTIONS"
                 :key="a"
                 type="button"
                 class="xpe-button-settings__seg-item"
                 :class="{ 'xpe-button-settings__seg-item--active': activeAlign === a }"
-                :aria-label="a"
+:aria-label="a === 'left' ? dict.toolbar.alignLeft : a === 'center' ? dict.toolbar.alignCenter : dict.toolbar.alignRight"
+                :aria-pressed="activeAlign === a"
                 @click="emit('patch', { align: a })"
               >
                 <component :is="ALIGN_ICONS[a]" />
@@ -274,12 +281,12 @@ defineExpose({
           </div>
 
           <div class="xpe-button-settings__field">
-            <span class="xpe-button-settings__label">Color</span>
+            <span class="xpe-button-settings__label">{{ t.color }}</span>
             <div class="xpe-button-settings__swatches">
               <button
                 type="button"
-                title="Theme default"
-                aria-label="Theme default"
+                :title="t.themeDefault"
+                :aria-label="t.themeDefault"
                 class="xpe-button-settings__swatch"
                 :class="{ 'xpe-button-settings__swatch--active': !accent }"
                 style="background: var(--xpe-primary, #4f46e5)"

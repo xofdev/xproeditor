@@ -1,8 +1,13 @@
 <script setup lang="ts">
+import { sanitizeMediaUrl } from '@xproeditor/core'
 import { FolderOpen, ImagePlus, Link2, Loader2, Upload } from 'lucide-vue-next';
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { Block } from '@xproeditor/core';
 import { fileToObjectUrl, mediaPropsFromFile } from '@xproeditor/core';
+import { useEditorDictionary } from '../i18n';
+
+const dict = useEditorDictionary();
+const t = computed(() => dict.value.media);
 
 const props = defineProps<{
     block: Block;
@@ -24,6 +29,7 @@ type InsertMode = 'upload' | 'library' | 'embed';
 
 const mode = ref<InsertMode>('upload');
 const uploading = ref(false);
+const uploadError = ref(false);
 const picking = ref(false);
 const dragOver = ref(false);
 const embedInput = ref('');
@@ -36,11 +42,14 @@ async function uploadFile(file: File) {
         return;
     }
 
+    uploadError.value = false;
     uploading.value = true;
 
     try {
         const url = await (props.upload ?? fileToObjectUrl)(file);
         emit('patch', mediaPropsFromFile(file, url));
+    } catch {
+        uploadError.value = true;
     } finally {
         uploading.value = false;
     }
@@ -54,7 +63,7 @@ async function pickFromLibrary() {
     picking.value = true;
 
     try {
-        const result = await props.pickMedia({ accept: ['image/*'], title: 'Choose image' });
+        const result = await props.pickMedia({ accept: ['image/*'], title: t.value.imageChoose });
 
         if (result?.url) {
             emit('patch', {
@@ -62,6 +71,8 @@ async function pickFromLibrary() {
                 ...(result.caption ? { caption: result.caption } : {}),
             });
         }
+    } catch {
+        uploadError.value = true;
     } finally {
         picking.value = false;
     }
@@ -72,7 +83,7 @@ function applyEmbed() {
     const url = embedInput.value.trim();
 
     if (!/^https?:\/\//i.test(url)) {
-        embedError.value = 'Enter a valid image URL';
+        embedError.value = t.value.imageInvalidUrl;
 
         return;
     }
@@ -122,8 +133,11 @@ watch(mode, (next) => {
             <div class="flex items-center justify-center gap-2 text-[var(--xpe-muted-foreground)]">
                 <Loader2 v-if="busy()" class="h-5 w-5 animate-spin text-[var(--xpe-primary)]" />
                 <ImagePlus v-else class="h-5 w-5" />
-                <span class="text-sm">{{ busy() ? 'Working...' : 'Add an image' }}</span>
+                <span class="text-sm">{{ busy() ? t.working : t.imageAdd }}</span>
             </div>
+            <p v-if="uploadError && !busy()" class="text-center text-xs text-[var(--xpe-danger)]" role="alert">
+                {{ t.uploadFailed }}
+            </p>
 
             <div v-if="!busy()" class="flex justify-center gap-1 px-4" @click.stop @mousedown.stop @pointerdown.stop>
                 <button
@@ -132,7 +146,7 @@ watch(mode, (next) => {
                     :class="mode === 'upload' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
                     @click.stop="mode = 'upload'"
                 >
-                    Upload
+                    {{ t.upload }}
                 </button>
                 <button
                     v-if="pickMedia"
@@ -141,7 +155,7 @@ watch(mode, (next) => {
                     :class="mode === 'library' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
                     @click.stop="mode = 'library'"
                 >
-                    Library
+                    {{ t.library }}
                 </button>
                 <button
                     type="button"
@@ -149,7 +163,7 @@ watch(mode, (next) => {
                     :class="mode === 'embed' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
                     @click.stop="mode = 'embed'"
                 >
-                    Link
+                    {{ t.link }}
                 </button>
             </div>
 
@@ -161,7 +175,7 @@ watch(mode, (next) => {
                         @click.stop="fileInput?.click()"
                     >
                         <Upload class="h-3.5 w-3.5" />
-                        Choose image
+                        {{ t.imageChoose }}
                     </button>
                     <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFilePicked" />
                 </div>
@@ -173,7 +187,7 @@ watch(mode, (next) => {
                         @click.stop="pickFromLibrary"
                     >
                         <FolderOpen class="h-3.5 w-3.5" />
-                        Open media library
+                        {{ t.openLibrary }}
                     </button>
                 </div>
 
@@ -185,7 +199,7 @@ watch(mode, (next) => {
                             v-model="embedInput"
                             type="url"
                             class="min-w-0 flex-1 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-2.5 py-1.5 text-xs text-[var(--xpe-foreground)] outline-none focus:border-[var(--xpe-ring)]"
-                            placeholder="Paste an image URL"
+                            :placeholder="t.imageUrlPlaceholder"
                             @keydown.enter.prevent="applyEmbed"
                         />
                         <button
@@ -193,7 +207,7 @@ watch(mode, (next) => {
                             class="rounded-lg bg-[var(--xpe-primary)] px-2.5 py-1.5 text-xs text-[var(--xpe-primary-foreground)]"
                             @click.stop="applyEmbed"
                         >
-                            Add
+                            {{ t.add }}
                         </button>
                     </div>
                     <p v-if="embedError" class="text-center text-xs text-[var(--xpe-danger)]">{{ embedError }}</p>
@@ -204,7 +218,7 @@ watch(mode, (next) => {
         <figure v-else class="group/img relative" :style="{ width: `${block.props.width ?? 100}%` }">
             <div @click="emit('select')">
                 <img
-                    :src="block.props.url"
+                    :src="sanitizeMediaUrl(block.props.url) || undefined"
                     :alt="block.props.caption || ''"
                     class="w-full rounded-[var(--xpe-radius)] transition-shadow"
                     :class="selected ? 'ring-2 ring-[var(--xpe-ring)]' : ''"
@@ -230,7 +244,8 @@ watch(mode, (next) => {
                 </button>
                 <button
                     class="rounded-md px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/20"
-                    title="Replace upload"
+                    :title="t.replace"
+                    :aria-label="t.replace"
                     @click.stop="fileInput?.click()"
                 >
                     ↻
@@ -238,10 +253,11 @@ watch(mode, (next) => {
                 <button
                     v-if="pickMedia"
                     class="rounded-md px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/20"
-                    title="Pick from library"
+                    :title="t.openLibrary"
+                    :aria-label="t.openLibrary"
                     @click.stop="pickFromLibrary"
                 >
-                    Lib
+                    {{ t.library }}
                 </button>
                 <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFilePicked" />
             </div>
@@ -249,7 +265,7 @@ watch(mode, (next) => {
                 <input
                     class="mt-1.5 w-full bg-transparent text-center text-xs text-[var(--xpe-muted-foreground)] outline-none placeholder:opacity-60"
                     :value="block.props.caption ?? ''"
-                    placeholder="Add caption..."
+                    :placeholder="t.addCaption"
                     :readonly="readonly"
                     @focus="emit('select')"
                     @input="emit('patch', { caption: ($event.target as HTMLInputElement).value })"

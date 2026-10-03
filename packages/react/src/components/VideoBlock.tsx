@@ -1,8 +1,10 @@
+import { sanitizeMediaUrl } from '@xproeditor/core'
 import { useRef, useState } from 'react'
 import { FolderOpen, Link2, Loader2, Upload, Video } from 'lucide-react'
 import { fileToObjectUrl, isAllowedEmbedUrl, mediaPropsFromFile, parseVideoEmbed } from '@xproeditor/core'
 import type { Block } from '@xproeditor/core'
 import type { PickMediaFn, UploadFn } from '../types'
+import { useEditorDictionary } from '../i18n'
 
 export interface VideoBlockProps {
   block: Block
@@ -26,8 +28,10 @@ export function VideoBlock({
   onPatch,
   onSelect,
 }: VideoBlockProps) {
+  const t = useEditorDictionary().media
   const [mode, setMode] = useState<InsertMode>('upload')
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(false)
   const [picking, setPicking] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [embedInput, setEmbedInput] = useState('')
@@ -45,10 +49,13 @@ export function VideoBlock({
   async function uploadFile(file: File) {
     if (!file.type.startsWith('video/')) return
 
+    setUploadError(false)
     setUploading(true)
     try {
       const url = await (upload ?? fileToObjectUrl)(file)
       onPatch({ ...mediaPropsFromFile(file, url), provider: 'file' })
+    } catch {
+      setUploadError(true)
     } finally {
       setUploading(false)
     }
@@ -59,13 +66,15 @@ export function VideoBlock({
 
     setPicking(true)
     try {
-      const result = await pickMedia({ accept: ['video/*'], title: 'Choose video' })
+      const result = await pickMedia({ accept: ['video/*'], title: t.videoChoose })
       if (result?.url)
         onPatch({
           url: result.url,
           provider: 'file',
           ...(result.caption ? { caption: result.caption } : {}),
         })
+    } catch {
+      setUploadError(true)
     } finally {
       setPicking(false)
     }
@@ -76,7 +85,7 @@ export function VideoBlock({
     const parsed = parseVideoEmbed(embedInput)
 
     if (!parsed) {
-      setEmbedError('Enter a valid YouTube or Vimeo URL')
+      setEmbedError(t.videoInvalidUrl)
       return
     }
 
@@ -123,8 +132,13 @@ export function VideoBlock({
             ) : (
               <Video className="h-5 w-5" />
             )}
-            <span className="text-sm">{busy ? 'Working...' : 'Add a video'}</span>
+            <span className="text-sm">{busy ? t.working : t.videoAdd}</span>
           </div>
+          {uploadError && !busy && (
+            <p className="text-center text-xs text-[var(--xpe-danger)]" role="alert">
+              {t.uploadFailed}
+            </p>
+          )}
 
           {!busy && (
             <div
@@ -140,7 +154,7 @@ export function VideoBlock({
                   switchMode('upload')
                 }}
               >
-                Upload
+                {t.upload}
               </button>
               {pickMedia && (
                 <button
@@ -151,7 +165,7 @@ export function VideoBlock({
                     switchMode('library')
                   }}
                 >
-                  Library
+                  {t.library}
                 </button>
               )}
               <button
@@ -162,7 +176,7 @@ export function VideoBlock({
                   switchMode('embed')
                 }}
               >
-                Embed
+                {t.embed}
               </button>
             </div>
           )}
@@ -184,7 +198,7 @@ export function VideoBlock({
                     }}
                   >
                     <Upload className="h-3.5 w-3.5" />
-                    Choose video file
+                    {t.videoChoose}
                   </button>
                   <input
                     ref={fileInput}
@@ -207,7 +221,7 @@ export function VideoBlock({
                     }}
                   >
                     <FolderOpen className="h-3.5 w-3.5" />
-                    Open media library
+                    {t.openLibrary}
                   </button>
                 </div>
               )}
@@ -220,7 +234,7 @@ export function VideoBlock({
                       ref={embedInputRef}
                       type="url"
                       className="min-w-0 flex-1 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-2.5 py-1.5 text-xs text-[var(--xpe-foreground)] outline-none focus:border-[var(--xpe-ring)]"
-                      placeholder="YouTube or Vimeo URL"
+                      placeholder={t.videoUrlPlaceholder}
                       value={embedInput}
                       onChange={(e) => setEmbedInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -238,7 +252,7 @@ export function VideoBlock({
                         applyEmbed()
                       }}
                     >
-                      Add
+                      {t.add}
                     </button>
                   </div>
                   {embedError && <p className="text-center text-xs text-[var(--xpe-danger)]">{embedError}</p>}
@@ -264,10 +278,10 @@ export function VideoBlock({
                 className="aspect-video w-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
-                title="Embedded video"
+                title={t.videoEmbedded}
               />
             ) : (
-              <video src={block.props.url} className="aspect-video w-full" controls playsInline />
+              <video src={sanitizeMediaUrl(block.props.url) || undefined} className="aspect-video w-full" controls playsInline />
             )}
           </div>
         </div>
@@ -288,7 +302,8 @@ export function VideoBlock({
             ))}
             <button
               className="rounded-md px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/20"
-              title="Remove video"
+              title={t.remove}
+              aria-label={t.remove}
               onClick={(e) => {
                 e.stopPropagation()
                 onPatch({ url: '', provider: 'file' })
@@ -307,7 +322,7 @@ export function VideoBlock({
           <input
             className="mt-1.5 w-full bg-transparent text-center text-xs text-[var(--xpe-muted-foreground)] outline-none placeholder:opacity-60"
             defaultValue={block.props.caption ?? ''}
-            placeholder="Add caption..."
+            placeholder={t.addCaption}
             readOnly={readonly}
             onFocus={onSelect}
             onChange={(e) => onPatch({ caption: e.target.value })}

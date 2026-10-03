@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   AlignCenter,
   AlignJustify,
@@ -40,6 +40,8 @@ import {
   ToolbarSeparator,
 } from './toolbar'
 import type { FormatToolbarAlign, FormatToolbarState } from '../types'
+import { useEditorDictionary } from '../i18n'
+import { withShortcut } from '../utils/shortcut'
 
 export type { FormatToolbarAlign, FormatToolbarState }
 
@@ -90,6 +92,8 @@ export function FormatToolbar({
   onCellBackground,
   onAskAI,
 }: FormatToolbarProps) {
+  const dict = useEditorDictionary()
+  const t = dict.toolbar
   const [turnIntoOpen, setTurnIntoOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
   const [colorOpen, setColorOpen] = useState(false)
@@ -105,7 +109,7 @@ export function FormatToolbar({
     setTableStyleOpen(false)
   }, [state?.blockId])
 
-  const turnIntoLabel = TURN_INTO.find((t) => t.type === state?.blockType)?.label ?? 'Paragraph'
+  const turnIntoLabel = dict.blockTypes[state?.blockType ?? 'paragraph'] ?? dict.blockTypes.paragraph
 
   function openLinkPopover(open: boolean) {
     if (open) {
@@ -115,6 +119,18 @@ export function FormatToolbar({
     }
     setLinkOpen(open)
   }
+  // Mod+K from the editor opens the link popover.
+  const handledLinkRequest = useRef(state?.linkRequest ?? 0)
+
+  useEffect(() => {
+    const request = state?.linkRequest ?? 0
+    if (!request || request === handledLinkRequest.current) return
+    handledLinkRequest.current = request
+    openLinkPopover(true)
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-xpe-link-input]')?.focus())
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to new Mod+K presses
+  }, [state?.linkRequest])
+
 
   function applyLink() {
     const url = linkInput.trim()
@@ -166,23 +182,23 @@ export function FormatToolbar({
             </ToolbarButton>
           }
         >
-          {TURN_INTO.map((t) => {
-            const Icon = t.icon
-            const selected = t.type === state?.blockType
+          {TURN_INTO.map((entry) => {
+            const Icon = entry.icon
+            const selected = entry.type === state?.blockType
             return (
               <button
-                key={t.type}
+                key={entry.type}
                 type="button"
                 className={`xpe-menu-item${selected ? ' xpe-menu-item--selected' : ''}`}
                 onClick={() => {
-                  onTurnInto(t.type)
+                  onTurnInto(entry.type)
                   setTurnIntoOpen(false)
                 }}
               >
                 <span className="xpe-menu-item__icon">
                   <Icon />
                 </span>
-                <span className="xpe-menu-item__label">{t.label}</span>
+                <span className="xpe-menu-item__label">{dict.blockTypes[entry.type]}</span>
                 {selected && <Check className="xpe-menu-item__meta" />}
               </button>
             )
@@ -190,7 +206,7 @@ export function FormatToolbar({
         </ToolbarPopover>
 
         {aiEnabled && onAskAI && (
-          <ToolbarButton title="Ask AI" onClick={onAskAI}>
+          <ToolbarButton title={t.askAI} onClick={onAskAI}>
             <Sparkles className="size-3.5" />
           </ToolbarButton>
         )}
@@ -200,7 +216,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={!!state?.activeMarks.bold}
           disabled={disabled || !state?.hasSelection}
-          title="Bold"
+          title={withShortcut(t.bold, 'B')}
           onClick={() => onMark('bold', !state?.activeMarks.bold)}
         >
           <Bold className="size-3.5" />
@@ -208,7 +224,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={!!state?.activeMarks.italic}
           disabled={disabled || !state?.hasSelection}
-          title="Italic"
+          title={withShortcut(t.italic, 'I')}
           onClick={() => onMark('italic', !state?.activeMarks.italic)}
         >
           <Italic className="size-3.5" />
@@ -216,7 +232,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={!!state?.activeMarks.underline}
           disabled={disabled || !state?.hasSelection}
-          title="Underline"
+          title={withShortcut(t.underline, 'U')}
           onClick={() => onMark('underline', !state?.activeMarks.underline)}
         >
           <Underline className="size-3.5" />
@@ -224,7 +240,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={!!state?.activeMarks.strikethrough}
           disabled={disabled || !state?.hasSelection}
-          title="Strikethrough"
+          title={withShortcut(t.strikethrough, 'Shift+S')}
           onClick={() => onMark('strikethrough', !state?.activeMarks.strikethrough)}
         >
           <Strikethrough className="size-3.5" />
@@ -232,7 +248,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={!!state?.activeMarks.code}
           disabled={disabled || !state?.hasSelection}
-          title="Inline code"
+          title={withShortcut(t.code, 'E')}
           onClick={() => onMark('code', !state?.activeMarks.code)}
         >
           <Code className="size-3.5" />
@@ -244,12 +260,12 @@ export function FormatToolbar({
           open={linkOpen}
           onOpenChange={openLinkPopover}
           contentClassName="p-2"
-          title="Link"
+          title={withShortcut(t.link, 'K')}
           trigger={
             <ToolbarButton
               active={linkOpen || !!state?.currentLink}
               disabled={disabled || !state?.hasSelection}
-              title="Link"
+              title={withShortcut(t.link, 'K')}
             >
               <Link2 className="size-3.5" />
             </ToolbarButton>
@@ -258,7 +274,8 @@ export function FormatToolbar({
           <div className="flex min-w-[260px] items-center gap-1.5">
             <Input
               className="h-8 flex-1 text-xs"
-              placeholder="https://..."
+              placeholder={t.linkPlaceholder}
+              data-xpe-link-input=""
               value={linkInput}
               onChange={(e) => setLinkInput(e.target.value)}
               onKeyDown={(e) => {
@@ -270,7 +287,7 @@ export function FormatToolbar({
               }}
             />
             <Button size="sm" className="h-8 px-3 text-xs" onClick={applyLink}>
-              Set
+              {dict.common.set}
             </Button>
             {state?.currentLink && (
               <Button
@@ -282,7 +299,7 @@ export function FormatToolbar({
                   setLinkOpen(false)
                 }}
               >
-                Remove
+                {dict.common.remove}
               </Button>
             )}
           </div>
@@ -296,7 +313,7 @@ export function FormatToolbar({
             <ToolbarButton
               active={colorOpen || !!state?.currentColor || !!state?.currentHighlight}
               disabled={disabled || !state?.hasSelection}
-              title="Color"
+              title={t.color}
             >
               <Paintbrush className="size-3.5" />
             </ToolbarButton>
@@ -312,7 +329,7 @@ export function FormatToolbar({
 
         <ToolbarButton
           disabled={blockActionsDisabled}
-          title="Quote"
+          title={dict.blockTypes.quote}
           onClick={() => onTurnInto('quote')}
         >
           <Quote className="size-3.5" />
@@ -330,7 +347,7 @@ export function FormatToolbar({
                 <ToolbarButton
                   wide
                   disabled={blockActionsDisabled}
-                  title="Callout icon"
+                  title={t.calloutIcon}
                   onClick={(e) => {
                     e.stopPropagation()
                     toggle()
@@ -350,7 +367,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={state?.blockType === 'bulleted_list_item'}
           disabled={blockActionsDisabled}
-          title="Bulleted list"
+          title={dict.blockTypes.bulleted_list_item}
           onClick={() => onTurnInto('bulleted_list_item')}
         >
           <List className="size-3.5" />
@@ -358,7 +375,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={state?.blockType === 'numbered_list_item'}
           disabled={blockActionsDisabled}
-          title="Numbered list"
+          title={dict.blockTypes.numbered_list_item}
           onClick={() => onTurnInto('numbered_list_item')}
         >
           <ListOrdered className="size-3.5" />
@@ -367,7 +384,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={state?.align === 'left'}
           disabled={blockActionsDisabled}
-          title="Align left"
+          title={t.alignLeft}
           onClick={() => onAlign('left')}
         >
           <AlignLeft className="size-3.5" />
@@ -375,7 +392,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={state?.align === 'center'}
           disabled={blockActionsDisabled}
-          title="Align center"
+          title={t.alignCenter}
           onClick={() => onAlign('center')}
         >
           <AlignCenter className="size-3.5" />
@@ -383,7 +400,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={state?.align === 'right'}
           disabled={blockActionsDisabled}
-          title="Align right"
+          title={t.alignRight}
           onClick={() => onAlign('right')}
         >
           <AlignRight className="size-3.5" />
@@ -392,7 +409,7 @@ export function FormatToolbar({
           <ToolbarButton
             active={state?.align === 'justify'}
             disabled={tableActionsDisabled}
-            title="Justify"
+            title={t.justify}
             onClick={() => onAlign('justify')}
           >
             <AlignJustify className="size-3.5" />
@@ -408,7 +425,7 @@ export function FormatToolbar({
               <ToolbarButton
                 active={tableStyleOpen}
                 disabled={tableActionsDisabled}
-                title="Table style"
+                title={t.tableStyle}
               >
                 <Paintbrush className="size-3.5" />
               </ToolbarButton>
@@ -432,7 +449,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={state?.dir === 'auto'}
           disabled={blockActionsDisabled || isTable}
-          title="Auto direction"
+          title={t.autoDirection}
           onClick={() => onDir('auto')}
         >
           <Languages className="size-3.5" />
@@ -440,7 +457,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={state?.dir === 'ltr'}
           disabled={blockActionsDisabled || isTable}
-          title="Left-to-right"
+          title={t.leftToRight}
           onClick={() => onDir('ltr')}
         >
           <span className="text-[10px] font-bold">LTR</span>
@@ -448,7 +465,7 @@ export function FormatToolbar({
         <ToolbarButton
           active={state?.dir === 'rtl'}
           disabled={blockActionsDisabled || isTable}
-          title="Right-to-left"
+          title={t.rightToLeft}
           onClick={() => onDir('rtl')}
         >
           <span className="text-[10px] font-bold">RTL</span>
@@ -456,14 +473,14 @@ export function FormatToolbar({
 
         <ToolbarButton
           disabled={blockActionsDisabled || isTable || (state?.indent ?? 0) <= 0}
-          title="Decrease indent"
+          title={t.decreaseIndent}
           onClick={onOutdent}
         >
           <IndentDecrease className="size-3.5" />
         </ToolbarButton>
         <ToolbarButton
           disabled={blockActionsDisabled || isTable || (state?.indent ?? 0) >= 6}
-          title="Increase indent"
+          title={t.increaseIndent}
           onClick={onIndent}
         >
           <IndentIncrease className="size-3.5" />

@@ -24,6 +24,7 @@ withDefaults(
         :class="cn(active && 'ebt-active', wide && '!w-auto gap-1 px-2 text-xs font-medium text-[var(--xpe-muted-foreground)]')"
         :disabled="disabled"
         :title="title"
+        :aria-label="title || undefined"
     >
         <slot />
     </button>

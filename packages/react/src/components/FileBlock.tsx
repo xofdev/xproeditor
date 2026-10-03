@@ -1,8 +1,10 @@
+import { sanitizeLinkUrl } from '@xproeditor/core'
 import { useRef, useState } from 'react'
 import { Download, FileText, FolderOpen, Loader2, Paperclip, Upload } from 'lucide-react'
 import type { Block } from '@xproeditor/core'
 import { fileToObjectUrl, formatFileSize, mediaPropsFromFile } from '@xproeditor/core'
 import type { PickMediaFn, UploadFn } from '../types'
+import { useEditorDictionary } from '../i18n'
 
 export interface FileBlockProps {
   block: Block
@@ -23,7 +25,10 @@ export function FileBlock({
   onPatch,
   onSelect,
 }: FileBlockProps) {
+  const dict = useEditorDictionary()
+  const t = dict.media
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(false)
   const [picking, setPicking] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const fileInput = useRef<HTMLInputElement | null>(null)
@@ -31,10 +36,13 @@ export function FileBlock({
   const busy = uploading || picking
 
   async function uploadFile(file: File) {
+    setUploadError(false)
     setUploading(true)
     try {
       const url = await (upload ?? fileToObjectUrl)(file)
       onPatch(mediaPropsFromFile(file, url))
+    } catch {
+      setUploadError(true)
     } finally {
       setUploading(false)
     }
@@ -45,8 +53,10 @@ export function FileBlock({
 
     setPicking(true)
     try {
-      const result = await pickMedia({ accept: ['*/*'], title: 'Choose file' })
+      const result = await pickMedia({ accept: ['*/*'], title: t.fileChoose })
       if (result?.url) onPatch({ url: result.url, ...(result.caption ? { name: result.caption } : {}) })
+    } catch {
+      setUploadError(true)
     } finally {
       setPicking(false)
     }
@@ -88,8 +98,13 @@ export function FileBlock({
             ) : (
               <Paperclip className="h-5 w-5" />
             )}
-            <span className="text-sm">{busy ? 'Working...' : 'Attach a file'}</span>
+            <span className="text-sm">{busy ? t.working : t.fileAttach}</span>
           </div>
+          {uploadError && !busy && (
+            <p className="text-center text-xs text-[var(--xpe-danger)]" role="alert">
+              {t.uploadFailed}
+            </p>
+          )}
           {!busy && (
             <div
               className="flex flex-wrap items-center justify-center gap-2"
@@ -103,7 +118,7 @@ export function FileBlock({
                 onClick={() => fileInput.current?.click()}
               >
                 <Upload className="h-3.5 w-3.5" />
-                Upload
+                {t.upload}
               </button>
               {pickMedia && (
                 <button
@@ -112,7 +127,7 @@ export function FileBlock({
                   onClick={pickFromLibrary}
                 >
                   <FolderOpen className="h-3.5 w-3.5" />
-                  Library
+                  {t.library}
                 </button>
               )}
             </div>
@@ -135,7 +150,7 @@ export function FileBlock({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-[var(--xpe-foreground)]">
-              {block.props.name || 'File'}
+              {block.props.name || dict.blockTypes.file}
             </span>
             {block.props.size ? (
               <span className="block text-xs text-[var(--xpe-muted-foreground)]">
@@ -144,10 +159,11 @@ export function FileBlock({
             ) : null}
           </span>
           <a
-            href={block.props.url}
+            href={sanitizeLinkUrl(block.props.url, { allowBlob: true }) || undefined}
             download={block.props.name ?? true}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)] hover:text-[var(--xpe-foreground)]"
-            title="Download"
+            title={t.fileDownload}
+            aria-label={t.fileDownload}
             onClick={(e) => e.stopPropagation()}
           >
             <Download className="h-4 w-4" />
@@ -158,7 +174,8 @@ export function FileBlock({
           <div className="absolute end-12 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-lg bg-black/60 p-0.5 backdrop-blur group-hover/file:flex">
             <button
               className="rounded-md px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/20"
-              title="Replace file"
+              title={t.replace}
+              aria-label={t.replace}
               onClick={(e) => {
                 e.stopPropagation()
                 fileInput.current?.click()
@@ -168,7 +185,8 @@ export function FileBlock({
             </button>
             <button
               className="rounded-md px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/20"
-              title="Remove file"
+              title={t.remove}
+              aria-label={t.remove}
               onClick={(e) => {
                 e.stopPropagation()
                 onPatch({ url: '', name: undefined, size: undefined, mime: undefined })

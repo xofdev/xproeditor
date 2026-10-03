@@ -23,6 +23,10 @@ export { default as EditorAudioBlock } from './components/EditorAudioBlock.vue'
 export { default as EditorFileBlock } from './components/EditorFileBlock.vue'
 export { default as EditorButtonBlock } from './components/EditorButtonBlock.vue'
 export { default as EditorBookmarkBlock } from './components/EditorBookmarkBlock.vue'
+export { default as EditorEmbedBlock } from './components/EditorEmbedBlock.vue'
+export { default as EditorTableOfContentsBlock } from './components/EditorTableOfContentsBlock.vue'
+export { default as EditorBlockContextMenu } from './components/EditorBlockContextMenu.vue'
+export { default as EditorEmojiTriggerMenu } from './components/EditorEmojiTriggerMenu.vue'
 export { default as EditorTableBlock } from './components/EditorTableBlock.vue'
 export { default as EditorTableCell } from './components/EditorTableCell.vue'
 export { default as EditorSelectionHighlight } from './components/EditorSelectionHighlight.vue'
@@ -42,5 +46,6 @@ export type { FormatToolbarAlign, FormatToolbarState } from './components/Editor
 export type { SlashItem } from './components/EditorSlashMenu.vue'
 
 export * from './ui'
+export { provideEditorI18n, useEditorDictionary, EDITOR_I18N_KEY } from './i18n'
 
 export * from '@xproeditor/core'

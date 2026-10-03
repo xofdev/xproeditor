@@ -25,6 +25,10 @@ import {
   type AITransport,
   type Block,
 } from '@xproeditor/core'
+import { useEditorDictionary } from '../i18n'
+
+const dictionary = useEditorDictionary()
+const t = computed(() => dictionary.value.ai)
 
 const props = defineProps<{
   open: boolean
@@ -210,7 +214,7 @@ async function run(command: AICommand | null, customPrompt: string) {
 
     const parsed = parseAIResponseToBlocks({ text: accumulated, blocks: structured })
     if (!parsed.length) {
-      error.value = 'No response from AI'
+      error.value = t.value.noResponse
       status.value = 'error'
       return
     }
@@ -224,7 +228,7 @@ async function run(command: AICommand | null, customPrompt: string) {
     status.value = 'user-reviewing'
   } catch (err) {
     if ((err as Error)?.name === 'AbortError') return
-    error.value = err instanceof Error ? err.message : 'AI request failed'
+    error.value = err instanceof Error ? err.message : t.value.failed
     status.value = 'error'
   }
 }
@@ -251,7 +255,7 @@ function reject() {
 function submitCustom() {
   if (!canSubmit.value) return
   void run(
-    activeCommand.value ?? { id: 'ask', label: 'Ask', kind: hasSelection.value ? 'update' : 'add' },
+    activeCommand.value ?? { id: 'ask', label: t.value.ask, kind: hasSelection.value ? 'update' : 'add' },
     prompt.value,
   )
 }
@@ -303,15 +307,15 @@ function iconFor(id: string) {
       class="xpe-ai-menu"
       :style="{ left: `${coords.left}px`, top: `${coords.top}px` }"
       role="dialog"
-      aria-label="Ask AI"
+      :aria-label="t.askAI"
     >
       <div class="xpe-ai-menu__head">
         <span class="xpe-ai-menu__brand" aria-hidden="true">
           <Sparkles />
         </span>
-        <span class="xpe-ai-menu__title">Ask AI</span>
-        <span v-if="hasSelection" class="xpe-ai-menu__badge">Selection</span>
-        <button type="button" class="xpe-ai-menu__icon-btn" aria-label="Close" @click="emit('close')">
+        <span class="xpe-ai-menu__title">{{ t.askAI }}</span>
+        <span v-if="hasSelection" class="xpe-ai-menu__badge">{{ t.selection }}</span>
+        <button type="button" class="xpe-ai-menu__icon-btn"   :aria-label="t.close" @click="emit('close')">
           <X />
         </button>
       </div>
@@ -323,14 +327,14 @@ function iconFor(id: string) {
               ref="inputRef"
               v-model="prompt"
               class="xpe-ai-menu__input"
-              :placeholder="hasSelection ? 'Edit selection with AI…' : 'Ask AI to write…'"
+              :placeholder="hasSelection ? t.editSelectionPlaceholder : t.writePlaceholder"
               @keydown="onInputKeyDown"
             />
             <button
               type="button"
               class="xpe-ai-menu__send"
               :disabled="!canSubmit"
-              aria-label="Send"
+              :aria-label="t.send"
               @click="submitCustom"
             >
               <ArrowUp />
@@ -342,7 +346,7 @@ function iconFor(id: string) {
               v-if="visibleCommands.length"
               class="xpe-ai-menu__cmds"
               role="listbox"
-              aria-label="AI commands"
+              :aria-label="t.commands"
             >
               <button
                 v-for="(cmd, i) in visibleCommands"
@@ -365,7 +369,7 @@ function iconFor(id: string) {
               </button>
             </div>
             <p v-else class="xpe-ai-menu__hint">
-              No matching commands — press Enter to run your prompt.
+              {{ t.noMatching }}
             </p>
           </template>
         </template>
@@ -374,13 +378,13 @@ function iconFor(id: string) {
           <div class="xpe-ai-menu__stream">
             <div class="xpe-ai-menu__stream-meta">
               <Loader2 class="xpe-ai-menu__spin" />
-              Writing…
+              {{ t.writing }}
             </div>
-            {{ streamText || 'Thinking…' }}
+            {{ streamText || t.thinking }}
           </div>
           <div class="xpe-ai-menu__actions">
             <button type="button" class="xpe-ai-menu__btn xpe-ai-menu__btn--danger" @click="stop">
-              Stop
+              {{ t.stop }}
             </button>
           </div>
         </template>
@@ -393,10 +397,10 @@ function iconFor(id: string) {
               class="xpe-ai-menu__btn xpe-ai-menu__btn--primary"
               @click="() => void run(activeCommand, prompt)"
             >
-              Retry
+              {{ t.retry }}
             </button>
             <button type="button" class="xpe-ai-menu__btn xpe-ai-menu__btn--ghost" @click="emit('close')">
-              Cancel
+              {{ t.cancel }}
             </button>
           </div>
         </template>
@@ -405,10 +409,10 @@ function iconFor(id: string) {
           <div class="xpe-ai-menu__preview">{{ previewText }}</div>
           <div class="xpe-ai-menu__actions">
             <button type="button" class="xpe-ai-menu__btn xpe-ai-menu__btn--primary" @click="accept">
-              <Check /> Accept
+              <Check /> {{ t.accept }}
             </button>
             <button type="button" class="xpe-ai-menu__btn xpe-ai-menu__btn--ghost" @click="reject">
-              Discard
+              {{ t.discard }}
             </button>
           </div>
         </template>

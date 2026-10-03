@@ -30,6 +30,8 @@ import {
   Files,
 } from 'lucide-react'
 import type { BlockType, MarkName } from '@xproeditor/core'
+import { useEditorDictionary } from '../i18n'
+import { modKeyLabel, withShortcut } from '../utils/shortcut'
 import { Button, Input } from '../ui'
 import { ToolbarColorPanel } from './toolbar'
 
@@ -55,6 +57,8 @@ export interface BubbleToolbarProps {
   onCopy?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
+  /** Increments on Mod+K — opens the link editor. */
+  linkRequest?: number
 }
 
 const TURN_INTO: Array<{ type: BlockType; label: string; icon: typeof Type }> = [
@@ -117,9 +121,22 @@ export function BubbleToolbar({
   onCopy,
   onDuplicate,
   onDelete,
+  linkRequest = 0,
 }: BubbleToolbarProps) {
   const [panel, setPanel] = useState<Panel>('none')
   const [linkInput, setLinkInput] = useState('')
+  const dict = useEditorDictionary()
+  const t = dict.toolbar
+  const handledLinkRequest = useRef(linkRequest)
+
+  useEffect(() => {
+    if (linkRequest === handledLinkRequest.current) return
+    handledLinkRequest.current = linkRequest
+    setLinkInput(currentLink ?? '')
+    setPanel('link')
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-xpe-link-input]')?.focus())
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to new Mod+K presses
+  }, [linkRequest])
   const [coords, setCoords] = useState({ left: position.x, top: position.y })
   const toolbarRef = useRef<HTMLDivElement | null>(null)
   const lastPositionKey = useRef<string | null>(null)
@@ -156,15 +173,18 @@ export function BubbleToolbar({
     setPanel('none')
   }
 
-  const turnIntoEntry = TURN_INTO.find((t) => t.type === blockType)
-  const turnIntoLabel = mixedTypes ? 'Turn into' : (turnIntoEntry?.label ?? 'Text')
+  const turnIntoEntry = TURN_INTO.find((entry) => entry.type === blockType)
+  const turnIntoLabel = mixedTypes
+    ? t.turnInto
+    : (dict.blockTypes[turnIntoEntry?.type ?? 'paragraph'] ?? dict.blockTypes.paragraph)
   const TurnIntoIcon = turnIntoEntry?.icon ?? Type
 
   const linkPanel = panel === 'link' && (
     <div className="xpe-float xpe-float--panel mt-1.5 flex items-center gap-1.5">
       <Input
         className="h-8 w-52 text-xs"
-        placeholder="https://..."
+        placeholder={t.linkPlaceholder}
+        data-xpe-link-input=""
         value={linkInput}
         onMouseDown={(e) => e.stopPropagation()}
         onChange={(e) => setLinkInput(e.target.value)}
@@ -177,7 +197,7 @@ export function BubbleToolbar({
         }}
       />
       <Button size="sm" className="h-8 px-3 text-xs" onClick={applyLink}>
-        Set
+        {dict.common.set}
       </Button>
       {currentLink && (
         <Button
@@ -189,7 +209,7 @@ export function BubbleToolbar({
             setPanel('none')
           }}
         >
-          Remove
+          {dict.common.remove}
         </Button>
       )}
     </div>
@@ -207,23 +227,23 @@ export function BubbleToolbar({
 
   const turnIntoPanel = panel === 'turninto' && (
     <div className="xpe-float xpe-menu-list mt-1.5 w-52 py-1.5">
-      {TURN_INTO.map((t) => {
-        const Icon = t.icon
-        const selected = !mixedTypes && t.type === blockType
+      {TURN_INTO.map((entry) => {
+        const Icon = entry.icon
+        const selected = !mixedTypes && entry.type === blockType
         return (
           <button
-            key={t.type}
+            key={entry.type}
             type="button"
             className={`xpe-menu-item${selected ? ' xpe-menu-item--selected' : ''}`}
             onClick={() => {
-              onTurnInto(t.type)
+              onTurnInto(entry.type)
               setPanel('none')
             }}
           >
             <span className="xpe-menu-item__icon">
               <Icon />
             </span>
-            <span className="xpe-menu-item__label">{t.label}</span>
+            <span className="xpe-menu-item__label">{dict.blockTypes[entry.type]}</span>
             {selected && <Check className="xpe-menu-item__meta" />}
           </button>
         )
@@ -268,7 +288,7 @@ export function BubbleToolbar({
             <button
               type="button"
               className={`ebt-btn${panel === 'color' || currentColor || currentHighlight ? ' ebt-active' : ''}`}
-              title="Color"
+              title={t.color} aria-label={t.color}
               onClick={() => setPanel((p) => (p === 'color' ? 'none' : 'color'))}
             >
               <Paintbrush className="size-3.5" />
@@ -276,7 +296,7 @@ export function BubbleToolbar({
             <button
               type="button"
               className={`ebt-btn${activeMarks.bold ? ' ebt-active' : ''}`}
-              title="Bold (Ctrl+B)"
+              title={withShortcut(t.bold, 'B')} aria-label={t.bold}
               onClick={() => onMark('bold', !activeMarks.bold)}
             >
               <Bold className="size-3.5" />
@@ -284,7 +304,7 @@ export function BubbleToolbar({
             <button
               type="button"
               className={`ebt-btn${activeMarks.italic ? ' ebt-active' : ''}`}
-              title="Italic (Ctrl+I)"
+              title={withShortcut(t.italic, 'I')} aria-label={t.italic}
               onClick={() => onMark('italic', !activeMarks.italic)}
             >
               <Italic className="size-3.5" />
@@ -292,7 +312,7 @@ export function BubbleToolbar({
             <button
               type="button"
               className={`ebt-btn${activeMarks.underline ? ' ebt-active' : ''}`}
-              title="Underline (Ctrl+U)"
+              title={withShortcut(t.underline, 'U')} aria-label={t.underline}
               onClick={() => onMark('underline', !activeMarks.underline)}
             >
               <Underline className="size-3.5" />
@@ -301,7 +321,7 @@ export function BubbleToolbar({
               <button
                 type="button"
                 className="ebt-btn"
-                title="Clear formatting"
+                title={t.clearFormatting} aria-label={t.clearFormatting}
                 onClick={onClearFormatting}
               >
                 <RemoveFormatting className="size-3.5" />
@@ -313,7 +333,7 @@ export function BubbleToolbar({
             <button
               type="button"
               className={`ebt-btn${panel === 'link' || currentLink ? ' ebt-active' : ''}`}
-              title="Link"
+              title={withShortcut(t.link, 'K')} aria-label={t.link}
               onClick={openLinkPanel}
             >
               <Link2 className="size-3.5" />
@@ -321,7 +341,7 @@ export function BubbleToolbar({
             <button
               type="button"
               className={`ebt-btn${activeMarks.strikethrough ? ' ebt-active' : ''}`}
-              title="Strikethrough"
+              title={withShortcut(t.strikethrough, 'Shift+S')} aria-label={t.strikethrough}
               onClick={() => onMark('strikethrough', !activeMarks.strikethrough)}
             >
               <Strikethrough className="size-3.5" />
@@ -329,7 +349,7 @@ export function BubbleToolbar({
             <button
               type="button"
               className={`ebt-btn${activeMarks.code ? ' ebt-active' : ''}`}
-              title="Inline code (Ctrl+E)"
+              title={withShortcut(t.code, 'E')} aria-label={t.code}
               onClick={() => onMark('code', !activeMarks.code)}
             >
               <Code className="size-3.5" />
@@ -345,8 +365,8 @@ export function BubbleToolbar({
                     <span className="xpe-menu-item__icon">
                       <Copy />
                     </span>
-                    <span className="xpe-menu-item__label">Copy</span>
-                    <span className="xpe-menu-item__kbd">⌘C</span>
+                    <span className="xpe-menu-item__label">{t.copy}</span>
+                    <span className="xpe-menu-item__kbd">{modKeyLabel()}C</span>
                   </button>
                 )}
                 {onDuplicate && (
@@ -354,8 +374,8 @@ export function BubbleToolbar({
                     <span className="xpe-menu-item__icon">
                       <Files />
                     </span>
-                    <span className="xpe-menu-item__label">Duplicate</span>
-                    <span className="xpe-menu-item__kbd">⌘D</span>
+                    <span className="xpe-menu-item__label">{t.duplicate}</span>
+                    <span className="xpe-menu-item__kbd">{modKeyLabel()}D</span>
                   </button>
                 )}
                 {onDelete && (
@@ -367,7 +387,7 @@ export function BubbleToolbar({
                     <span className="xpe-menu-item__icon">
                       <Trash2 />
                     </span>
-                    <span className="xpe-menu-item__label">Delete</span>
+                    <span className="xpe-menu-item__label">{t.delete}</span>
                     <span className="xpe-menu-item__kbd">⌫</span>
                   </button>
                 )}
@@ -382,7 +402,7 @@ export function BubbleToolbar({
                 <span className="xpe-menu-item__icon">
                   <Sparkles />
                 </span>
-                <span className="xpe-menu-item__label">Ask AI</span>
+                <span className="xpe-menu-item__label">{t.askAI}</span>
               </button>
             </>
           )}
@@ -426,35 +446,35 @@ export function BubbleToolbar({
 
         <button
           className={`ebt-btn${activeMarks.bold ? ' ebt-active' : ''}`}
-          title="Bold (Ctrl+B)"
+          title={withShortcut(t.bold, 'B')} aria-label={t.bold}
           onClick={() => onMark('bold', !activeMarks.bold)}
         >
           <Bold className="size-3.5" />
         </button>
         <button
           className={`ebt-btn${activeMarks.italic ? ' ebt-active' : ''}`}
-          title="Italic (Ctrl+I)"
+          title={withShortcut(t.italic, 'I')} aria-label={t.italic}
           onClick={() => onMark('italic', !activeMarks.italic)}
         >
           <Italic className="size-3.5" />
         </button>
         <button
           className={`ebt-btn${activeMarks.underline ? ' ebt-active' : ''}`}
-          title="Underline (Ctrl+U)"
+          title={withShortcut(t.underline, 'U')} aria-label={t.underline}
           onClick={() => onMark('underline', !activeMarks.underline)}
         >
           <Underline className="size-3.5" />
         </button>
         <button
           className={`ebt-btn${activeMarks.strikethrough ? ' ebt-active' : ''}`}
-          title="Strikethrough"
+          title={withShortcut(t.strikethrough, 'Shift+S')} aria-label={t.strikethrough}
           onClick={() => onMark('strikethrough', !activeMarks.strikethrough)}
         >
           <Strikethrough className="size-3.5" />
         </button>
         <button
           className={`ebt-btn${activeMarks.code ? ' ebt-active' : ''}`}
-          title="Inline code (Ctrl+E)"
+          title={withShortcut(t.code, 'E')} aria-label={t.code}
           onClick={() => onMark('code', !activeMarks.code)}
         >
           <Code className="size-3.5" />
@@ -464,14 +484,14 @@ export function BubbleToolbar({
 
         <button
           className={`ebt-btn${panel === 'link' || currentLink ? ' ebt-active' : ''}`}
-          title="Link"
+          title={withShortcut(t.link, 'K')} aria-label={t.link}
           onClick={openLinkPanel}
         >
           <Link2 className="size-3.5" />
         </button>
         <button
           className={`ebt-btn${panel === 'color' || currentColor || currentHighlight ? ' ebt-active' : ''}`}
-          title="Color"
+          title={t.color} aria-label={t.color}
           onClick={() => setPanel((p) => (p === 'color' ? 'none' : 'color'))}
         >
           <Paintbrush className="size-3.5" />
@@ -479,7 +499,7 @@ export function BubbleToolbar({
         {onClearFormatting && (
           <button
             className="ebt-btn"
-            title="Clear formatting"
+            title={t.clearFormatting} aria-label={t.clearFormatting}
             onClick={onClearFormatting}
           >
             <RemoveFormatting className="size-3.5" />
@@ -489,7 +509,7 @@ export function BubbleToolbar({
         {aiEnabled && onAskAI && (
           <>
             <div className="mx-0.5 h-5 w-px bg-[var(--xpe-border)]" />
-            <button className="ebt-btn" title="Ask AI" onClick={onAskAI}>
+            <button className="ebt-btn" title={t.askAI} aria-label={t.askAI} onClick={onAskAI}>
               <Sparkles className="size-3.5" />
             </button>
           </>

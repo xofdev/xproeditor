@@ -35,7 +35,13 @@ type BlockType =
   | 'toggle_heading_1' | 'toggle_heading_2' | 'toggle_heading_3'
   | 'quote' | 'callout' | 'code' | 'divider'
   | 'image' | 'video' | 'audio' | 'file' | 'table' | 'button' | 'bookmark'
+  | 'embed' | 'table_of_contents'
 ```
+
+`BLOCK_TYPES` (from `@xproeditor/core`) lists every type in slash-menu order.
+Documents that contain a type this version doesn't know (e.g. written by a
+newer version) load with that block degraded to a paragraph that keeps its
+text — see [security.md](security.md).
 
 ## `InlineSpan` (rich text)
 
@@ -67,13 +73,14 @@ interface BlockProps {
   language?: string         // code
   code?: string             // code
   wrap?: boolean            // code: soft-wrap long lines
-  url?: string              // image/video/audio/file/button/bookmark
-  caption?: string          // image/video/audio
+  url?: string              // image/video/audio/file/button/bookmark/embed
+  caption?: string          // image/video/audio/embed
   name?: string              // audio/file: original file name
   size?: number              // audio/file: size in bytes
   mime?: string              // audio/file: MIME type
   width?: number             // image/video width percent (10–100)
-  provider?: 'file' | 'youtube' | 'vimeo' // video
+  provider?: 'file' | 'youtube' | 'vimeo' | string // video source / embed provider id
+  height?: number            // embed: frame height in px (80–1200)
   icon?: string              // callout
   color?: string             // callout background
   table?: TableData          // table
@@ -87,6 +94,16 @@ interface BlockProps {
   align?: 'left' | 'center' | 'right'
 }
 ```
+
+## Embeds and table of contents
+
+- `embed` stores only the URL the user pasted (`props.url`) plus an optional
+  `height`. The iframe `src` is re-derived from that URL at render time with
+  `resolveEmbed(url)`, which only accepts the providers in `EMBED_PROVIDERS`
+  (YouTube, Vimeo, Loom, Figma, CodePen, CodeSandbox, Spotify, SoundCloud,
+  Google Maps). Anything else renders nothing.
+- `table_of_contents` has no props: it lists the document's headings
+  (`extractHeadings(blocks)`) at render time, so it never goes stale.
 
 ## Tables
 

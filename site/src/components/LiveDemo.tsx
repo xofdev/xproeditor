@@ -8,6 +8,7 @@ import {
 } from '@xproeditor/react'
 
 type ToolbarMode = 'fixed' | 'floating' | 'both'
+type DemoLocale = 'en' | 'fa'
 
 /** Demo-only mock transport — replace with your LLM backend in production. */
 const demoAITransport: AITransport = async function* (request) {
@@ -36,6 +37,7 @@ const demoAITransport: AITransport = async function* (request) {
 function seed(): Block[] {
   return [
     createBlock('heading_1', { content: [{ text: 'Tour the editor' }] }),
+    createBlock('table_of_contents'),
     createBlock('paragraph', {
       content: [
         { text: 'This is the real ' },
@@ -50,6 +52,32 @@ function seed(): Block[] {
         },
       ],
       props: { icon: '✨' },
+    }),
+    createBlock('heading_2', { content: [{ text: 'Type like Markdown' }] }),
+    createBlock('paragraph', {
+      content: [
+        { text: 'Type ' },
+        { text: '**bold**', marks: { code: true } },
+        { text: ', ' },
+        { text: '*italic*', marks: { code: true } },
+        { text: ', ' },
+        { text: '`code`', marks: { code: true } },
+        { text: ' or ' },
+        { text: '~~strike~~', marks: { code: true } },
+        { text: ' inline, and ' },
+        { text: '# ', marks: { code: true } },
+        { text: ', ' },
+        { text: '- ', marks: { code: true } },
+        { text: ', ' },
+        { text: '1. ', marks: { code: true } },
+        { text: ', ' },
+        { text: '[x] ', marks: { code: true } },
+        { text: ' at the start of a line. ' },
+        { text: '⌘/Ctrl+Alt+1', marks: { code: true } },
+        { text: ' turns a block into a heading; ' },
+        { text: '⌘/Ctrl+Shift+↑', marks: { code: true } },
+        { text: ' moves it.' },
+      ],
     }),
     createBlock('heading_2', { content: [{ text: 'Lists, toggles & tasks' }] }),
     createBlock('bulleted_list_item', { content: [{ text: 'Headings, quotes, callouts, bookmarks' }] }),
@@ -103,6 +131,10 @@ function seed(): Block[] {
         favicon: 'https://www.google.com/s2/favicons?domain=github.com&sz=64',
       },
     }),
+    createBlock('heading_2', { content: [{ text: 'Embeds' }] }),
+    createBlock('embed', {
+      props: { url: 'https://codepen.io/team/codepen/pen/PNaGbb', height: 300 },
+    }),
     createBlock('quote', {
       content: [
         {
@@ -126,6 +158,34 @@ function seed(): Block[] {
   ]
 }
 
+function seedFa(): Block[] {
+  return [
+    createBlock('heading_1', { content: [{ text: 'یک ویرایشگر کامل، به فارسی' }] }),
+    createBlock('table_of_contents'),
+    createBlock('paragraph', {
+      content: [
+        { text: 'رابط کاربری با ' },
+        { text: 'locale="fa"', marks: { code: true } },
+        { text: ' کاملاً فارسی و راست‌به‌چپ می‌شود. ' },
+        { text: '/', marks: { code: true } },
+        { text: ' را بزنید تا منوی بلوک‌ها باز شود.' },
+      ],
+    }),
+    createBlock('heading_2', { content: [{ text: 'میانبرها' }] }),
+    createBlock('bulleted_list_item', {
+      content: [{ text: 'تایپ ** دور یک کلمه آن را پررنگ می‌کند؛ ` آن را به کد تبدیل می‌کند.' }],
+    }),
+    createBlock('to_do', { content: [{ text: 'نوشتن [x] در ابتدای خط یک کار انجام‌شده می‌سازد' }], props: { checked: true } }),
+    createBlock('heading_2', { content: [{ text: 'نقل‌قول و نکته' }] }),
+    createBlock('quote', { content: [{ text: 'جهت هر بلوک از متن آن تشخیص داده می‌شود؛ English stays left-to-right.' }] }),
+    createBlock('callout', {
+      content: [{ text: 'شمارش کلمات، زمان مطالعه و خروجی Markdown/HTML از طریق API در دسترس است.' }],
+      props: { icon: '💡' },
+    }),
+    createBlock('paragraph', { content: [] }),
+  ]
+}
+
 const MODES: { value: ToolbarMode; label: string }[] = [
   { value: 'floating', label: 'Floating' },
   { value: 'fixed', label: 'Fixed toolbar' },
@@ -141,6 +201,9 @@ const TRY_TIPS = [
   { label: 'Code chrome', detail: 'Change language, toggle wrap, or copy' },
   { label: 'Bookmark', detail: 'Click the bookmark card or insert with /bookmark' },
   { label: 'Markdown', detail: 'Copy the fenced sample and paste below' },
+  { label: 'Shortcuts', detail: 'Type **bold** or `code`, or press ⌘/Ctrl+Alt+1 for a heading' },
+  { label: 'Embed', detail: 'Insert /embed and paste a YouTube, Figma, CodePen or Loom link' },
+  { label: 'فارسی', detail: 'Switch the language to Persian — the whole UI becomes RTL' },
 ]
 
 type EditorTheme = 'bento' | 'default'
@@ -164,7 +227,8 @@ export function LiveDemo() {
   const [editorTheme, setEditorTheme] = useState<EditorTheme>('bento')
   const [resetKey, setResetKey] = useState(0)
   const [activeTip, setActiveTip] = useState(0)
-  const initialBlocks = useMemo(() => seed(), [resetKey])
+  const [locale, setLocale] = useState<DemoLocale>('en')
+  const initialBlocks = useMemo(() => (locale === 'fa' ? seedFa() : seed()), [resetKey, locale])
   const ai = useMemo(() => ({ transport: demoAITransport }), [])
 
   return (
@@ -230,6 +294,20 @@ export function LiveDemo() {
                   </button>
                 ))}
               </div>
+              <div className="mode-switch" role="tablist" aria-label="Editor language">
+                {(['en', 'fa'] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    role="tab"
+                    aria-selected={locale === l}
+                    className={locale === l ? 'active' : ''}
+                    onClick={() => setLocale(l)}
+                  >
+                    {l === 'en' ? 'English' : 'فارسی'}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 className="nav-link"
@@ -242,10 +320,11 @@ export function LiveDemo() {
           </div>
           <div className={`demo-body${editorTheme === 'bento' ? ' editor-theme-bento' : ''}`}>
             <ProEditor
-              key={`${mode}-${resetKey}`}
+              key={`${mode}-${resetKey}-${locale}`}
               defaultValue={initialBlocks}
               toolbar={mode}
-              editorDir="ltr"
+              locale={locale}
+              editorDir={locale === 'fa' ? 'rtl' : 'ltr'}
               ai={ai}
               fetchBookmarkMeta={fetchBookmarkMeta}
             />

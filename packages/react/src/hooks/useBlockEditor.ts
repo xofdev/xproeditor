@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ALL_EMOJIS } from '../ui/emojiData'
+import { useEditorDictionary } from '../i18n'
 import {
+  applyInlineMarkdownShortcut,
+  blocksToHtmlContent,
+  blocksToMarkdownLossy,
+  blocksToPlainText,
+  extractHeadings,
+  getBlockSubtreeLength,
+  getDocumentStats,
+  sanitizeBlocks,
   applyMarkToRange,
   applyMarkToTextRange,
   blocksToClipboardPayload,
@@ -12,6 +21,7 @@ import {
   createBlock,
   deleteRangeInSpans,
   deleteTextRange,
+  exitMarkAfterShortcut,
   extractTextRangeAsBlocks,
   fileToObjectUrl,
   fullBlockTextRange,
@@ -29,6 +39,9 @@ import {
   isTextBlock,
   isTextRangeCollapsed,
   isToggleBlock,
+  matchBlockShortcut,
+  moveBlockSubtree,
+  resolveBlockKeyboardShortcut,
   resolveHistoryShortcut,
   resolveSelectAllShortcut,
   mediaPropsFromFile,
@@ -37,6 +50,8 @@ import {
   normalizeTableData,
   nextVisibleCellCoord,
   parseBlocksFromClipboardData,
+  pasteBlocksIntoTextBlock,
+  plainTextToBlocks,
   patchTableCell,
   patchTableCellsBackground,
   patchTableStyle,
@@ -55,10 +70,13 @@ import type {
   AICommand,
   AITransport,
   Block,
+  BlockKeyboardAction,
   BlockType,
+  DocHeading,
   FetchBookmarkMetaFn,
   InlineSpan,
   MarkName,
+  PasteFocus,
   TableCellAlign,
   TableCellCoord,
   TableStyle,
@@ -94,6 +112,14 @@ export interface UseBlockEditorOptions {
   }
   onChange?: (blocks: Block[]) => void
   onFormatState?: (state: FormatToolbarState | null) => void
+  /** Called when `upload` rejects for a pasted/dropped file (the file is skipped). */
+  onUploadError?: (error: unknown, file: File) => void
+  /** Placeholder shown in the focused empty paragraph. */
+  placeholder?: string
+  /** Browser spellcheck in text blocks (default `true`). */
+  spellCheck?: boolean
+  /** Focus the editor on mount (`true` = end of document). */
+  autofocus?: boolean | 'start' | 'end'
 }
 
 interface SlashState {
@@ -153,17 +179,6 @@ const TEXT_BLOCK_TYPES_FOR_ENTER = [
 const KEEP_TYPE_ON_ENTER = ['bulleted_list_item', 'numbered_list_item', 'to_do', 'quote']
 const BOOLEAN_MARKS: MarkName[] = ['bold', 'italic', 'underline', 'strikethrough', 'code']
 
-const MD_PATTERNS: Array<{ prefix: string; type: BlockType }> = [
-  { prefix: '### ', type: 'heading_3' },
-  { prefix: '## ', type: 'heading_2' },
-  { prefix: '# ', type: 'heading_1' },
-  { prefix: '- ', type: 'bulleted_list_item' },
-  { prefix: '* ', type: 'bulleted_list_item' },
-  { prefix: '1. ', type: 'numbered_list_item' },
-  { prefix: '[] ', type: 'to_do' },
-  { prefix: '[ ] ', type: 'to_do' },
-  { prefix: '> ', type: 'quote' },
-]
 
 /**
  * Framework-level state machine for the block editor: history, cross-block
@@ -184,10 +199,13 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     fetchBookmarkMeta,
     ai,
   } = options
+  const dict = useEditorDictionary()
   const onChangeRef = useRef(options.onChange)
   onChangeRef.current = options.onChange
   const onFormatStateRef = useRef(options.onFormatState)
   onFormatStateRef.current = options.onFormatState
+  const onUploadErrorRef = useRef(options.onUploadError)
+  onUploadErrorRef.current = options.onUploadError
 
   const blocksRef = useRef<Block[]>(
     options.defaultValue.length ? options.defaultValue : [makeBlock('paragraph')],
@@ -217,6 +235,8 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   } | null>(null)
   const [bubble, setBubble] = useState<BubbleState | null>(null)
   const [aiMenu, setAiMenu] = useState<{ position: { x: number; y: number } } | null>(null)
+  /** Bumped by Mod+K — toolbars open their link editor when it changes. */
+  const [linkRequest, setLinkRequest] = useState(0)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ id: string; position: 'before' | 'after' } | null>(
     null,
@@ -238,6 +258,8 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
    */
   const suppressBubbleClearRef = useRef(false)
   /** Last non-collapsed inline selection — fallback when native selection was stolen by a toolbar input. */
+  /** Mark to stop after an inline Markdown shortcut (see `handleInput`). */
+  const pendingMarkExitRef = useRef<{ blockId: string; offset: number; mark: MarkName } | null>(null)
   const savedInlineSelectionRef = useRef<{
     blockId: string
     start: number
@@ -409,12 +431,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   }
 
   function textHighlightForBlock(id: string): { start: number; end: number } | null {
-    if (!hasActiveManagedSelection() || !textRangeSelection) return null
-
-    const segments = getTextRangeSegments(textRangeSelection, blocksRef.current, visibleBlocks)
-    const segment = segments.find((s) => s.blockId === id)
-
-    return segment ? { start: segment.start, end: segment.end } : null
+    return highlightSegments?.get(id) ?? null
   }
 
   /** Non-text blocks (media/code/divider/table) highlighted inside a multi-block range. */
@@ -630,6 +647,36 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
   const numbering = useMemo(() => computeListNumbering(visibleBlocks), [visibleBlocks])
 
+  /** Headings for table-of-contents blocks; identity only changes when a heading changes. */
+  const tocHeadingsCache = useRef<{ key: string; value: DocHeading[] }>({ key: '', value: [] })
+  const tocHeadings = useMemo(() => {
+    const next = extractHeadings(blocksRef.current)
+    const key = JSON.stringify(next)
+    if (key !== tocHeadingsCache.current.key) tocHeadingsCache.current = { key, value: next }
+    return tocHeadingsCache.current.value
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version])
+
+  /** Scroll a block into view and put the caret in it (table of contents links). */
+  function navigateToBlock(id: string) {
+    const el = rootRef.current?.querySelector(`[data-block-id="${CSS.escape(id)}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    focusBlock(id, 'start')
+  }
+
+  /** Per-block highlight of the managed multi-block range — computed once per render, not once per block. */
+  const highlightSegments = useMemo(() => {
+    if (!managedTextSelection || !textRangeSelection) return null
+    if (isTextRangeCollapsed(textRangeSelection, visibleBlocks)) return null
+
+    const map = new Map<string, { start: number; end: number }>()
+    for (const segment of getTextRangeSegments(textRangeSelection, blocksRef.current, visibleBlocks)) {
+      map.set(segment.blockId, { start: segment.start, end: segment.end })
+    }
+    return map
+  }, [managedTextSelection, textRangeSelection, visibleBlocks])
+
   function visibleIndex(id: string): number {
     return visibleBlocks.findIndex((b) => b.id === id)
   }
@@ -759,7 +806,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     const removeEnd = state.index + 1 + state.query.length
     const spans = deleteRangeInSpans(block.content, state.index, removeEnd)
-    const isInsertType = ['divider', 'image', 'video', 'audio', 'file', 'table', 'code'].includes(item.type)
+    const isInsertType = ['divider', 'image', 'video', 'audio', 'file', 'table', 'code', 'bookmark', 'embed', 'table_of_contents'].includes(item.type)
 
     if (!isInsertType) {
       const defaults = makeBlockLocal(item.type)
@@ -849,11 +896,11 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   // ─── Markdown shortcuts ────────────────────────────────────────────────────
 
   function tryMarkdownShortcut(block: Block, spans: InlineSpan[], caret: number | null): boolean {
-    if (block.type !== 'paragraph' || caret === null) return false
+    if (caret === null) return false
 
     const text = spansToText(spans)
 
-    if (text === '```' && caret === 3) {
+    if (block.type === 'paragraph' && text === '```' && caret === 3) {
       const defaults = makeBlockLocal('code')
       block.type = 'code'
       block.content = []
@@ -863,7 +910,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       return true
     }
 
-    if (text === '---' && caret === 3) {
+    if (block.type === 'paragraph' && text === '---' && caret === 3) {
       block.type = 'divider'
       block.content = []
       const idx = blocksRef.current.indexOf(block)
@@ -874,14 +921,37 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       return true
     }
 
-    for (const { prefix, type } of MD_PATTERNS) {
-      if (caret === prefix.length && text.startsWith(prefix)) {
-        const defaults = makeBlockLocal(type)
-        block.type = type
-        block.content = deleteRangeInSpans(spans, 0, prefix.length)
-        block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+    // Block prefixes (`# `, `- `, `1. `, `[x] `, …) on paragraphs; `[ ] ` also
+    // upgrades a bullet to a to-do, so `- [ ] ` works in one go.
+    const match =
+      block.type === 'paragraph' || block.type === 'bulleted_list_item'
+        ? matchBlockShortcut(text, caret)
+        : null
+
+    if (match && (block.type === 'paragraph' || match.type === 'to_do')) {
+      const defaults = makeBlockLocal(match.type)
+      block.type = match.type
+      block.content = deleteRangeInSpans(spans, 0, match.prefixLength)
+      block.props = {
+        ...defaults.props,
+        ...match.props,
+        indent: block.props.indent,
+        dir: block.props.dir,
+      }
+      pushHistory(true)
+      focusBlock(block.id, 'start')
+      return true
+    }
+
+    // Inline marks: **bold**, *italic*, `code`, ~~strike~~ …
+    if (isTextBlock(block.type)) {
+      const inline = applyInlineMarkdownShortcut(spans, caret)
+
+      if (inline) {
+        block.content = inline.spans
+        pendingMarkExitRef.current = { blockId: block.id, offset: inline.caret, mark: inline.mark }
         pushHistory(true)
-        focusBlock(block.id, 'start')
+        focusBlock(block.id, inline.caret)
         return true
       }
     }
@@ -893,6 +963,21 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
   function handleInput(block: Block, spans: InlineSpan[], caret: number | null) {
     if (readonly) return
+
+    // Text typed right after an inline shortcut lands inside the formatted
+    // element; take the mark back off so formatting stops at the delimiter.
+    const pendingExit = pendingMarkExitRef.current
+    pendingMarkExitRef.current = null
+
+    if (
+      pendingExit &&
+      pendingExit.blockId === block.id &&
+      caret !== null &&
+      caret > pendingExit.offset &&
+      rangeHasMark(spans, pendingExit.offset, caret, pendingExit.mark)
+    ) {
+      spans = exitMarkAfterShortcut(spans, pendingExit.offset, caret, pendingExit.mark)
+    }
 
     block.content = spans
 
@@ -1088,19 +1173,39 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     return normalizeSpans([...before, ...inserted, ...after])
   }
 
-  /** Insert dropped/pasted files as media blocks (image/video/audio/file by MIME). */
+  /**
+   * Insert dropped/pasted files as media blocks (image/video/audio/file by MIME).
+   * Anchored on the block before the insertion point so edits made while an
+   * upload is in flight don't shift where the file lands; a failed upload is
+   * reported through `onUploadError` and skipped instead of aborting the rest.
+   */
   async function insertFileBlocks(files: File[], at: number) {
     const doUpload = upload ?? fileToObjectUrl
+    let afterId: string | null = blocksRef.current[at - 1]?.id ?? null
+    let inserted = false
 
-    for (const [i, file] of files.entries()) {
+    for (const file of files) {
+      let url: string
+
+      try {
+        url = await doUpload(file)
+      } catch (error) {
+        onUploadErrorRef.current?.(error, file)
+        continue
+      }
+
       const type = blockTypeForFile(file)
-      const url = await doUpload(file)
       const media = mediaPropsFromFile(file, url)
       const extra = type === 'video' ? { provider: 'file' as const } : {}
-      blocksRef.current.splice(at + i, 0, makeBlockLocal(type, { props: { ...media, ...extra } }))
+      const nb = makeBlockLocal(type, { props: { ...media, ...extra } })
+      const anchorIdx = afterId ? blocksRef.current.findIndex((b) => b.id === afterId) : -1
+      const insertAt = afterId && anchorIdx === -1 ? Math.min(at, blocksRef.current.length) : anchorIdx + 1
+      blocksRef.current.splice(insertAt, 0, nb)
+      afterId = nb.id
+      inserted = true
     }
 
-    pushHistory(true)
+    if (inserted) pushHistory(true)
   }
 
   async function handlePasted(
@@ -1116,12 +1221,6 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       return
     }
 
-    let content = block.content
-    if (payload.offsets.end > payload.offsets.start) {
-      content = deleteRangeInSpans(content, payload.offsets.start, payload.offsets.end)
-    }
-
-    const at = payload.offsets.start
     let pastedBlocks =
       payload.html && payload.html.includes('<') ? htmlToBlocks(payload.html) : []
 
@@ -1131,52 +1230,24 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     }
 
     if (pastedBlocks.length === 0) {
-      const text = payload.text
-      if (!text) return
-
-      const lines = text.split(/\r?\n/)
-
-      if (lines.length === 1 || !isTextBlock(block.type)) {
-        block.content = insertSpansAt(content, at, [{ text }])
-        pushHistory(true)
-        focusBlock(block.id, at + text.length)
-      } else {
-        block.content = insertSpansAt(content, at, [{ text: lines[0] }])
-        const newOnes = lines
-          .slice(1)
-          .map((line) => makeBlockLocal('paragraph', { content: line ? [{ text: line }] : [] }))
-        blocksRef.current.splice(idx + 1, 0, ...newOnes)
-        pushHistory(true)
-        const last = newOnes[newOnes.length - 1]
-        focusBlock(last.id, 'end')
-      }
-
-      return
+      if (!payload.text) return
+      pastedBlocks = plainTextToBlocks(payload.text, makeBlockLocal)
     }
 
-    const [first, ...others] = pastedBlocks
+    const focus = pasteBlocksIntoTextBlock(
+      blocksRef.current,
+      block.id,
+      payload.offsets,
+      pastedBlocks,
+      makeBlockLocal,
+    )
+    pushHistory(true)
+    if (focus) applyPasteFocus(focus)
+  }
 
-    if (first.type === 'paragraph' || spansToText(block.content).length > 0) {
-      if (isTextBlock(first.type)) {
-        block.content = insertSpansAt(content, at, first.content)
-      } else {
-        others.unshift(first)
-        block.content = content
-      }
-    } else {
-      others.unshift(first)
-      block.content = content
-    }
-
-    if (others.length > 0) {
-      blocksRef.current.splice(idx + 1, 0, ...others)
-      pushHistory(true)
-      const last = others[others.length - 1]
-      if (isTextBlock(last.type)) focusBlock(last.id, 'end')
-    } else {
-      pushHistory(true)
-      focusBlock(block.id, at + spansToText(first.content).length)
-    }
+  function applyPasteFocus(focus: PasteFocus) {
+    if (focus.offset === null) selectBlock(focus.blockId)
+    else focusBlock(focus.blockId, focus.offset)
   }
 
   // ─── Clipboard (multi-block copy / cut / paste) ──────────────────────────
@@ -1211,41 +1282,12 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     else selectBlock(last.id)
   }
 
-  function insertPastedInTextBlock(block: Block, pasted: Block[], offset: number) {
-    const idx = blocksRef.current.indexOf(block)
-    if (idx === -1) return
-
-    const [before, afterParts] = splitSpansAt(block.content, offset)
-    const first = pasted[0]
-    const rest = pasted.slice(1)
-    if (!first) return
-
-    if (isTextBlock(first.type)) {
-      block.content = normalizeSpans([...before, ...first.content])
-      const toInsert = [...rest]
-
-      if (spansToText(afterParts).length > 0) {
-        if (rest.length > 0) {
-          const last = rest[rest.length - 1]
-          if (isTextBlock(last.type)) {
-            last.content = normalizeSpans([...last.content, ...afterParts])
-          } else {
-            toInsert.push(makeBlockLocal('paragraph', { content: afterParts }))
-          }
-        } else {
-          block.content = normalizeSpans([...block.content, ...afterParts])
-        }
-      }
-
-      if (toInsert.length > 0) blocksRef.current.splice(idx + 1, 0, ...toInsert)
-    } else {
-      block.content = before
-      const trailing =
-        spansToText(afterParts).length > 0
-          ? [makeBlockLocal('paragraph', { content: afterParts })]
-          : []
-      blocksRef.current.splice(idx + 1, 0, ...pasted, ...trailing)
-    }
+  function insertPastedInTextBlock(
+    block: Block,
+    pasted: Block[],
+    range: { start: number; end: number },
+  ): PasteFocus | null {
+    return pasteBlocksIntoTextBlock(blocksRef.current, block.id, range, pasted, makeBlockLocal)
   }
 
   function insertBlocksFromClipboard(pasted: Block[]) {
@@ -1261,9 +1303,10 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
         const block = byId(deleteResult.focusBlockId)
 
         if (block && isTextBlock(block.type)) {
-          insertPastedInTextBlock(block, pasted, deleteResult.focusOffset)
+          const at = deleteResult.focusOffset
+          const focus = insertPastedInTextBlock(block, pasted, { start: at, end: at })
           pushHistory(true)
-          focusAfterPaste(pasted)
+          if (focus) applyPasteFocus(focus)
           return
         }
 
@@ -1282,17 +1325,9 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
       if (block && isTextBlock(block.type)) {
         const offsets = itemRefs.current.get(block.id)?.getSelection() ?? { start: 0, end: 0 }
-        let offset = offsets.start
-
-        if (offsets.end > offsets.start) {
-          block.content = deleteRangeInSpans(block.content, offsets.start, offsets.end)
-        } else {
-          offset = offsets.start
-        }
-
-        insertPastedInTextBlock(block, pasted, offset)
+        const focus = insertPastedInTextBlock(block, pasted, offsets)
         pushHistory(true)
-        focusAfterPaste(pasted)
+        if (focus) applyPasteFocus(focus)
         return
       }
 
@@ -2457,8 +2492,10 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   }, [version, bubble, textRangeSelection, focusedBlockId, managedTextSelection])
 
   useEffect(() => {
-    onFormatStateRef.current?.(formatToolbarState)
-  }, [formatToolbarState])
+    onFormatStateRef.current?.(
+      formatToolbarState && linkRequest ? { ...formatToolbarState, linkRequest } : formatToolbarState,
+    )
+  }, [formatToolbarState, linkRequest])
 
   // ─── Drag & drop ───────────────────────────────────────────────────────────
 
@@ -2705,6 +2742,66 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     if (block) selectActiveBlockForSelectAll(block)
   }
 
+  /** Turn a text block into `type` keeping the caret (Mod+Alt+1 …); same type again reverts to text. */
+  function turnIntoKeepingCaret(block: Block, type: BlockType) {
+    if (!isTextBlock(block.type) || block.type === 'button') return false
+
+    const sel = itemRefs.current.get(block.id)?.getSelection()
+    const target: BlockType = block.type === type && type !== 'paragraph' ? 'paragraph' : type
+    const defaults = makeBlockLocal(target)
+    block.type = target
+    block.props = {
+      ...defaults.props,
+      indent: block.props.indent,
+      dir: block.props.dir,
+      align: block.props.align,
+    }
+    pushHistory(true)
+    focusBlock(block.id, sel?.start ?? 'end')
+    return true
+  }
+
+  function runBlockKeyboardAction(block: Block, action: BlockKeyboardAction, target: HTMLElement): boolean {
+    switch (action.kind) {
+      case 'turn-into':
+        return turnIntoKeepingCaret(block, action.type)
+      case 'move': {
+        const sel = itemRefs.current.get(block.id)?.getSelection()
+        if (!moveBlockSubtree(blocksRef.current, block.id, action.direction)) return true
+        pushHistory(true)
+        if (focusedBlockId === block.id && (isTextBlock(block.type) || block.type === 'code'))
+          focusBlock(block.id, sel?.start ?? 'end')
+        else selectBlock(block.id)
+        return true
+      }
+      case 'duplicate':
+        duplicateBlock(block)
+        return true
+      case 'toggle':
+        // Mod+Enter inside a code block keeps its own meaning (exit the block).
+        if (target.closest('textarea')) return false
+        if (block.type === 'to_do') {
+          block.props.checked = !block.props.checked
+          pushHistory(true)
+          return true
+        }
+        if (isToggleBlock(block.type)) {
+          block.props.collapsed = !block.props.collapsed
+          pushHistory(true)
+          return true
+        }
+        return false
+      case 'link': {
+        const sel = window.getSelection()
+        if (!sel || sel.isCollapsed) return false
+        setLinkRequest((n) => n + 1)
+        return true
+      }
+      default:
+        return false
+    }
+  }
+
   function onKeydownCapture(e: React.KeyboardEvent) {
     if (readonly) return
 
@@ -2807,6 +2904,28 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
         e.stopPropagation()
         if (historyAction === 'redo') redo()
         else undo()
+        return
+      }
+    }
+
+    // Block shortcuts (turn into, move, duplicate, toggle, link) work from
+    // inside a text block or on a selected block.
+    const blockAction = resolveBlockKeyboardShortcut({
+      key: e.key,
+      code: e.code,
+      ctrlKey: e.ctrlKey,
+      metaKey: e.metaKey,
+      altKey: e.altKey,
+      shiftKey: e.shiftKey,
+    })
+
+    if (blockAction && !hasActiveManagedSelection() && rootRef.current?.contains(e.target as Node)) {
+      const targetId = focusedBlockId ?? selectedBlockId
+      const targetBlock = targetId ? byId(targetId) : undefined
+
+      if (targetBlock && runBlockKeyboardAction(targetBlock, blockAction, e.target as HTMLElement)) {
+        e.preventDefault()
+        e.stopPropagation()
         return
       }
     }
@@ -3028,9 +3147,9 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
   function placeholderFor(block: Block): string | undefined {
     if (block.type !== 'paragraph') return undefined
-    if (focusedBlockId === block.id) return "Type '/' for commands..."
+    if (focusedBlockId === block.id) return options.placeholder ?? dict.placeholders.focused
     if (blocksRef.current.length === 1 && spansToText(block.content) === '') {
-      return '+ Start writing or type / for plugins'
+      return dict.placeholders.emptyDocument
     }
     return undefined
   }
@@ -3078,6 +3197,136 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     }
   })
 
+  // ─── Public document API (exposed on the component ref) ───────────────────
+
+  /** Deep copy of the current document. */
+  function getBlocks(): Block[] {
+    return blocksRef.current.map((b) => cloneBlock(b, false))
+  }
+
+  function resetTransientState() {
+    clearTextRangeSelection()
+    setSelectedBlockId(null)
+    setFocusedBlockId(null)
+    setSlashState(null)
+    setEmojiTriggerState(null)
+    setBubble(null)
+  }
+
+  /**
+   * Replace the whole document. `history: 'reset'` (for loading a different
+   * document) clears undo history and does not fire `onChange`; the default
+   * `'push'` records an undo step and fires `onChange`.
+   */
+  function setBlocks(next: Block[], opts: { history?: 'push' | 'reset' } = {}) {
+    const clean = sanitizeBlocks(next)
+    blocksRef.current = clean.length ? clean : [makeBlockLocal('paragraph')]
+    resetTransientState()
+
+    // A read-only viewer still loads content; it just has no history.
+    if (opts.history === 'reset' || readonly) {
+      resetHistory()
+      rerender()
+    } else {
+      pushHistory(true)
+    }
+  }
+
+  /**
+   * Insert blocks after/before a block (default: after the focused or
+   * selected block, else at the end). Returns the inserted block ids.
+   */
+  function insertBlocks(input: Block[], position: { after?: string; before?: string } = {}): string[] {
+    if (readonly) return []
+
+    const clean = sanitizeBlocks(input).map((b) => cloneBlock(b, true))
+    if (clean.length === 0) return []
+
+    let at = blocksRef.current.length
+    const anchorId = position.after ?? position.before ?? focusedBlockId ?? selectedBlockId
+
+    if (anchorId) {
+      const idx = blocksRef.current.findIndex((b) => b.id === anchorId)
+      if (idx !== -1) at = position.before ? idx : idx + getBlockSubtreeLength(blocksRef.current, idx)
+    }
+
+    blocksRef.current.splice(at, 0, ...clean)
+    pushHistory(true)
+    return clean.map((b) => b.id)
+  }
+
+  /** Patch one block: change its type, replace its content, and/or merge props. */
+  function updateBlock(
+    id: string,
+    patch: { type?: BlockType; content?: InlineSpan[]; props?: Partial<Block['props']> },
+  ): boolean {
+    if (readonly) return false
+
+    const block = byId(id)
+    if (!block) return false
+
+    const [clean] = sanitizeBlocks([
+      {
+        ...block,
+        type: patch.type ?? block.type,
+        content: patch.content ?? block.content,
+        props: { ...block.props, ...(patch.props ?? {}) },
+      },
+    ])
+
+    block.type = clean.type
+    block.content = clean.content
+    block.props = clean.props
+    pushHistory(true)
+    return true
+  }
+
+  /** Remove blocks by id (toggle children go with their toggle). */
+  function removeBlocks(ids: string[]) {
+    if (readonly || ids.length === 0) return
+
+    const remove = new Set(ids)
+
+    // A removed toggle takes its (possibly hidden) children with it.
+    blocksRef.current.forEach((b, idx) => {
+      if (remove.has(b.id) && isToggleBlock(b.type)) {
+        const len = getToggleSubtreeLength(blocksRef.current, idx)
+        blocksRef.current.slice(idx, idx + len).forEach((child) => remove.add(child.id))
+      }
+    })
+
+    blocksRef.current = blocksRef.current.filter((b) => !remove.has(b.id))
+    ensureNotEmpty()
+    resetTransientState()
+    pushHistory(true)
+  }
+
+  /** Focus the editor: `'start'`, `'end'`, or a block (optionally at a text offset). */
+  function focus(target: 'start' | 'end' | { blockId: string; offset?: number } = 'end') {
+    if (target === 'start') {
+      const first = visibleBlocks[0]
+      if (first) focusBlock(first.id, 'start')
+      return
+    }
+
+    if (target === 'end') {
+      const last = visibleBlocks[visibleBlocks.length - 1]
+      if (last) focusBlock(last.id, 'end')
+      return
+    }
+
+    focusBlock(target.blockId, target.offset ?? 'end')
+  }
+
+  const autofocusDone = useRef(false)
+
+  useEffect(() => {
+    if (autofocusDone.current || !options.autofocus || readonly) return
+    autofocusDone.current = true
+    focus(options.autofocus === 'start' ? 'start' : 'end')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, [])
+
   return {
     rootRef,
     blocks: blocksRef.current,
@@ -3101,11 +3350,15 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     pickMedia,
     fetchBookmarkMeta,
     editorDir,
+    spellCheck: options.spellCheck ?? true,
+    tocHeadings,
+    navigateToBlock,
     setItemRef,
     textHighlightForBlock,
     isBlockChromeSelected,
     placeholderFor,
     formatToolbarState,
+    linkRequest,
     canUndo,
     canRedo,
     undo,
@@ -3123,14 +3376,18 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     closeAIMenu,
     getAISelectionBlocks,
     replaceDocumentBlocks,
-    focusFirst: () => {
-      const first = visibleBlocks[0]
-      if (first) focusBlock(first.id, 'start')
-    },
-    focusEnd: () => {
-      const last = visibleBlocks[visibleBlocks.length - 1]
-      if (last) focusBlock(last.id, 'end')
-    },
+    focusFirst: () => focus('start'),
+    focusEnd: () => focus('end'),
+    focus,
+    getBlocks,
+    setBlocks,
+    insertBlocks,
+    updateBlock,
+    removeBlocks,
+    getMarkdown: () => blocksToMarkdownLossy(blocksRef.current),
+    getHTML: () => blocksToHtmlContent(blocksRef.current),
+    getText: () => blocksToPlainText(blocksRef.current),
+    getStats: () => getDocumentStats(blocksRef.current),
     // Event handlers wired by <BlockEditor>
     onKeydownCapture,
     onRootKeydown,

@@ -1,8 +1,10 @@
+import { sanitizeMediaUrl } from '@xproeditor/core'
 import { useEffect, useRef, useState } from 'react'
 import { FolderOpen, ImagePlus, Link2, Loader2, Upload } from 'lucide-react'
 import type { Block } from '@xproeditor/core'
 import { fileToObjectUrl, mediaPropsFromFile } from '@xproeditor/core'
 import type { PickMediaFn, UploadFn } from '../types'
+import { useEditorDictionary } from '../i18n'
 
 export interface ImageBlockProps {
   block: Block
@@ -27,8 +29,10 @@ export function ImageBlock({
   onPatch,
   onSelect,
 }: ImageBlockProps) {
+  const t = useEditorDictionary().media
   const [mode, setMode] = useState<InsertMode>('upload')
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(false)
   const [picking, setPicking] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [embedInput, setEmbedInput] = useState('')
@@ -45,10 +49,13 @@ export function ImageBlock({
   async function uploadFile(file: File) {
     if (!file.type.startsWith('image/')) return
 
+    setUploadError(false)
     setUploading(true)
     try {
       const url = await (upload ?? fileToObjectUrl)(file)
       onPatch(mediaPropsFromFile(file, url))
+    } catch {
+      setUploadError(true)
     } finally {
       setUploading(false)
     }
@@ -59,9 +66,11 @@ export function ImageBlock({
 
     setPicking(true)
     try {
-      const result = await pickMedia({ accept: ['image/*'], title: 'Choose image' })
+      const result = await pickMedia({ accept: ['image/*'], title: t.imageChoose })
       if (result?.url)
         onPatch({ url: result.url, ...(result.caption ? { caption: result.caption } : {}) })
+    } catch {
+      setUploadError(true)
     } finally {
       setPicking(false)
     }
@@ -72,7 +81,7 @@ export function ImageBlock({
     const url = embedInput.trim()
 
     if (!/^https?:\/\//i.test(url)) {
-      setEmbedError('Enter a valid image URL')
+      setEmbedError(t.imageInvalidUrl)
       return
     }
 
@@ -119,8 +128,13 @@ export function ImageBlock({
             ) : (
               <ImagePlus className="h-5 w-5" />
             )}
-            <span className="text-sm">{busy ? 'Working...' : 'Add an image'}</span>
+            <span className="text-sm">{busy ? t.working : t.imageAdd}</span>
           </div>
+          {uploadError && !busy && (
+            <p className="text-center text-xs text-[var(--xpe-danger)]" role="alert">
+              {t.uploadFailed}
+            </p>
+          )}
 
           {!busy && (
             <div
@@ -130,15 +144,15 @@ export function ImageBlock({
               onPointerDown={stop}
             >
               <button type="button" className={tabClass(mode === 'upload')} onClick={() => setMode('upload')}>
-                Upload
+                {t.upload}
               </button>
               {pickMedia && (
                 <button type="button" className={tabClass(mode === 'library')} onClick={() => setMode('library')}>
-                  Library
+                  {t.library}
                 </button>
               )}
               <button type="button" className={tabClass(mode === 'embed')} onClick={() => setMode('embed')}>
-                Link
+                {t.link}
               </button>
             </div>
           )}
@@ -153,7 +167,7 @@ export function ImageBlock({
                     onClick={() => fileInput.current?.click()}
                   >
                     <Upload className="h-3.5 w-3.5" />
-                    Choose image
+                    {t.imageChoose}
                   </button>
                   <input
                     ref={fileInput}
@@ -173,7 +187,7 @@ export function ImageBlock({
                     onClick={pickFromLibrary}
                   >
                     <FolderOpen className="h-3.5 w-3.5" />
-                    Open media library
+                    {t.openLibrary}
                   </button>
                 </div>
               )}
@@ -187,7 +201,7 @@ export function ImageBlock({
                       value={embedInput}
                       type="url"
                       className="min-w-0 flex-1 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-2.5 py-1.5 text-xs text-[var(--xpe-foreground)] outline-none focus:border-[var(--xpe-ring)]"
-                      placeholder="Paste an image URL"
+                      placeholder={t.imageUrlPlaceholder}
                       onChange={(e) => setEmbedInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
@@ -201,7 +215,7 @@ export function ImageBlock({
                       className="rounded-lg bg-[var(--xpe-primary)] px-2.5 py-1.5 text-xs text-[var(--xpe-primary-foreground)]"
                       onClick={applyEmbed}
                     >
-                      Add
+                      {t.add}
                     </button>
                   </div>
                   {embedError && (
@@ -221,7 +235,7 @@ export function ImageBlock({
       <figure className="group/img relative" style={{ width: `${block.props.width ?? 100}%` }}>
         <div onClick={onSelect}>
           <img
-            src={block.props.url}
+            src={sanitizeMediaUrl(block.props.url) || undefined}
             alt={block.props.caption || ''}
             className={`w-full rounded-[var(--xpe-radius)] transition-shadow ${selected ? 'ring-2 ring-[var(--xpe-ring)]' : ''}`}
             draggable={false}
@@ -243,7 +257,8 @@ export function ImageBlock({
             ))}
             <button
               className="rounded-md px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/20"
-              title="Replace upload"
+              title={t.replace}
+              aria-label={t.replace}
               onClick={(e) => {
                 e.stopPropagation()
                 fileInput.current?.click()
@@ -254,13 +269,14 @@ export function ImageBlock({
             {pickMedia && (
               <button
                 className="rounded-md px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/20"
-                title="Pick from library"
+                title={t.openLibrary}
+                aria-label={t.openLibrary}
                 onClick={(e) => {
                   e.stopPropagation()
                   pickFromLibrary()
                 }}
               >
-                Lib
+                {t.library}
               </button>
             )}
             <input
@@ -280,7 +296,7 @@ export function ImageBlock({
           <input
             className="mt-1.5 w-full bg-transparent text-center text-xs text-[var(--xpe-muted-foreground)] outline-none placeholder:opacity-60"
             defaultValue={block.props.caption ?? ''}
-            placeholder="Add caption..."
+            placeholder={t.addCaption}
             readOnly={readonly}
             onFocus={onSelect}
             onChange={(e) => onPatch({ caption: e.target.value })}

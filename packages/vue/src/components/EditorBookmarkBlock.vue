@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { sanitizeLinkUrl, sanitizeMediaUrl } from '@xproeditor/core'
 import { Bookmark, Globe, Loader2, Pencil, Settings2 } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
@@ -9,6 +10,10 @@ import {
   type FetchBookmarkMetaFn,
 } from '@xproeditor/core'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui'
+import { useEditorDictionary } from '../i18n'
+
+const dict = useEditorDictionary()
+const t = computed(() => dict.value.bookmark)
 
 const props = defineProps<{
   block: Block
@@ -59,7 +64,7 @@ async function createBookmark() {
   error.value = ''
   const normalized = normalizeBookmarkUrl(urlDraft.value)
   if (!normalized) {
-    error.value = 'Enter a valid http(s) URL'
+    error.value = t.value.invalidUrl
     return
   }
 
@@ -141,7 +146,7 @@ function stopBlockPointer(e: Event) {
       class="xpe-bookmark xpe-bookmark--empty xpe-bookmark--readonly"
     >
       <Bookmark class="xpe-bookmark__icon" />
-      <span>Web bookmark</span>
+      <span>{{ dict.blockTypes.bookmark }}</span>
     </div>
     <Popover v-else v-model:open="open">
       <PopoverTrigger>
@@ -154,7 +159,7 @@ function stopBlockPointer(e: Event) {
           @click="onEmptyClick"
         >
           <Bookmark class="xpe-bookmark__icon" />
-          <span>Add a web bookmark</span>
+          <span>{{ t.add }}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" class="xpe-bookmark-popover xpe-float">
@@ -163,7 +168,7 @@ function stopBlockPointer(e: Event) {
             ref="inputRef"
             type="url"
             class="xpe-bookmark-form__input"
-            placeholder="Paste in https://…"
+            :placeholder="t.placeholder"
             v-model="urlDraft"
             :disabled="loading"
             @keydown.enter.prevent="createBookmark"
@@ -177,9 +182,9 @@ function stopBlockPointer(e: Event) {
             @click="createBookmark"
           >
             <Loader2 v-if="loading" class="xpe-bookmark-form__spin" />
-            {{ loading ? 'Creating…' : 'Create bookmark' }}
+            {{ loading ? t.creating : t.create }}
           </button>
-          <p class="xpe-bookmark-form__hint">Create a visual bookmark from a link.</p>
+          <p class="xpe-bookmark-form__hint">{{ t.hint }}</p>
         </div>
       </PopoverContent>
     </Popover>
@@ -193,7 +198,7 @@ function stopBlockPointer(e: Event) {
   >
     <a
       class="xpe-bookmark-card"
-      :href="url"
+      :href="sanitizeLinkUrl(url, { allowBlob: true }) || undefined"
       target="_blank"
       rel="noopener noreferrer"
       @click="onCardClick"
@@ -202,7 +207,7 @@ function stopBlockPointer(e: Event) {
         <div class="xpe-bookmark-card__title-row">
           <img
             v-if="favicon && !faviconBroken"
-            :src="favicon"
+            :src="sanitizeMediaUrl(favicon) || undefined"
             alt=""
             class="xpe-bookmark-card__favicon"
             @error="faviconBroken = true"
@@ -214,7 +219,7 @@ function stopBlockPointer(e: Event) {
         <span class="xpe-bookmark-card__url">{{ host || url }}</span>
       </div>
       <div v-if="image && !imageBroken" class="xpe-bookmark-card__media">
-        <img :src="image" alt="" @error="imageBroken = true" />
+        <img :src="sanitizeMediaUrl(image) || undefined" alt="" @error="imageBroken = true" />
       </div>
     </a>
 
@@ -224,8 +229,8 @@ function stopBlockPointer(e: Event) {
           type="button"
           class="xpe-btn-settings-trigger"
           :class="{ 'xpe-btn-settings-trigger--open': open }"
-          title="Edit bookmark"
-          aria-label="Edit bookmark"
+          :title="t.edit"
+          :aria-label="t.edit"
           :aria-expanded="open"
           @pointerdown="stopBlockPointer"
           @mousedown="stopBlockPointer"
@@ -239,14 +244,14 @@ function stopBlockPointer(e: Event) {
           <span class="xpe-menu-brand" aria-hidden="true">
             <Settings2 />
           </span>
-          <span class="xpe-bookmark-popover__title">Bookmark</span>
+          <span class="xpe-bookmark-popover__title">{{ t.title }}</span>
         </div>
         <div class="xpe-bookmark-form" @mousedown.stop>
           <input
             ref="inputRef"
             type="url"
             class="xpe-bookmark-form__input"
-            placeholder="Paste in https://…"
+            :placeholder="t.placeholder"
             v-model="urlDraft"
             :disabled="loading"
             @keydown.enter.prevent="createBookmark"
@@ -260,11 +265,11 @@ function stopBlockPointer(e: Event) {
             @click="createBookmark"
           >
             <Loader2 v-if="loading" class="xpe-bookmark-form__spin" />
-            {{ loading ? 'Creating…' : 'Update bookmark' }}
+            {{ loading ? t.creating : t.update }}
           </button>
-          <p class="xpe-bookmark-form__hint">Create a visual bookmark from a link.</p>
+          <p class="xpe-bookmark-form__hint">{{ t.hint }}</p>
           <button type="button" class="xpe-bookmark-form__clear" @click="clearBookmark">
-            Remove link
+            {{ t.removeLink }}
           </button>
         </div>
       </PopoverContent>

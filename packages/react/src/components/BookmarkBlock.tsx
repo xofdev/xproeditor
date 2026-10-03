@@ -1,3 +1,4 @@
+import { sanitizeLinkUrl, sanitizeMediaUrl } from '@xproeditor/core'
 import { useEffect, useRef, useState } from 'react'
 import { Bookmark, Globe, Loader2, Pencil, Settings2 } from 'lucide-react'
 import {
@@ -8,6 +9,7 @@ import {
   type FetchBookmarkMetaFn,
 } from '@xproeditor/core'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui'
+import { useEditorDictionary } from '../i18n'
 
 export interface BookmarkBlockProps {
   block: Block
@@ -26,6 +28,8 @@ export function BookmarkBlock({
   onPatch,
   onSelect,
 }: BookmarkBlockProps) {
+  const dict = useEditorDictionary()
+  const t = dict.bookmark
   const url = (block.props.url ?? '').trim()
   const hasUrl = !!url
   const [open, setOpen] = useState(false)
@@ -63,7 +67,7 @@ export function BookmarkBlock({
     setError('')
     const normalized = normalizeBookmarkUrl(urlDraft)
     if (!normalized) {
-      setError('Enter a valid http(s) URL')
+      setError(t.invalidUrl)
       return
     }
 
@@ -122,7 +126,7 @@ export function BookmarkBlock({
         ref={inputRef}
         type="url"
         className="xpe-bookmark-form__input"
-        placeholder="Paste in https://…"
+        placeholder={t.placeholder}
         value={urlDraft}
         disabled={loading}
         onChange={(e) => {
@@ -150,18 +154,18 @@ export function BookmarkBlock({
         {loading ? (
           <>
             <Loader2 className="xpe-bookmark-form__spin" />
-            Creating…
+            {t.creating}
           </>
         ) : hasUrl ? (
-          'Update bookmark'
+          t.update
         ) : (
-          'Create bookmark'
+          t.create
         )}
       </button>
-      <p className="xpe-bookmark-form__hint">Create a visual bookmark from a link.</p>
+      <p className="xpe-bookmark-form__hint">{t.hint}</p>
       {hasUrl && !readonly && (
         <button type="button" className="xpe-bookmark-form__clear" onClick={clearBookmark}>
-          Remove link
+          {t.removeLink}
         </button>
       )}
     </div>
@@ -172,7 +176,7 @@ export function BookmarkBlock({
       return (
         <div className="xpe-bookmark xpe-bookmark--empty xpe-bookmark--readonly">
           <Bookmark className="xpe-bookmark__icon" />
-          <span>Web bookmark</span>
+          <span>{dict.blockTypes.bookmark}</span>
         </div>
       )
     }
@@ -194,7 +198,7 @@ export function BookmarkBlock({
               }}
             >
               <Bookmark className="xpe-bookmark__icon" />
-              <span>Add a web bookmark</span>
+              <span>{t.add}</span>
             </button>
           </PopoverTrigger>
           <PopoverContent align="start" className="xpe-bookmark-popover xpe-float">
@@ -216,7 +220,7 @@ export function BookmarkBlock({
     >
       <a
         className="xpe-bookmark-card"
-        href={url}
+        href={sanitizeLinkUrl(url, { allowBlob: true }) || undefined}
         target="_blank"
         rel="noopener noreferrer"
         onClick={(e) => {
@@ -232,7 +236,7 @@ export function BookmarkBlock({
           <div className="xpe-bookmark-card__title-row">
             {favicon && !faviconBroken ? (
               <img
-                src={favicon}
+                src={sanitizeMediaUrl(favicon) || undefined}
                 alt=""
                 className="xpe-bookmark-card__favicon"
                 onError={() => setFaviconBroken(true)}
@@ -247,7 +251,7 @@ export function BookmarkBlock({
         </div>
         {image && !imageBroken && (
           <div className="xpe-bookmark-card__media">
-            <img src={image} alt="" onError={() => setImageBroken(true)} />
+            <img src={sanitizeMediaUrl(image) || undefined} alt="" onError={() => setImageBroken(true)} />
           </div>
         )}
       </a>
@@ -258,8 +262,8 @@ export function BookmarkBlock({
             <button
               type="button"
               className={`xpe-btn-settings-trigger${open ? ' xpe-btn-settings-trigger--open' : ''}`}
-              title="Edit bookmark"
-              aria-label="Edit bookmark"
+              title={t.edit}
+              aria-label={t.edit}
               aria-expanded={open}
               onPointerDown={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
@@ -277,7 +281,7 @@ export function BookmarkBlock({
               <span className="xpe-menu-brand" aria-hidden>
                 <Settings2 />
               </span>
-              <span className="xpe-bookmark-popover__title">Bookmark</span>
+              <span className="xpe-bookmark-popover__title">{t.title}</span>
             </div>
             {form}
           </PopoverContent>

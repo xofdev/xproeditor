@@ -57,15 +57,28 @@ See [`docs/block-model.md`](../../docs/block-model.md) for the full shape.
 | `bookmark` | URL normalize + display helpers for web bookmark blocks |
 | `markdown` | Markdown ↔ blocks (paste / export) |
 | `video-embed` | YouTube/Vimeo URL parsing + an allow-list for safe iframe embeds |
-| `doc-heading-id` | Heading-to-slug helper used for anchor links |
+| `embed` | Allow-listed embed providers (`EMBED_PROVIDERS`, `resolveEmbed`) for the `embed` block |
+| `doc-heading-id` | Unicode-aware heading-to-slug helper used for anchor links |
+| `sanitize` | `sanitizeUrl` / `sanitizeLinkUrl` / `sanitizeMediaUrl` / `sanitizeCssColor` / `sanitizeBlocks` for untrusted input |
+| `paste` | `pasteBlocksIntoTextBlock`, `plainTextToBlocks` — caret-correct paste |
+| `shortcuts` | Markdown-as-you-type: `matchBlockShortcut`, `applyInlineMarkdownShortcut` |
+| `keyboard` | `resolveBlockKeyboardShortcut`, `moveBlockSubtree`, `BLOCK_KEYBOARD_SHORTCUTS` |
+| `i18n` | `EditorDictionary`, `EN_DICTIONARY`, `FA_DICTIONARY`, `resolveEditorDictionary` |
+| `editor-api` | `EditorDocumentApi` — the ref API both adapters implement |
+| `ai` | Pluggable Ask AI types and helpers |
 
 ## Example: headless HTML export
 
 ```ts
-import { blocksToHtmlContent } from '@xproeditor/core'
+import { blocksToHtmlContent, getDocumentStats, normalizeContent } from '@xproeditor/core'
 
-const html = blocksToHtmlContent(myBlocksArray)
+const blocks = normalizeContent(row.content)   // sanitized Block[] from storage
+const html = blocksToHtmlContent(blocks)        // nested lists, anchors, embeds — safe to serve
+const { words, readingTimeMinutes } = getDocumentStats(blocks)
 ```
+
+`htmlToBlocks` / `markdownToBlocks` need a DOM (`DOMParser`) for HTML; run
+them in the browser or with `jsdom` / `linkedom` on the server.
 
 ## License
 

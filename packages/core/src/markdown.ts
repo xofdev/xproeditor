@@ -5,27 +5,57 @@
  */
 
 import { createBlock, normalizeSpans } from './ops'
+import { sanitizeLinkUrl, sanitizeMediaUrl } from './sanitize'
 import { normalizeTableData } from './table'
-import type { Block, InlineMarks, InlineSpan } from './types'
+import type { Block, BlockType, InlineMarks, InlineSpan } from './types'
 import { isTextBlock } from './types'
 import { blockToPlainText } from './serialize'
 
 function escapeMd(text: string): string {
-  return text.replace(/([\\`*_{}[\]()#+\-.!|>])/g, '\\$1')
+  return text.replace(/([\\`*_{}[\]()#+\-.!|>~])/g, '\\$1')
+}
+
+/** Escape inline syntax characters in plain text so it re-imports verbatim. */
+function escapeMdInline(text: string): string {
+  return text.replace(/([\\`*_[\]~])/g, '\\$1')
+}
+
+/** Escape a leading character that would otherwise start a block construct. */
+function escapeMdLineStart(text: string): string {
+  return text
+    .replace(/^(\s*)([#>+-])(?=\s)/, '$1\\$2')
+    .replace(/^(\s*)(\d+)([.)])(?=\s)/, '$1$2\\$3')
 }
 
 function spansToMarkdownInline(spans: InlineSpan[]): string {
   return spans.map((span) => {
-    let text = span.text.replace(/\n/g, ' ')
     const marks = span.marks
+    const raw = span.text.replace(/\n/g, ' ')
 
-    if (!marks) {
+    if (marks?.code) {
+      // Pick a fence longer than any backtick run inside the code span.
+      const longest = Math.max(0, ...(raw.match(/`+/g) ?? []).map(run => run.length))
+      const fence = '`'.repeat(longest + 1)
+      const pad = raw.startsWith('`') || raw.endsWith('`') ? ' ' : ''
+      let text = `${fence}${pad}${raw}${pad}${fence}`
+
+      if (marks.link) {
+        text = `[${text}](${marks.link})`
+      }
+
       return text
     }
 
-    if (marks.code) {
-      text = `\`${text.replace(/`/g, '\\`')}\``
+    let text = escapeMdInline(raw)
+
+    if (!marks || !text.trim()) {
+      return text
     }
+
+    // Markdown emphasis can't start/end on whitespace — keep it outside.
+    const lead = /^\s*/.exec(text)?.[0] ?? ''
+    const trail = /\s*$/.exec(text)?.[0] ?? ''
+    text = text.slice(lead.length, text.length - trail.length)
 
     if (marks.bold) {
       text = `**${text}**`
@@ -43,49 +73,77 @@ function spansToMarkdownInline(spans: InlineSpan[]): string {
       text = `[${text}](${marks.link})`
     }
 
-    return text
+    return `${lead}${text}${trail}`
   }).join('')
+}
+
+const INLINE_TOKEN_RE = new RegExp(
+  [
+    // 1: backslash escape
+    '(\\\\[\\\\`*_{}()#+.!|>~\\[\\]\\-])',
+    // 2: code span (any fence length)
+    '((`+)(?!`)[\\s\\S]*?[^`]\\3(?!`))',
+    // 4: link [text](url "title")
+    '(\\[[^\\]]+\\]\\([^)\\s]+(?:\\s+"[^"]*")?\\))',
+    // 5: bold **x**
+    '(\\*\\*(?!\\s)[^*]+?(?<!\\s)\\*\\*)',
+    // 6: bold __x__ (not inside words)
+    '((?<![\\p{L}\\p{N}_])__(?!\\s)[^_]+?(?<!\\s)__(?![\\p{L}\\p{N}_]))',
+    // 7: italic *x*
+    '(\\*(?!\\s)[^*]+?(?<!\\s)\\*)',
+    // 8: italic _x_ (not inside words — keeps snake_case intact)
+    '((?<![\\p{L}\\p{N}_])_(?!\\s)[^_]+?(?<!\\s)_(?![\\p{L}\\p{N}_]))',
+    // 9: strikethrough ~~x~~
+    '(~~(?!\\s)[^~]+?(?<!\\s)~~)',
+  ].join('|'),
+  'gu',
+)
+
+function withMark(spans: InlineSpan[], marks: InlineMarks): InlineSpan[] {
+  return spans.map(span => ({ text: span.text, marks: { ...marks, ...(span.marks ?? {}) } }))
 }
 
 function parseInlineMarkdown(line: string): InlineSpan[] {
   const spans: InlineSpan[] = []
-  // Order: code, links, bold, italic, strike — pragmatic subset
-  const tokenRe =
-    /(`[^`]+`)|(\[[^\]]+\]\([^)]+\))|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)|(~~[^~]+~~)/g
+  const re = new RegExp(INLINE_TOKEN_RE.source, INLINE_TOKEN_RE.flags)
   let last = 0
   let match: RegExpExecArray | null
 
-  while ((match = tokenRe.exec(line)) !== null) {
+  while ((match = re.exec(line)) !== null) {
     if (match.index > last) {
       spans.push({ text: line.slice(last, match.index) })
     }
 
     const raw = match[0]
-    const marks: InlineMarks = {}
-    let text = raw
 
-    if (raw.startsWith('`')) {
-      text = raw.slice(1, -1)
-      marks.code = true
-    } else if (raw.startsWith('[')) {
-      const m = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(raw)
+    if (match[1]) {
+      spans.push({ text: raw.slice(1) })
+    } else if (match[2]) {
+      const fence = match[3].length
+      let code = raw.slice(fence, -fence)
 
-      if (m) {
-        text = m[1]
-        marks.link = m[2]
+      if (code.length > 2 && code.startsWith(' ') && code.endsWith(' ')) {
+        code = code.slice(1, -1)
       }
-    } else if (raw.startsWith('**') || raw.startsWith('__')) {
-      text = raw.slice(2, -2)
-      marks.bold = true
-    } else if (raw.startsWith('~~')) {
-      text = raw.slice(2, -2)
-      marks.strikethrough = true
-    } else if (raw.startsWith('*') || raw.startsWith('_')) {
-      text = raw.slice(1, -1)
-      marks.italic = true
+
+      spans.push({ text: code, marks: { code: true } })
+    } else if (match[4]) {
+      const m = /^\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$/.exec(raw)
+      const href = m ? sanitizeLinkUrl(m[2]) : ''
+
+      if (m && href) {
+        spans.push(...withMark(parseInlineMarkdown(m[1]), { link: href }))
+      } else {
+        spans.push(...parseInlineMarkdown(m ? m[1] : raw))
+      }
+    } else if (match[5] || match[6]) {
+      spans.push(...withMark(parseInlineMarkdown(raw.slice(2, -2)), { bold: true }))
+    } else if (match[7] || match[8]) {
+      spans.push(...withMark(parseInlineMarkdown(raw.slice(1, -1)), { italic: true }))
+    } else if (match[9]) {
+      spans.push(...withMark(parseInlineMarkdown(raw.slice(2, -2)), { strikethrough: true }))
     }
 
-    spans.push({ text, marks: Object.keys(marks).length ? marks : undefined })
     last = match.index + raw.length
   }
 
@@ -103,7 +161,24 @@ function looksLikeTableSeparator(line: string): boolean {
 function parseTableRow(line: string): string[] {
   const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '')
 
-  return trimmed.split('|').map(c => c.trim())
+  return trimmed.split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, '|'))
+}
+
+/** Leading whitespace width (tab = 4 columns). */
+function indentWidth(line: string): number {
+  let width = 0
+
+  for (const ch of line) {
+    if (ch === ' ') {
+      width += 1
+    } else if (ch === '\t') {
+      width += 4
+    } else {
+      break
+    }
+  }
+
+  return width
 }
 
 /**
@@ -129,7 +204,7 @@ export function looksLikeMarkdown(text: string): boolean {
     return true
   }
 
-  if (/^(\*|-|\+|\d+\.)\s+\S/m.test(t)) {
+  if (/^\s*(\*|-|\+|\d+[.)])\s+\S/m.test(t)) {
     return true
   }
 
@@ -141,7 +216,7 @@ export function looksLikeMarkdown(text: string): boolean {
     return true
   }
 
-  if (/\*\*[^*]+\*\*|__[^_]+__|`[^`]+`/.test(t)) {
+  if (/\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|~~[^~]+~~/.test(t)) {
     return true
   }
 
@@ -152,11 +227,27 @@ export function looksLikeMarkdown(text: string): boolean {
   return false
 }
 
+const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/
+
 /** Parse CommonMark/GFM-ish markdown into blocks (lossy). */
 export function markdownToBlocks(markdown: string): Block[] {
-  const lines = markdown.replace(/\r\n/g, '\n').split('\n')
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
   const out: Block[] = []
+  /** Indent widths of the open list levels, for nested list items. */
+  let listStack: number[] = []
   let i = 0
+
+  const listIndent = (width: number): number => {
+    while (listStack.length > 0 && listStack[listStack.length - 1] > width) {
+      listStack.pop()
+    }
+
+    if (listStack.length === 0 || listStack[listStack.length - 1] < width) {
+      listStack.push(width)
+    }
+
+    return Math.min(listStack.length - 1, 8)
+  }
 
   while (i < lines.length) {
     const line = lines[i]
@@ -167,13 +258,19 @@ export function markdownToBlocks(markdown: string): Block[] {
       continue
     }
 
-    if (/^---+$/.test(trimmed) || /^\*\*\*+$/.test(trimmed) || /^___+$/.test(trimmed)) {
+    const listMatch = LIST_ITEM_RE.exec(line)
+
+    if (!listMatch) {
+      listStack = []
+    }
+
+    if (/^(?:-\s*){3,}$/.test(trimmed) || /^(?:\*\s*){3,}$/.test(trimmed) || /^(?:_\s*){3,}$/.test(trimmed)) {
       out.push(createBlock('divider'))
       i += 1
       continue
     }
 
-    const heading = /^(#{1,6})\s+(.*)$/.exec(trimmed)
+    const heading = /^(#{1,6})\s+(.*?)(?:\s+#+)?$/.exec(trimmed)
 
     if (heading) {
       const level = Math.min(heading[1].length, 3) as 1 | 2 | 3
@@ -184,13 +281,18 @@ export function markdownToBlocks(markdown: string): Block[] {
       continue
     }
 
-    if (trimmed.startsWith('```')) {
-      const lang = trimmed.slice(3).trim() || 'plaintext'
+    const fenceMatch = /^(`{3,}|~{3,})\s*([\w#+.-]*)/.exec(trimmed)
+
+    if (fenceMatch) {
+      const fence = fenceMatch[1]
+      const lang = fenceMatch[2] || 'plaintext'
+      const fenceIndent = indentWidth(line)
       const body: string[] = []
       i += 1
 
-      while (i < lines.length && !lines[i].trim().startsWith('```')) {
-        body.push(lines[i])
+      while (i < lines.length && !lines[i].trim().startsWith(fence)) {
+        // Drop the fence's own indentation from each body line.
+        body.push(lines[i].replace(new RegExp(`^ {0,${fenceIndent}}`), ''))
         i += 1
       }
 
@@ -211,7 +313,7 @@ export function markdownToBlocks(markdown: string): Block[] {
       }
 
       out.push(createBlock('quote', {
-        content: parseInlineMarkdown(quoteLines.join(' ')),
+        content: parseInlineMarkdown(quoteLines.join(' ').trim()),
       }))
       continue
     }
@@ -236,7 +338,7 @@ export function markdownToBlocks(markdown: string): Block[] {
         const cells = [...r]
 
         while (cells.length < cols) {
-          cells.push({ content: [{ text: '' }] })
+          cells.push({ content: [] })
         }
 
         return cells.slice(0, cols)
@@ -248,43 +350,37 @@ export function markdownToBlocks(markdown: string): Block[] {
       continue
     }
 
-    const todo = /^[-*+]\s+\[([ xX])\]\s+(.*)$/.exec(trimmed)
+    if (listMatch) {
+      const indent = listIndent(indentWidth(listMatch[1]))
+      const marker = listMatch[2]
+      const body = listMatch[3]
+      const todo = /^\[([ xX])\]\s+(.*)$/.exec(body)
+      let type: BlockType = /\d/.test(marker) ? 'numbered_list_item' : 'bulleted_list_item'
+      let content = body
+      const props: Block['props'] = indent ? { indent } : {}
 
-    if (todo) {
-      out.push(createBlock('to_do', {
-        content: parseInlineMarkdown(todo[2]),
-        props: { checked: todo[1].toLowerCase() === 'x' },
-      }))
+      if (todo && type === 'bulleted_list_item') {
+        type = 'to_do'
+        content = todo[2]
+        props.checked = todo[1].toLowerCase() === 'x'
+      }
+
+      out.push(createBlock(type, { content: parseInlineMarkdown(content), props }))
       i += 1
       continue
     }
 
-    const bullet = /^[-*+]\s+(.*)$/.exec(trimmed)
-
-    if (bullet) {
-      out.push(createBlock('bulleted_list_item', {
-        content: parseInlineMarkdown(bullet[1]),
-      }))
-      i += 1
-      continue
-    }
-
-    const numbered = /^(\d+)\.\s+(.*)$/.exec(trimmed)
-
-    if (numbered) {
-      out.push(createBlock('numbered_list_item', {
-        content: parseInlineMarkdown(numbered[2]),
-      }))
-      i += 1
-      continue
-    }
-
-    const image = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(trimmed)
+    const image = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$/.exec(trimmed)
 
     if (image) {
-      out.push(createBlock('image', {
-        props: { url: image[2], caption: image[1] },
-      }))
+      const url = sanitizeMediaUrl(image[2])
+
+      if (url) {
+        out.push(createBlock('image', {
+          props: { url, caption: image[1] },
+        }))
+      }
+
       i += 1
       continue
     }
@@ -302,10 +398,9 @@ export function markdownToBlocks(markdown: string): Block[] {
 
       if (
         /^(#{1,6})\s+/.test(next)
-        || next.startsWith('```')
+        || /^(`{3,}|~{3,})/.test(next)
         || next.startsWith('>')
-        || /^[-*+]\s+/.test(next)
-        || /^\d+\.\s+/.test(next)
+        || LIST_ITEM_RE.test(lines[i])
         || /^---+$/.test(next)
         || next.startsWith('|')
         || /^!\[/.test(next)
@@ -328,76 +423,111 @@ export function markdownToBlocks(markdown: string): Block[] {
 /** Export blocks to Markdown. Custom blocks degrade lossily. */
 export function blocksToMarkdownLossy(blocks: Block[]): string {
   const parts: string[] = []
+  let numberedCounters: number[] = []
+  let previousListLike = false
+
+  const push = (text: string, listLike = false) => {
+    // List items stay tight (single newline); everything else is a paragraph.
+    if (parts.length > 0) {
+      parts.push(listLike && previousListLike ? '\n' : '\n\n')
+    }
+
+    parts.push(text)
+    previousListLike = listLike
+  }
 
   for (const block of blocks) {
+    const indent = block.props.indent ?? 0
+    const pad = '  '.repeat(indent)
+    const inline = () => escapeMdLineStart(spansToMarkdownInline(block.content))
+
+    if (block.type !== 'numbered_list_item') {
+      numberedCounters = numberedCounters.slice(0, indent)
+    }
+
     switch (block.type) {
       case 'heading_1':
-        parts.push(`# ${spansToMarkdownInline(block.content)}`)
+        push(`# ${spansToMarkdownInline(block.content)}`)
         break
       case 'heading_2':
-        parts.push(`## ${spansToMarkdownInline(block.content)}`)
+        push(`## ${spansToMarkdownInline(block.content)}`)
         break
       case 'heading_3':
-        parts.push(`### ${spansToMarkdownInline(block.content)}`)
+        push(`### ${spansToMarkdownInline(block.content)}`)
         break
       case 'quote':
-        parts.push(`> ${spansToMarkdownInline(block.content)}`)
+        push(`${pad}> ${spansToMarkdownInline(block.content)}`)
         break
       case 'bulleted_list_item':
-        parts.push(`${'  '.repeat(block.props.indent ?? 0)}- ${spansToMarkdownInline(block.content)}`)
+        push(`${pad}- ${spansToMarkdownInline(block.content)}`, true)
         break
-      case 'numbered_list_item':
-        parts.push(`${'  '.repeat(block.props.indent ?? 0)}1. ${spansToMarkdownInline(block.content)}`)
+      case 'numbered_list_item': {
+        numberedCounters = numberedCounters.slice(0, indent + 1)
+        numberedCounters[indent] = (numberedCounters[indent] ?? 0) + 1
+        push(`${pad}${numberedCounters[indent]}. ${spansToMarkdownInline(block.content)}`, true)
         break
+      }
       case 'to_do':
-        parts.push(`- [${block.props.checked ? 'x' : ' '}] ${spansToMarkdownInline(block.content)}`)
+        push(`${pad}- [${block.props.checked ? 'x' : ' '}] ${spansToMarkdownInline(block.content)}`, true)
         break
       case 'code': {
         const lang = block.props.language && block.props.language !== 'plaintext'
           ? block.props.language
           : ''
-        parts.push(`\`\`\`${lang}\n${block.props.code ?? ''}\n\`\`\``)
+        const code = block.props.code ?? ''
+        const longest = Math.max(2, ...(code.match(/`{3,}/g) ?? []).map(run => run.length))
+        const fence = '`'.repeat(longest + 1)
+        push(`${fence}${lang}\n${code}\n${fence}`)
         break
       }
       case 'divider':
-        parts.push('---')
+        push('---')
         break
       case 'image':
-        parts.push(`![${escapeMd(block.props.caption ?? '')}](${block.props.url ?? ''})`)
+        if (block.props.url) {
+          push(`![${escapeMd(block.props.caption ?? '')}](${block.props.url})`)
+        }
         break
       case 'video':
       case 'audio':
       case 'file':
+      case 'embed':
         if (block.props.url) {
-          parts.push(`[${escapeMd(blockToPlainText(block) || block.type)}](${block.props.url})`)
+          push(`[${escapeMd(blockToPlainText(block) || block.props.url)}](${block.props.url})`)
         }
         break
       case 'button': {
         const label = spansToMarkdownInline(block.content) || 'Button'
         const url = block.props.url ?? ''
-        parts.push(url ? `[${label}](${url})` : label)
+        push(url ? `[${label}](${url})` : label)
         break
       }
       case 'bookmark': {
         const url = block.props.url ?? ''
         if (!url) break
         const label = escapeMd(block.props.title || url)
-        parts.push(`[${label}](${url})`)
+        push(`[${label}](${url})`)
         break
       }
-      case 'callout':
+      case 'callout': {
+        const icon = block.props.icon ? `${block.props.icon} ` : ''
+        push(`${pad}> ${icon}${spansToMarkdownInline(block.content)}`)
+        break
+      }
       case 'toggle':
       case 'toggle_heading_1':
       case 'toggle_heading_2':
       case 'toggle_heading_3': {
         const toggleHeading = /^toggle_heading_([1-3])$/.exec(block.type)
         if (toggleHeading) {
-          parts.push(`${'#'.repeat(Number(toggleHeading[1]))} ${spansToMarkdownInline(block.content)}`)
+          push(`${'#'.repeat(Number(toggleHeading[1]))} ${spansToMarkdownInline(block.content)}`)
         } else {
-          parts.push(spansToMarkdownInline(block.content))
+          push(`${pad}${inline()}`)
         }
         break
       }
+      case 'table_of_contents':
+        break
       case 'table': {
         const table = normalizeTableData(block.props.table)
 
@@ -408,30 +538,32 @@ export function blocksToMarkdownLossy(blocks: Block[]): string {
         const cells = (row: typeof table.rows[0]) =>
           row.filter(c => !c.hidden).map(c => spansToMarkdownInline(c.content).replace(/\|/g, '\\|'))
 
+        const lines: string[] = []
         const header = cells(table.rows[0])
-        parts.push(`| ${header.join(' | ')} |`)
-        parts.push(`| ${header.map(() => '---').join(' | ')} |`)
+        lines.push(`| ${header.join(' | ')} |`)
+        lines.push(`| ${header.map(() => '---').join(' | ')} |`)
 
         for (let r = 1; r < table.rows.length; r++) {
-          parts.push(`| ${cells(table.rows[r]).join(' | ')} |`)
+          lines.push(`| ${cells(table.rows[r]).join(' | ')} |`)
         }
 
+        push(lines.join('\n'))
         break
       }
       default:
         if (isTextBlock(block.type)) {
-          parts.push(spansToMarkdownInline(block.content))
+          push(`${pad}${inline()}`)
         } else {
           const plain = blockToPlainText(block)
 
           if (plain) {
-            parts.push(plain)
+            push(plain)
           }
         }
     }
   }
 
-  return parts.join('\n\n')
+  return parts.join('')
 }
 
 /** Prefer markdown when plain text looks like MD; otherwise empty (caller falls through). */

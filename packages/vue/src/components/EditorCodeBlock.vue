@@ -2,6 +2,11 @@
 import { Check, Copy, WrapText } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { Block } from '@xproeditor/core'
+import { useEditorDictionary } from '../i18n'
+import { modKeyLabel } from '../utils/shortcut'
+
+const dictionary = useEditorDictionary()
+const t = computed(() => dictionary.value.code)
 
 const props = defineProps<{ block: Block; readonly?: boolean }>()
 
@@ -206,19 +211,21 @@ defineExpose({ focusAt })
         class="ecb-lang"
         :value="language"
         :disabled="readonly"
-        aria-label="Language"
+        :aria-label="t.language"
         @change="emit('patch', { language: ($event.target as HTMLSelectElement).value })"
         @mousedown.stop
       >
-        <option v-for="lang in LANGUAGES" :key="lang.id" :value="lang.id">{{ lang.label }}</option>
+        <!-- Keep languages from imported Markdown/HTML selectable even if not in the list. -->
+        <option v-if="!LANGUAGES.some(lang => lang.id === language)" :value="language">{{ language }}</option>
+        <option v-for="lang in LANGUAGES" :key="lang.id" :value="lang.id">{{ lang.id === 'plaintext' ? t.plainText : lang.label }}</option>
       </select>
       <div class="ecb-actions">
         <button
           type="button"
           class="ecb-action"
           :class="{ 'ecb-action--active': wrap }"
-          :title="wrap ? 'Disable wrap' : 'Wrap lines'"
-          :aria-label="wrap ? 'Disable wrap' : 'Wrap lines'"
+          :title="wrap ? t.disableWrap : t.wrap"
+          :aria-label="wrap ? t.disableWrap : t.wrap"
           :aria-pressed="wrap"
           :disabled="readonly"
           @mousedown.prevent
@@ -230,15 +237,15 @@ defineExpose({ focusAt })
           type="button"
           class="ecb-action"
           :class="{ 'ecb-action--ok': copied }"
-          :title="copied ? 'Copied' : 'Copy code'"
-          :aria-label="copied ? 'Copied' : 'Copy code'"
+          :title="copied ? t.copied : t.copy"
+          :aria-label="copied ? t.copied : t.copy"
           @mousedown.prevent
           @click="copyCode"
         >
           <Check v-if="copied" />
           <Copy v-else />
         </button>
-        <span class="ecb-hint">Ctrl+↵ exit</span>
+        <span class="ecb-hint">{{ t.exitHint.replace(/^Ctrl\+/, modKeyLabel()) }}</span>
       </div>
     </div>
     <textarea
@@ -247,7 +254,7 @@ defineExpose({ focusAt })
       :readonly="readonly"
       class="ecb-input"
       rows="1"
-      placeholder="Write code…"
+      :placeholder="t.placeholder"
       spellcheck="false"
       autocapitalize="off"
       autocorrect="off"

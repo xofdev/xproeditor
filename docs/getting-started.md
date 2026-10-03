@@ -73,7 +73,9 @@ export function Editor() {
 
 `<ProEditor>` is uncontrolled (like `<input defaultValue>`) — it owns the
 block array and calls `onChange(blocks)` when it changes. To load different
-content, remount by changing the component's `key`.
+content, call `ref.current.setBlocks(blocks, { history: 'reset' })` (or
+remount by changing the component's `key`). See [api.md](api.md) for every
+method on the ref.
 
 ## Controlled (Vue) vs uncontrolled (React)
 
@@ -85,7 +87,7 @@ follows its own framework's convention rather than a shared abstraction:
 | Prop | `:model-value="blocks"` | `defaultValue={blocks}` |
 | Ownership | Your `ref` is the source of truth | The editor owns the array |
 | Reading changes | Mutations land on your `ref`; `@change` fires after | `onChange(blocks)` |
-| Loading new content | Assign to the `ref` | Remount via `key` |
+| Loading new content | Assign to the `ref` | `ref.setBlocks(blocks, { history: 'reset' })` |
 
 Everything else — block model, keyboard shortcuts, toolbar modes, theming
 tokens, the `Block[]` you persist — is identical, so documents move between
@@ -97,6 +99,23 @@ Store the `Block[]` array as JSON (e.g. wrapped in the `BlocksContent` shape —
 see [block-model.md](block-model.md)). To render it read-only later (a blog
 post, a docs page), use `<DocRenderer>` from either adapter — no
 contentEditable, no editor JS shipped to that page.
+
+## Options at a glance
+
+| Option | Vue | React | Default |
+| --- | --- | --- | --- |
+| Toolbar style | `toolbar` | `toolbar` | `'floating'` |
+| UI language | `locale` / `dictionary` | `locale` / `dictionary` | `'en'` — see [i18n.md](i18n.md) |
+| Default text direction | `editor-dir` | `editorDir` | `'ltr'` |
+| Read-only | `readonly` | `readonly` | `false` |
+| Empty-line placeholder | `placeholder` | `placeholder` | localized “Type '/' for commands…” |
+| Browser spellcheck | `spellcheck` | `spellCheck` | `true` |
+| Focus on mount | `autofocus` | `autofocus` | `false` (`true` / `'start'` / `'end'`) |
+| Ask AI | `ai` | `ai` | off — see the package READMEs |
+| Upload failed | `@upload-error` | `onUploadError` | — |
+
+Keyboard and Markdown shortcuts are listed in
+[keyboard-shortcuts.md](keyboard-shortcuts.md).
 
 ## Uploads & media picking
 
@@ -110,8 +129,16 @@ Both `<ProEditor>` and `<BlockEditor>` accept:
   optional helper for `/bookmark` cards (OG/title/favicon). Without it, users
   can still paste a URL; the card just won’t auto-fill metadata.
 
+If `upload` rejects, the file is skipped and `onUploadError(error, file)` /
+`@upload-error` fires; media blocks also show an inline “Upload failed”.
+
 ## Next
 
+- [Editor API](api.md) — ref methods, events and core helpers
+- [Keyboard & Markdown shortcuts](keyboard-shortcuts.md)
+- [Localization & RTL](i18n.md)
+- [Security](security.md)
 - [Block model](block-model.md)
 - [Theming](theming.md)
 - [Architecture](architecture.md)
+- [Changelog](changelog.md)
