@@ -1,4 +1,5 @@
 import { forwardRef, useImperativeHandle, useState, type ReactNode } from 'react'
+import { useEditorDictionary } from '../i18n'
 import { EmojiPicker } from './EmojiPicker'
 import { Popover, PopoverContent, PopoverTrigger } from './Popover'
 
@@ -24,6 +25,7 @@ export const IconEmojiPicker = forwardRef<IconEmojiPickerHandle, IconEmojiPicker
     { value, onChange, disabled = false, align = 'start', side = 'bottom', renderTrigger },
     ref,
   ) {
+    const t = useEditorDictionary().emoji
     const [open, setOpen] = useState(false)
     const [customValue, setCustomValue] = useState('')
 
@@ -66,7 +68,7 @@ export const IconEmojiPicker = forwardRef<IconEmojiPickerHandle, IconEmojiPicker
             <input
               type="text"
               maxLength={8}
-              placeholder="Custom emoji or text"
+              placeholder={t.customPlaceholder}
               className="xpe-icon-custom-input"
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
@@ -78,7 +80,7 @@ export const IconEmojiPicker = forwardRef<IconEmojiPickerHandle, IconEmojiPicker
               }}
             />
             <button type="button" className="xpe-icon-custom-apply" onClick={applyCustom}>
-              Set
+              {t.set}
             </button>
           </div>
         </PopoverContent>

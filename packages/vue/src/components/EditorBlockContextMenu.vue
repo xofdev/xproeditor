@@ -25,6 +25,7 @@ import {
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { syncThemeVars, type BlockType } from '@xproeditor/core'
+import { useEditorDictionary } from '../i18n'
 
 const props = defineProps<{
   position: { x: number; y: number }
@@ -68,9 +69,8 @@ const TURN_INTO: Array<{ type: BlockType; label: string; icon: unknown; keywords
   { type: 'bookmark', label: 'Web bookmark', icon: Bookmark, keywords: ['bookmark', 'link', 'url'] },
 ]
 
-const BLOCK_LABELS: Partial<Record<BlockType, string>> = Object.fromEntries(
-  TURN_INTO.map(t => [t.type, t.label]),
-)
+const dict = useEditorDictionary()
+const t = computed(() => dict.value.blockMenu)
 
 const view = ref<View>('root')
 const query = ref('')
@@ -85,7 +85,7 @@ const mod = isMac ? '⌘' : 'Ctrl+'
 
 const q = computed(() => query.value.trim().toLowerCase())
 const blockLabel = computed(
-  () => BLOCK_LABELS[props.blockType] ?? props.blockType.replace(/_/g, ' '),
+  () => dict.value.blockTypes[props.blockType] ?? props.blockType.replace(/_/g, ' '),
 )
 
 function matches(hay: string[]): boolean {
@@ -108,7 +108,7 @@ const sections = computed(() => {
   if (props.canTurnInto) {
     transform.push({
       id: 'turn-into',
-      label: 'Turn into',
+      label: t.value.turnInto,
       icon: Type,
       chevron: true,
       run: () => { view.value = 'turn-into' },
@@ -117,7 +117,7 @@ const sections = computed(() => {
   if (props.colorPresets?.length) {
     transform.push({
       id: 'color',
-      label: 'Color',
+      label: t.value.color,
       icon: Palette,
       chevron: true,
       run: () => { view.value = 'color' },
@@ -127,28 +127,28 @@ const sections = computed(() => {
   const manage: ActionItem[] = [
     {
       id: 'duplicate',
-      label: 'Duplicate',
+      label: t.value.duplicate,
       icon: Copy,
       shortcut: `${mod}D`,
       run: () => { emit('duplicate'); emit('close') },
     },
     {
       id: 'copy',
-      label: 'Copy',
+      label: t.value.copy,
       icon: ClipboardCopy,
       shortcut: `${mod}C`,
       run: () => { emit('copy'); emit('close') },
     },
     {
       id: 'cut',
-      label: 'Cut',
+      label: t.value.cut,
       icon: Scissors,
       shortcut: `${mod}X`,
       run: () => { emit('cut'); emit('close') },
     },
     {
       id: 'delete',
-      label: 'Delete',
+      label: t.value.delete,
       icon: Trash2,
       shortcut: 'Del',
       danger: true,
@@ -159,7 +159,7 @@ const sections = computed(() => {
   const insert: ActionItem[] = [
     {
       id: 'insert-below',
-      label: 'Insert below',
+      label: t.value.insertBelow,
       icon: ArrowDownToLine,
       run: () => { emit('insertBelow'); emit('close') },
     },
@@ -168,14 +168,14 @@ const sections = computed(() => {
   const ai: ActionItem[] = props.aiEnabled
     ? [{
         id: 'ask-ai',
-        label: 'Ask AI',
+        label: t.value.askAI,
         icon: Sparkles,
         run: () => { emit('askAI'); emit('close') },
       }]
     : []
 
   const filter = (items: ActionItem[], keywords: Record<string, string[]>) =>
-    items.filter(item => matches([item.label, ...(keywords[item.id] ?? [])]))
+    items.filter(item => matches([item.label, item.id, ...(keywords[item.id] ?? [])]))
 
   return [
     filter(transform, { 'turn-into': ['turn', 'convert', 'type'], color: ['color', 'background'] }),
@@ -191,7 +191,7 @@ const sections = computed(() => {
 })
 
 const turnIntoItems = computed(() =>
-  TURN_INTO.filter(t => matches([t.label, t.type, ...t.keywords])),
+  TURN_INTO.filter(item => matches([dict.value.blockTypes[item.type], item.label, item.type, ...item.keywords])),
 )
 
 function place() {
@@ -251,13 +251,13 @@ watch(view, () => nextTick(() => searchRef.value?.focus()))
           ref="searchRef"
           v-model="query"
           class="xpe-menu-search__input"
-          placeholder="Search actions…"
+          :placeholder="t.searchActions"
         />
       </div>
 
       <template v-if="view === 'root'">
         <p class="xpe-ctx-menu__type">{{ blockLabel }}</p>
-        <p v-if="!sections.length" class="xpe-menu-empty">No matching actions</p>
+        <p v-if="!sections.length" class="xpe-menu-empty">{{ t.noMatches }}</p>
         <div v-for="(section, si) in sections" :key="si" class="xpe-ctx-menu__section">
           <div v-if="si > 0" class="xpe-menu-sep" />
           <button
@@ -281,22 +281,22 @@ watch(view, () => nextTick(() => searchRef.value?.focus()))
       <template v-else-if="view === 'turn-into'">
         <button type="button" class="xpe-ctx-menu__back" @click="view = 'root'; query = ''">
           <ChevronLeft />
-          Turn into
+          {{ t.turnInto }}
         </button>
         <div class="xpe-ctx-menu__section">
           <button
-            v-for="t in turnIntoItems"
-            :key="t.type"
+            v-for="entry in turnIntoItems"
+            :key="entry.type"
             type="button"
             class="xpe-menu-item"
-            :class="{ 'xpe-menu-item--selected': t.type === blockType }"
-            @click="emit('turnInto', t.type); emit('close')"
+            :class="{ 'xpe-menu-item--selected': entry.type === blockType }"
+            @click="emit('turnInto', entry.type); emit('close')"
           >
             <span class="xpe-menu-item__icon">
-              <component :is="t.icon" />
+              <component :is="entry.icon" />
             </span>
-            <span class="xpe-menu-item__label">{{ t.label }}</span>
-            <Check v-if="t.type === blockType" class="xpe-menu-item__meta" />
+            <span class="xpe-menu-item__label">{{ dict.blockTypes[entry.type] }}</span>
+            <Check v-if="entry.type === blockType" class="xpe-menu-item__meta" />
           </button>
         </div>
       </template>
@@ -304,12 +304,12 @@ watch(view, () => nextTick(() => searchRef.value?.focus()))
       <template v-else>
         <button type="button" class="xpe-ctx-menu__back" @click="view = 'root'; query = ''">
           <ChevronLeft />
-          Color
+          {{ t.color }}
         </button>
         <div class="xpe-ctx-menu__swatches">
           <button
             type="button"
-            title="Default"
+            :title="t.defaultColor"
             class="xpe-ctx-menu__swatch"
             :class="{ 'xpe-ctx-menu__swatch--active': !currentColor }"
             style="background: var(--xpe-muted, #f3f4f6)"

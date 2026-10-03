@@ -2,6 +2,14 @@
 import { Clock, Hash, Leaf, Lightbulb, Music, Plane, Search, Smile, UtensilsCrossed } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { ALL_EMOJIS, EMOJI_CATEGORIES, type EmojiEntry } from './emojiData'
+import { useEditorDictionary } from '../i18n'
+
+const dictionary = useEditorDictionary()
+const t = computed(() => dictionary.value.emoji)
+
+function categoryLabel(cat: { id: string; label: string }): string {
+  return t.value.categories[cat.id as keyof typeof t.value.categories] ?? cat.label
+}
 
 const RECENTS_KEY = 'xpe-emoji-recents'
 const MAX_RECENTS = 24
@@ -84,7 +92,7 @@ return EMOJI_CATEGORIES
 
   const recentEntries = recents.value.map(charToEntry).filter((e): e is EmojiEntry => !!e)
 
-  return [{ id: 'recents', label: 'Recently used', emojis: recentEntries }, ...EMOJI_CATEGORIES]
+  return [{ id: 'recents', label: t.value.recent, emojis: recentEntries }, ...EMOJI_CATEGORIES]
 })
 
 function pick(entry: EmojiEntry) {
@@ -115,7 +123,7 @@ function scrollToCategory(id: string) {
         ref="searchEl"
         v-model="internalQuery"
         type="text"
-        placeholder="Search emoji..."
+        :placeholder="t.search"
         class="xpe-emoji-search-input"
         @keydown.enter.prevent="confirmSearch"
       />
@@ -123,7 +131,7 @@ function scrollToCategory(id: string) {
 
     <div class="xpe-emoji-scroll">
       <template v-if="filtered">
-        <p v-if="filtered.length === 0" class="xpe-emoji-empty">No emoji found</p>
+        <p v-if="filtered.length === 0" class="xpe-emoji-empty">{{ t.noResults }}</p>
         <div v-else class="xpe-emoji-grid">
           <button
             v-for="entry in filtered"
@@ -139,7 +147,7 @@ function scrollToCategory(id: string) {
       </template>
       <template v-else>
         <div v-for="cat in categoriesToRender" :key="cat.id" :ref="(el) => { sectionEls[cat.id] = el as HTMLElement }">
-          <p class="xpe-menu-heading xpe-emoji-heading">{{ cat.label }}</p>
+          <p class="xpe-menu-heading xpe-emoji-heading">{{ categoryLabel(cat) }}</p>
           <div class="xpe-emoji-grid">
             <button
               v-for="entry in cat.emojis"
@@ -157,14 +165,15 @@ function scrollToCategory(id: string) {
     </div>
 
     <div v-if="!filtered" class="xpe-emoji-catbar">
-      <button type="button" title="Recently used" @click="scrollToCategory('recents')">
+      <button type="button" :title="t.recent" :aria-label="t.recent" @click="scrollToCategory('recents')">
         <Clock class="h-4 w-4" />
       </button>
       <button
         v-for="cat in EMOJI_CATEGORIES"
         :key="cat.id"
         type="button"
-        :title="cat.label"
+        :title="categoryLabel(cat)"
+        :aria-label="categoryLabel(cat)"
         @click="scrollToCategory(cat.id)"
       >
         <component :is="CATEGORY_ICONS[cat.id] ?? Hash" class="h-4 w-4" />

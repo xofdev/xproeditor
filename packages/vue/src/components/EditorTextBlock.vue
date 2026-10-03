@@ -12,11 +12,15 @@ import {
 } from '@xproeditor/core'
 import type { Block, InlineSpan, MarkName } from '@xproeditor/core'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   block: Block
   placeholder?: string
+  /** Browser spellcheck (default `true`). */
+  spellcheck?: boolean
   readonly?: boolean
-}>()
+}>(), {
+  spellcheck: true,
+})
 
 const emit = defineEmits<{
   input: [spans: InlineSpan[], caret: number | null]
@@ -260,7 +264,7 @@ defineExpose({ focusAt, getSelection, setSelection, el })
     :dir="block.props.dir === 'ltr' || block.props.dir === 'rtl' ? block.props.dir : undefined"
     :style="block.props.align ? { textAlign: block.props.align } : undefined"
     :data-placeholder="placeholder"
-    spellcheck="false"
+    :spellcheck="spellcheck !== false && !readonly"
     @input="onInput"
     @pointerdown="onPointerDown"
     @keydown="onKeydown"

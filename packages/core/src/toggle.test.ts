@@ -93,7 +93,7 @@ describe('toggle HTML round-trip', () => {
 
     const html = blocksToHtmlContent(blocks)
     expect(html).toContain('data-xpe-type="toggle_heading_2"')
-    expect(html).toContain('<h2>')
+    expect(html).toMatch(/<h2 id="[^"]+">/)
     expect(html).not.toMatch(/<details[^>]*\sopen/)
 
     const parsed = htmlToBlocks(html)

@@ -1,8 +1,13 @@
 <script setup lang="ts">
+import { sanitizeMediaUrl } from '@xproeditor/core'
 import { FolderOpen, Link2, Loader2, Music, Upload } from 'lucide-vue-next';
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { Block } from '@xproeditor/core';
 import { fileToObjectUrl, formatFileSize, mediaPropsFromFile } from '@xproeditor/core';
+import { useEditorDictionary } from '../i18n';
+
+const dict = useEditorDictionary();
+const t = computed(() => dict.value.media);
 
 const props = defineProps<{
     block: Block;
@@ -24,6 +29,7 @@ type InsertMode = 'upload' | 'library' | 'embed';
 
 const mode = ref<InsertMode>('upload');
 const uploading = ref(false);
+const uploadError = ref(false);
 const picking = ref(false);
 const dragOver = ref(false);
 const embedInput = ref('');
@@ -36,11 +42,14 @@ async function uploadFile(file: File) {
         return;
     }
 
+    uploadError.value = false;
     uploading.value = true;
 
     try {
         const url = await (props.upload ?? fileToObjectUrl)(file);
         emit('patch', mediaPropsFromFile(file, url));
+    } catch {
+        uploadError.value = true;
     } finally {
         uploading.value = false;
     }
@@ -54,7 +63,7 @@ async function pickFromLibrary() {
     picking.value = true;
 
     try {
-        const result = await props.pickMedia({ accept: ['audio/*'], title: 'Choose audio' });
+        const result = await props.pickMedia({ accept: ['audio/*'], title: t.value.audioChoose });
 
         if (result?.url) {
             emit('patch', {
@@ -62,6 +71,8 @@ async function pickFromLibrary() {
                 ...(result.caption ? { caption: result.caption } : {}),
             });
         }
+    } catch {
+        uploadError.value = true;
     } finally {
         picking.value = false;
     }
@@ -72,7 +83,7 @@ function applyEmbed() {
     const url = embedInput.value.trim();
 
     if (!/^https?:\/\//i.test(url)) {
-        embedError.value = 'Enter a valid audio file URL';
+        embedError.value = t.value.audioInvalidUrl;
 
         return;
     }
@@ -121,8 +132,11 @@ watch(mode, (next) => {
             <div class="flex items-center justify-center gap-2 text-[var(--xpe-muted-foreground)]">
                 <Loader2 v-if="busy()" class="h-5 w-5 animate-spin text-[var(--xpe-primary)]" />
                 <Music v-else class="h-5 w-5" />
-                <span class="text-sm">{{ busy() ? 'Working...' : 'Add audio' }}</span>
+                <span class="text-sm">{{ busy() ? t.working : t.audioAdd }}</span>
             </div>
+            <p v-if="uploadError && !busy()" class="text-center text-xs text-[var(--xpe-danger)]" role="alert">
+                {{ t.uploadFailed }}
+            </p>
 
             <div v-if="!busy()" class="flex justify-center gap-1 px-4" @click.stop @mousedown.stop @pointerdown.stop>
                 <button
@@ -131,7 +145,7 @@ watch(mode, (next) => {
                     :class="mode === 'upload' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
                     @click.stop="mode = 'upload'"
                 >
-                    Upload
+                    {{ t.upload }}
                 </button>
                 <button
                     v-if="pickMedia"
@@ -140,7 +154,7 @@ watch(mode, (next) => {
                     :class="mode === 'library' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
                     @click.stop="mode = 'library'"
                 >
-                    Library
+                    {{ t.library }}
                 </button>
                 <button
                     type="button"
@@ -148,7 +162,7 @@ watch(mode, (next) => {
                     :class="mode === 'embed' ? 'bg-[var(--xpe-primary-muted)] text-[var(--xpe-primary)]' : 'text-[var(--xpe-muted-foreground)] hover:bg-[var(--xpe-surface-hover)]'"
                     @click.stop="mode = 'embed'"
                 >
-                    Link
+                    {{ t.link }}
                 </button>
             </div>
 
@@ -160,7 +174,7 @@ watch(mode, (next) => {
                         @click.stop="fileInput?.click()"
                     >
                         <Upload class="h-3.5 w-3.5" />
-                        Choose audio file
+                        {{ t.audioChoose }}
                     </button>
                     <input ref="fileInput" type="file" accept="audio/*" class="hidden" @change="onFilePicked" />
                 </div>
@@ -172,7 +186,7 @@ watch(mode, (next) => {
                         @click.stop="pickFromLibrary"
                     >
                         <FolderOpen class="h-3.5 w-3.5" />
-                        Open media library
+                        {{ t.openLibrary }}
                     </button>
                 </div>
 
@@ -184,7 +198,7 @@ watch(mode, (next) => {
                             v-model="embedInput"
                             type="url"
                             class="min-w-0 flex-1 rounded-lg border border-[var(--xpe-border)] bg-[var(--xpe-surface)] px-2.5 py-1.5 text-xs text-[var(--xpe-foreground)] outline-none focus:border-[var(--xpe-ring)]"
-                            placeholder="Audio file URL (.mp3, .ogg, ...)"
+                            :placeholder="t.audioUrlPlaceholder"
                             @keydown.enter.prevent="applyEmbed"
                         />
                         <button
@@ -192,7 +206,7 @@ watch(mode, (next) => {
                             class="rounded-lg bg-[var(--xpe-primary)] px-2.5 py-1.5 text-xs text-[var(--xpe-primary-foreground)]"
                             @click.stop="applyEmbed"
                         >
-                            Add
+                            {{ t.add }}
                         </button>
                     </div>
                     <p v-if="embedError" class="text-center text-xs text-[var(--xpe-danger)]">{{ embedError }}</p>
@@ -211,7 +225,7 @@ watch(mode, (next) => {
                     <span class="truncate font-medium text-[var(--xpe-foreground)]">{{ block.props.name }}</span>
                     <span v-if="block.props.size" class="shrink-0">{{ formatFileSize(block.props.size) }}</span>
                 </div>
-                <audio :src="block.props.url" class="w-full" controls preload="metadata" />
+                <audio :src="sanitizeMediaUrl(block.props.url) || undefined" class="w-full" controls preload="metadata" />
             </div>
 
             <div
@@ -220,7 +234,8 @@ watch(mode, (next) => {
             >
                 <button
                     class="rounded-md px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/20"
-                    title="Remove audio"
+                    :title="t.remove"
+                    :aria-label="t.remove"
                     @click.stop="emit('patch', { url: '', name: undefined, size: undefined, mime: undefined })"
                 >
                     ✕
@@ -231,7 +246,7 @@ watch(mode, (next) => {
                 <input
                     class="mt-1.5 w-full bg-transparent text-center text-xs text-[var(--xpe-muted-foreground)] outline-none placeholder:opacity-60"
                     :value="block.props.caption ?? ''"
-                    placeholder="Add caption..."
+                    :placeholder="t.addCaption"
                     :readonly="readonly"
                     @focus="emit('select')"
                     @input="emit('patch', { caption: ($event.target as HTMLInputElement).value })"

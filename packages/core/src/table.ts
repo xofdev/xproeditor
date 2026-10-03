@@ -1,3 +1,4 @@
+import { sanitizeCssColor, sanitizeMarks } from './sanitize'
 import type {
   InlineSpan,
   TableBorderStyle,
@@ -37,6 +38,12 @@ export function tableCellFromText(text: string): TableCell {
   return text ? { content: [{ text }] } : { content: [] }
 }
 
+function spanCount(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 1
+    ? Math.min(Math.floor(value), 1000)
+    : undefined
+}
+
 export function normalizeTableCell(cell: unknown): TableCell {
   if (isPlainStringCell(cell)) {
     return tableCellFromText(cell)
@@ -55,20 +62,20 @@ export function normalizeTableCell(cell: unknown): TableCell {
   const content = Array.isArray(raw.content)
     ? (raw.content as InlineSpan[])
         .map((span) => ({
-          text: span?.text ?? '',
-          marks: span?.marks,
+          text: typeof span?.text === 'string' ? span.text : '',
+          marks: sanitizeMarks(span?.marks),
         }))
         .filter((span) => span.text.length > 0)
     : []
 
   return {
     content,
-    colspan: typeof raw.colspan === 'number' ? raw.colspan : undefined,
-    rowspan: typeof raw.rowspan === 'number' ? raw.rowspan : undefined,
+    colspan: spanCount(raw.colspan),
+    rowspan: spanCount(raw.rowspan),
     align: raw.align === 'left' || raw.align === 'center' || raw.align === 'right' || raw.align === 'justify'
       ? raw.align
       : undefined,
-    background: typeof raw.background === 'string' ? raw.background : undefined,
+    background: sanitizeCssColor(raw.background) || undefined,
     hidden: raw.hidden === true ? true : undefined,
   }
 }
@@ -160,12 +167,16 @@ function normalizeTableStyle(raw: unknown): TableStyle | undefined {
   const value = raw as Record<string, unknown>
   const style: TableStyle = {}
 
-  if (typeof value.background === 'string') {
-    style.background = value.background
+  const background = sanitizeCssColor(value.background)
+
+  if (background) {
+    style.background = background
   }
 
-  if (typeof value.headerBackground === 'string') {
-    style.headerBackground = value.headerBackground
+  const headerBackground = sanitizeCssColor(value.headerBackground)
+
+  if (headerBackground) {
+    style.headerBackground = headerBackground
   }
 
   if (value.border && typeof value.border === 'object') {
@@ -180,7 +191,7 @@ function normalizeTableBorder(raw: unknown): TableBorderStyle {
   const width = border.width
 
   return {
-    color: typeof border.color === 'string' ? border.color : DEFAULT_TABLE_BORDER.color,
+    color: sanitizeCssColor(border.color) || DEFAULT_TABLE_BORDER.color,
     width: width === 0 || width === 1 || width === 2 || width === 3 || width === 4 ? width : DEFAULT_TABLE_BORDER.width,
     style: border.style === 'solid' || border.style === 'dashed' || border.style === 'dotted' || border.style === 'none'
       ? border.style

@@ -7,9 +7,10 @@
  */
 
 import { createBlock, generateBlockId, normalizeSpans } from './ops'
+import { sanitizeBlocks } from './sanitize'
 import { htmlToBlocks } from './normalize'
 import { markdownToBlocks } from './markdown'
-import type { Block, InlineSpan } from './types'
+import type { Block } from './types'
 import { isTextBlock } from './types'
 
 export type AIAgentStatus =
@@ -171,12 +172,8 @@ export function parseAIResponseToBlocks(chunk: {
   blocks?: Block[]
 }): Block[] {
   if (chunk.blocks && chunk.blocks.length > 0) {
-    return chunk.blocks.map(b => ({
-      ...b,
-      id: b.id || generateBlockId(),
-      content: Array.isArray(b.content) ? normalizeSpans(b.content as InlineSpan[]) : [],
-      props: b.props ?? {},
-    }))
+    // Model output is untrusted: validate shape, links and colours.
+    return sanitizeBlocks(chunk.blocks)
   }
 
   const text = (chunk.text ?? '').trim()

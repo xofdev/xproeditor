@@ -1283,3 +1283,59 @@ footer {
     margin-left: auto;
   }
 }
+
+/* ─── Changelog ───────────────────────────────────────────────────────────── */
+
+.changelog-tabs {
+  margin: 0 auto 1.5rem;
+  width: fit-content;
+}
+
+.changelog-list {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  max-width: 760px;
+  display: grid;
+  gap: 1rem;
+}
+
+.changelog-release {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  padding: 1.1rem 1.3rem;
+  background: var(--surface, transparent);
+}
+
+.changelog-release h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.changelog-release--next {
+  border-style: dashed;
+}
+
+.changelog-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--chip);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.changelog-release .doc-blocks {
+  font-size: 0.92rem;
+}
+
+.changelog-more {
+  display: block;
+  margin: 1.25rem auto 0;
+}

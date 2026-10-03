@@ -21,6 +21,10 @@ import {
 } from '@xproeditor/core'
 import type { Block, InlineSpan, MarkName, TableCellCoord, TableData, TableStyle, TableWidth } from '@xproeditor/core'
 import EditorTableCell from './EditorTableCell.vue'
+import { useEditorDictionary } from '../i18n'
+
+const dictionary = useEditorDictionary()
+const t = computed(() => dictionary.value.table)
 
 const props = defineProps<{ block: Block; readonly?: boolean }>()
 
@@ -269,19 +273,19 @@ defineExpose({
   >
     <div v-if="!readonly" class="etable-toolbar">
       <button type="button" class="etable-btn" @click="toggleHeader">
-        {{ table.hasHeader ? 'Header: on' : 'Header: off' }}
+        {{ table.hasHeader ? t.headerOn : t.headerOff }}
       </button>
       <button
         type="button"
         class="etable-btn"
         :disabled="!mergeEnabled"
-        :title="mergeEnabled ? 'Merge selected cells' : 'Drag or Shift+click to select 2+ cells'"
+        :title="mergeEnabled ? t.mergeSelected : t.selectHint"
         @click="handleMerge"
       >
-        <Merge class="inline h-3 w-3" /> Merge
+        <Merge class="inline h-3 w-3" /> {{ t.merge }}
       </button>
       <button type="button" class="etable-btn" :disabled="!unmergeEnabled" @click="handleUnmerge">
-        <SplitSquareHorizontal class="inline h-3 w-3" /> Unmerge
+        <SplitSquareHorizontal class="inline h-3 w-3" /> {{ t.unmerge }}
       </button>
       <div class="etable-width">
         <button
@@ -357,7 +361,8 @@ defineExpose({
                   v-if="!readonly"
                   type="button"
                   class="etable-icon-btn etable-icon-btn--danger"
-                  title="Remove row"
+                  :title="t.removeRow"
+                  :aria-label="t.removeRow"
                   @click="updateTable(removeTableRow(table, rowIdx))"
                 >
                   <Trash2 class="h-3 w-3" />
@@ -370,28 +375,29 @@ defineExpose({
           v-if="!readonly"
           type="button"
           class="etable-add-row"
-          title="Add row below"
+          :title="t.addRowBelow"
           @click="handleAddRow"
         >
           <Rows3 class="h-3.5 w-3.5" />
-          <span>Add row</span>
+          <span>{{ t.addRow }}</span>
         </button>
       </div>
       <div v-if="!readonly" class="etable-col-gutter">
-        <button type="button" class="etable-add-col" title="Add column" @click="handleAddColumn">
+        <button type="button" class="etable-add-col" :title="t.addColumn" @click="handleAddColumn">
           <Columns2 class="h-3.5 w-3.5" />
-          <span>Col</span>
+          <span>{{ t.addColumn }}</span>
         </button>
         <button
           v-if="table.rows[0]?.length"
           type="button"
           class="etable-icon-btn etable-icon-btn--danger"
-          :title="focusCell ? 'Remove selected column' : 'Remove last column'"
+          :title="focusCell ? t.removeColumn : t.removeLastColumn"
+          :aria-label="focusCell ? t.removeColumn : t.removeLastColumn"
           @click="handleRemoveColumn"
         >
           <Trash2 class="h-3.5 w-3.5" />
         </button>
-        <button type="button" class="etable-icon-btn" title="Add row" @click="handleAddRow">
+        <button type="button" class="etable-icon-btn" :title="t.addRow" :aria-label="t.addRow" @click="handleAddRow">
           <Plus class="h-3.5 w-3.5" />
         </button>
       </div>

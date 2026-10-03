@@ -19,6 +19,8 @@ export interface FormatToolbarState {
   calloutIcon?: string | null
   tableStyle?: TableStyle
   cellBackground?: string | null
+  /** Increments when the user presses Mod+K — open the link editor. */
+  linkRequest?: number
 }
 
 export type SlashGroup = 'basic' | 'lists' | 'media' | 'advanced' | 'ai'

@@ -10,6 +10,9 @@ export function ToolbarButton({ active, wide, className, ...rest }: ToolbarButto
   return (
     <button
       type="button"
+      // Icon-only buttons: expose the tooltip as the accessible name and the toggle state.
+      aria-label={rest['aria-label'] ?? (typeof rest.title === 'string' ? rest.title : undefined)}
+      aria-pressed={active === undefined ? undefined : active}
       className={cn(
         'ebt-btn',
         active && 'ebt-active',

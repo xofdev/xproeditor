@@ -28,6 +28,7 @@ import type {
   TableWidth,
 } from '@xproeditor/core'
 import { TableCell, type TableCellHandle } from './TableCell'
+import { useEditorDictionary } from '../i18n'
 
 export interface TableBlockHandle {
   getSelectedCells: () => TableCellCoord[]
@@ -79,6 +80,7 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
   },
   ref,
 ) {
+  const t = useEditorDictionary().table
   const cellRefs = useRef(new Map<string, TableCellHandle>())
   const rootRef = useRef<HTMLDivElement | null>(null)
   const tableRef = useRef<TableData>(normalizeTableData(block.props.table))
@@ -301,19 +303,19 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
       {!readonly && (
         <div className="etable-toolbar">
           <button type="button" className="etable-btn" onClick={toggleHeader}>
-            {table.hasHeader ? 'Header: on' : 'Header: off'}
+            {table.hasHeader ? t.headerOn : t.headerOff}
           </button>
           <button
             type="button"
             className="etable-btn"
             disabled={!mergeEnabled}
-            title={mergeEnabled ? 'Merge selected cells' : 'Drag or Shift+click to select 2+ cells'}
+            title={mergeEnabled ? t.mergeSelected : t.selectHint}
             onClick={handleMerge}
           >
-            <Merge className="inline h-3 w-3" /> Merge
+            <Merge className="inline h-3 w-3" /> {t.merge}
           </button>
           <button type="button" className="etable-btn" disabled={!unmergeEnabled} onClick={handleUnmerge}>
-            <SplitSquareHorizontal className="inline h-3 w-3" /> Unmerge
+            <SplitSquareHorizontal className="inline h-3 w-3" /> {t.unmerge}
           </button>
           <div className="etable-width">
             <button
@@ -401,7 +403,8 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
                       <button
                         type="button"
                         className="etable-icon-btn etable-icon-btn--danger"
-                        title="Remove row"
+                        title={t.removeRow}
+                        aria-label={t.removeRow}
                         onClick={() => updateTable(removeTableRow(table, rowIdx))}
                       >
                         <Trash2 className="h-3 w-3" />
@@ -413,23 +416,24 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
             </tbody>
           </table>
           {!readonly && (
-            <button type="button" className="etable-add-row" title="Add row below" onClick={handleAddRow}>
+            <button type="button" className="etable-add-row" title={t.addRowBelow} onClick={handleAddRow}>
               <Rows3 className="h-3.5 w-3.5" />
-              <span>Add row</span>
+              <span>{t.addRow}</span>
             </button>
           )}
         </div>
         {!readonly && (
           <div className="etable-col-gutter">
-            <button type="button" className="etable-add-col" title="Add column" onClick={handleAddColumn}>
+            <button type="button" className="etable-add-col" title={t.addColumn} onClick={handleAddColumn}>
               <Columns2 className="h-3.5 w-3.5" />
-              <span>Col</span>
+              <span>{t.addColumn}</span>
             </button>
             {table.rows[0]?.length ? (
               <button
                 type="button"
                 className="etable-icon-btn etable-icon-btn--danger"
-                title={focusCell ? 'Remove selected column' : 'Remove last column'}
+                title={focusCell ? t.removeColumn : t.removeLastColumn}
+                aria-label={focusCell ? t.removeColumn : t.removeLastColumn}
                 onClick={handleRemoveColumn}
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -438,7 +442,8 @@ export const TableBlock = forwardRef<TableBlockHandle, TableBlockProps>(function
             <button
               type="button"
               className="etable-icon-btn"
-              title="Add row"
+              title={t.addRow}
+              aria-label={t.addRow}
               onClick={handleAddRow}
             >
               <Plus className="h-3.5 w-3.5" />

@@ -3,11 +3,17 @@
 A Notion-like block editor for Vue 3 — contentEditable-based, with a flat
 block model (paragraphs, headings, lists, to-dos, toggles & toggle headings,
 quotes, callouts, code, dividers, buttons, images, video, audio, file
-attachments, tables, web bookmarks) and two editing styles built in:
+attachments, tables, web bookmarks, embeds, table of contents) and two
+editing styles built in:
 
 - **Fixed toolbar** — a sticky top toolbar, classic WYSIWYG feel.
 - **Floating (Notion-like)** — a bubble toolbar on text selection plus a `/`
   slash command menu.
+
+Markdown-as-you-type (`**bold**`, `# `, `- [ ] `…), keyboard shortcuts for
+every block action, a full document API on the template ref, built-in
+English and Persian UI (any language via a dictionary), and sanitized
+rendering of untrusted content come standard.
 
 No Tailwind, shadcn, or Radix required in your app — styles ship as a single
 precompiled stylesheet, themeable via CSS variables.
@@ -47,6 +53,26 @@ const blocks = ref<Block[]>([
 
 `<ProEditor>` mutates the array you pass to `model-value` in place and emits
 `change` (no payload) whenever it does — read `blocks.value` in the handler.
+To load another document, assign a new array to `blocks.value` (undo history
+resets) or call `editor.value.setBlocks(next, { history: 'reset' })`.
+
+### The editor ref
+
+```vue
+<script setup lang="ts">
+const editor = ref<InstanceType<typeof ProEditor> | null>(null)
+
+const markdown = () => editor.value?.getMarkdown()
+const stats = () => editor.value?.getStats() // { words, characters, readingTimeMinutes, … }
+const addNote = () => editor.value?.insertBlocks([createBlock('callout', { content: [{ text: 'Note' }] })])
+</script>
+
+<template>
+  <ProEditor ref="editor" :model-value="blocks" />
+</template>
+```
+
+Full reference: [`docs/api.md`](../../docs/api.md).
 
 ### Composing it yourself
 
@@ -80,10 +106,23 @@ const formatState = ref<FormatToolbarState | null>(null)
 | `toolbar` | `'fixed' \| 'floating' \| 'both' \| 'none'` | `'floating'` | Which toolbar UI to render |
 | `upload` | `(file: File) => Promise<string>` | — | Called for drag/drop/paste of images, video, audio & files |
 | `pickMedia` | `(opts: { accept: string[]; title?: string }) => Promise<{url, alt?, caption?} \| null>` | — | Hook up your media library picker |
+| `fetchBookmarkMeta` | `(url: string) => Promise<BookmarkMeta \| null>` | — | OG metadata for `/bookmark` cards |
 | `editorDir` | `'ltr' \| 'rtl'` | `'ltr'` | Default direction for new blocks |
 | `readonly` | `boolean` | `false` | Disable editing |
+| `locale` | `string` | `'en'` | UI language — `'en'` or `'fa'` built in ([i18n](../../docs/i18n.md)) |
+| `dictionary` | `EditorDictionaryOverrides` | — | Override any UI string |
+| `placeholder` | `string` | localized | Placeholder of the focused empty line |
+| `spellcheck` | `boolean` | `true` | Browser spellcheck in text blocks |
+| `autofocus` | `boolean \| 'start' \| 'end'` | `false` | Focus on mount |
+| `ai` | `{ transport: AITransport; commands?: AICommand[] }` | — | Pluggable Ask AI |
 
-Emits: `change` (no payload — read the mutated array).
+Emits: `change` (no payload — read the mutated array) and `upload-error`
+(`error, file`) when `upload` rejects for a pasted/dropped file.
+
+The template ref exposes the [document API](../../docs/api.md) (`getBlocks`,
+`setBlocks`, `insertBlocks`, `updateBlock`, `removeBlocks`, `focus`,
+`getMarkdown`, `getHTML`, `getText`, `getStats`) plus `undo`, `redo`,
+`openAIMenu`, `focusFirst`, `focusEnd`.
 
 ## `<BlockEditor>` (lower-level)
 
@@ -92,7 +131,15 @@ Emits `change` and `format-state` (`FormatToolbarState | null`). Exposes via
 template ref: `undo`, `redo`, `canUndo`, `canRedo`, `applyToolbarMark`,
 `turnIntoBlock`, `indentFocusedBlock`, `outdentFocusedBlock`, `setFocusedAlign`,
 `setFocusedDir`, `setFocusedCalloutIcon`, `patchTableStyle`,
-`patchTableCellBackground`, `focusFirst`, `focusEnd`.
+`patchTableCellBackground`, `focusFirst`, `focusEnd`, and the same document
+API.
+
+## Shortcuts
+
+Type `# `, `- `, `1. `, `[x] `, `> ` at the start of a line, or `**bold**`,
+`` `code` ``, `~~strike~~` inline. `Mod+Alt+1…3` makes headings,
+`Mod+Shift+↑/↓` moves blocks, `Mod+D` duplicates, `Mod+K` links. Full list:
+[`docs/keyboard-shortcuts.md`](../../docs/keyboard-shortcuts.md).
 
 ## Read-only rendering
 
@@ -105,9 +152,13 @@ import { DocRenderer } from '@xproeditor/vue'
 </script>
 
 <template>
-  <DocRenderer :blocks="post.content.blocks" editor-dir="ltr" />
+  <DocRenderer :blocks="post.content.blocks" editor-dir="ltr" locale="en" />
 </template>
 ```
+
+Headings get anchor ids, code is highlighted (highlight.js loads on demand),
+embeds and the table of contents render, and every link and media URL is
+sanitized — see [`docs/security.md`](../../docs/security.md).
 
 ## Theming
 

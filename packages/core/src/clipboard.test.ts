@@ -77,7 +77,7 @@ describe('blocksToHtmlContent', () => {
   it('maps block types onto semantic tags', () => {
     const html = blocksToHtmlContent(sample)
 
-    expect(html).toContain('<h1>Title</h1>')
+    expect(html).toContain('<h1 id="title">Title</h1>')
     expect(html).toContain('<strong>Bold</strong>')
     expect(html).toContain('<li>')
   })

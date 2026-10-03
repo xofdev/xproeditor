@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import hljs from 'highlight.js/lib/common'
+import { sanitizeLinkUrl, sanitizeMediaUrl } from '@xproeditor/core'
 import { Check, ChevronRight, Copy, Link as LinkIcon, X } from 'lucide-vue-next'
-import { ref, computed } from 'vue'
+import { ref, computed, watch, toRef, onBeforeUnmount } from 'vue'
+import { highlightCode as highlightCodeHtml, isHighlighterReady, loadHighlighter } from '../utils/highlight'
 import {
   computeListNumbering,
+  embedFrameHeight,
   escapeHtml,
+  extractHeadings,
+  resolveEmbed,
   formatFileSize,
   headingAnchorIds,
   isAllowedEmbedUrl,
@@ -16,14 +20,28 @@ import {
   tableWrapperStyle,
   toggleHeadingLevel,
 } from '@xproeditor/core'
-import type { Block, TableCell } from '@xproeditor/core'
+import type { Block, EditorDictionaryOverrides, TableCell } from '@xproeditor/core'
+import { provideEditorI18n } from '../i18n'
 import { IconValueDisplay } from '../ui'
 
 const props = defineProps<{
   blocks: Block[]
   /** Fallback direction when block dir is auto and content is empty. */
   editorDir?: 'ltr' | 'rtl'
+  /** UI language for the renderer chrome (`'en'` default, `'fa'` built in). */
+  locale?: string
+  /** Override any UI string. */
+  dictionary?: EditorDictionaryOverrides
 }>()
+
+const dict = provideEditorI18n(toRef(props, 'locale'), toRef(props, 'dictionary'))
+const headings = computed(() => extractHeadings(props.blocks))
+
+function embedFor(block: Block) {
+  const resolved = resolveEmbed(block.props.url)
+
+  return resolved ? { ...resolved, height: embedFrameHeight(block.props.height, resolved.height) } : null
+}
 
 function blockDirection(block: Block): 'ltr' | 'rtl' {
   return resolveBlockDirection(block, props.editorDir ?? 'ltr')
@@ -111,14 +129,26 @@ function buttonAccentStyle(block: Block): Record<string, string> | undefined {
   return { color: accent, '--xpe-btn-accent': accent }
 }
 
-function highlightCode(code: string, language?: string): string {
-  try {
-    if (language && language !== 'plaintext' && hljs.getLanguage(language)) {
-      return hljs.highlight(code, { language }).value
-    }
-  } catch { /* fall through */ }
+// highlight.js loads on demand the first time the document has a code block.
+const highlighterReady = ref(isHighlighterReady())
 
-  return escapeHtml(code)
+watch(
+  () => props.blocks.some(b => b.type === 'code'),
+  (hasCode) => {
+    if (hasCode && !highlighterReady.value) {
+      void loadHighlighter().then(() => {
+        highlighterReady.value = true
+      })
+    }
+  },
+  { immediate: true },
+)
+
+function highlightCode(code: string, language?: string): string {
+  // Reading the ref re-renders once the highlighter arrives.
+  void highlighterReady.value
+
+  return highlightCodeHtml(code, language)
 }
 
 // Heading anchor / code copy
@@ -146,8 +176,24 @@ function copyAnchor(id: string) {
 }, 1500)
 }
 
-// Image lightbox
+// Image lightbox (Escape closes it)
 const lightboxUrl = ref<string | null>(null)
+
+function onLightboxKey(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    lightboxUrl.value = null
+  }
+}
+
+watch(lightboxUrl, (url) => {
+  if (url) {
+    window.addEventListener('keydown', onLightboxKey)
+  } else {
+    window.removeEventListener('keydown', onLightboxKey)
+  }
+})
+
+onBeforeUnmount(() => window.removeEventListener('keydown', onLightboxKey))
 function safeVideoEmbedUrl(block: Block): string {
   const url = block.props.url ?? ''
 
@@ -175,7 +221,8 @@ function safeVideoEmbedUrl(block: Block): string {
         <button
           v-if="anchors.get(block.id)"
           class="db-anchor-btn"
-          :title="copiedAnchor === anchors.get(block.id) ? 'Copied!' : 'Copy link'"
+          :title="copiedAnchor === anchors.get(block.id) ? dict.renderer.linkCopied : dict.renderer.copyLink"
+          :aria-label="dict.renderer.copyLink"
           @click="copyAnchor(anchors.get(block.id)!)"
         >
           <LinkIcon class="w-3.5 h-3.5" />
@@ -290,8 +337,8 @@ function safeVideoEmbedUrl(block: Block): string {
             type="button"
             class="db-code-copy"
             :class="{ 'db-code-copy--ok': copiedCode === idx }"
-            :title="copiedCode === idx ? 'Copied' : 'Copy code'"
-            :aria-label="copiedCode === idx ? 'Copied' : 'Copy code'"
+            :title="copiedCode === idx ? dict.renderer.codeCopied : dict.renderer.copyCode"
+            :aria-label="copiedCode === idx ? dict.renderer.codeCopied : dict.renderer.copyCode"
             @click="copyCodeBlock(idx, block.props.code ?? '')"
           >
             <Check v-if="copiedCode === idx" />
@@ -307,7 +354,7 @@ function safeVideoEmbedUrl(block: Block): string {
       <!-- Image -->
       <figure v-else-if="block.type === 'image' && block.props.url" class="db-figure">
         <img
-          :src="block.props.url"
+          :src="sanitizeMediaUrl(block.props.url) || undefined"
           :alt="block.props.caption || ''"
           :style="{ width: `${block.props.width ?? 100}%` }"
           class="db-img"
@@ -329,11 +376,11 @@ function safeVideoEmbedUrl(block: Block): string {
             class="aspect-video w-full"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowfullscreen
-            title="Embedded video"
+            :title="block.props.caption || dict.media.videoEmbedded"
           />
           <video
             v-else
-            :src="block.props.url"
+            :src="sanitizeMediaUrl(block.props.url) || undefined"
             class="aspect-video w-full"
             controls
             playsinline
@@ -346,7 +393,7 @@ function safeVideoEmbedUrl(block: Block): string {
       <figure v-else-if="block.type === 'audio' && block.props.url" class="db-figure">
         <div class="db-audio-wrap">
           <div v-if="block.props.name" class="db-audio-name">{{ block.props.name }}</div>
-          <audio :src="block.props.url" controls preload="metadata" class="w-full" />
+          <audio :src="sanitizeMediaUrl(block.props.url) || undefined" controls preload="metadata" class="w-full" />
         </div>
         <figcaption v-if="block.props.caption" class="db-caption">{{ block.props.caption }}</figcaption>
       </figure>
@@ -354,11 +401,11 @@ function safeVideoEmbedUrl(block: Block): string {
       <!-- File -->
       <a
         v-else-if="block.type === 'file' && block.props.url"
-        :href="block.props.url"
+        :href="sanitizeLinkUrl(block.props.url, { allowBlob: true }) || undefined"
         :download="block.props.name ?? true"
         class="db-file"
       >
-        <span class="db-file-name">{{ block.props.name || 'Download file' }}</span>
+        <span class="db-file-name">{{ block.props.name || dict.renderer.downloadFile }}</span>
         <span v-if="block.props.size" class="db-file-size">{{ formatFileSize(block.props.size) }}</span>
       </a>
 
@@ -370,20 +417,20 @@ function safeVideoEmbedUrl(block: Block): string {
       >
         <a
           v-if="block.props.url"
-          :href="block.props.url"
+          :href="sanitizeLinkUrl(block.props.url, { allowBlob: true }) || undefined"
           :target="block.props.openInNewTab ? '_blank' : undefined"
           :rel="block.props.openInNewTab ? 'noopener noreferrer' : undefined"
           class="db-button"
           :class="`db-button--${block.props.buttonStyle ?? 'primary'}`"
           :style="buttonAccentStyle(block)"
-          v-html="inlineHtml(block) || 'Button'"
+          v-html="inlineHtml(block) || escapeHtml(dict.button.defaultLabel)"
         />
         <span
           v-else
           class="db-button"
           :class="`db-button--${block.props.buttonStyle ?? 'primary'}`"
           :style="buttonAccentStyle(block)"
-          v-html="inlineHtml(block) || 'Button'"
+          v-html="inlineHtml(block) || escapeHtml(dict.button.defaultLabel)"
         />
       </div>
 
@@ -391,7 +438,7 @@ function safeVideoEmbedUrl(block: Block): string {
       <a
         v-else-if="block.type === 'bookmark' && block.props.url"
         class="db-bookmark"
-        :href="block.props.url"
+        :href="sanitizeLinkUrl(block.props.url, { allowBlob: true }) || undefined"
         target="_blank"
         rel="noopener noreferrer"
       >
@@ -399,7 +446,7 @@ function safeVideoEmbedUrl(block: Block): string {
           <div class="db-bookmark__title">
             <img
               v-if="block.props.favicon"
-              :src="block.props.favicon"
+              :src="sanitizeMediaUrl(block.props.favicon) || undefined"
               alt=""
               class="db-bookmark__favicon"
             />
@@ -411,9 +458,40 @@ function safeVideoEmbedUrl(block: Block): string {
           <span class="db-bookmark__url">{{ bookmarkHost(block.props.url) }}</span>
         </div>
         <div v-if="block.props.image" class="db-bookmark__media">
-          <img :src="block.props.image" alt="" />
+          <img :src="sanitizeMediaUrl(block.props.image) || undefined" alt="" />
         </div>
       </a>
+
+      <!-- Embed -->
+      <figure v-else-if="block.type === 'embed' && embedFor(block)" class="db-figure db-embed">
+        <iframe
+          :src="embedFor(block)!.embedUrl"
+          :title="block.props.caption || embedFor(block)!.provider.name"
+          class="db-embed__frame"
+          :style="{ height: `${embedFor(block)!.height}px` }"
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-presentation allow-forms"
+        />
+        <figcaption v-if="block.props.caption" class="db-caption">{{ block.props.caption }}</figcaption>
+      </figure>
+
+      <!-- Table of contents -->
+      <nav
+        v-else-if="block.type === 'table_of_contents' && headings.length"
+        class="db-toc"
+        :aria-label="dict.toc.title"
+        dir="auto"
+      >
+        <p class="db-toc__title">{{ dict.toc.title }}</p>
+        <ul class="db-toc__list">
+          <li v-for="h in headings" :key="h.id" class="db-toc__item" :class="`db-toc__item--${h.level}`">
+            <a :href="`#${h.id}`">{{ h.text }}</a>
+          </li>
+        </ul>
+      </nav>
 
       <!-- Table -->
       <div
@@ -456,8 +534,8 @@ function safeVideoEmbedUrl(block: Block): string {
         class="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-6 cursor-zoom-out"
         @click="lightboxUrl = null"
       >
-        <img :src="lightboxUrl" class="max-w-full max-h-full rounded-lg shadow-2xl" alt="" />
-        <button class="absolute top-4 end-4 text-white/80 hover:text-white">
+        <img :src="sanitizeMediaUrl(lightboxUrl) || undefined" class="max-w-full max-h-full rounded-lg shadow-2xl" alt="" />
+        <button type="button" :aria-label="dict.common.close" class="absolute top-4 end-4 text-white/80 hover:text-white">
           <X class="w-6 h-6" />
         </button>
       </div>

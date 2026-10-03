@@ -1,5 +1,8 @@
 import { parseInlineNodes } from './html'
-import { createBlock, generateBlockId, normalizeSpans } from './ops'
+import { createBlock, normalizeSpans } from './ops'
+import { resolveEmbed } from './embed'
+import { sanitizeBlocks, sanitizeCssColor, sanitizeLinkUrl, sanitizeMediaUrl } from './sanitize'
+import { parseVideoEmbed } from './video-embed'
 import { normalizeTableData, tableCellFromText } from './table'
 import { isToggleBlockType } from './toggle'
 import type { Block, BlockType, InlineMarks, InlineSpan, TableCell } from './types'
@@ -289,8 +292,92 @@ export function tiptapToBlocks(doc: Record<string, unknown>): Block[] {
 
 // ─── HTML → blocks (client only, requires DOMParser) ─────────────────────────
 
+function figureCaption(el: Element): string {
+  return el.querySelector('figcaption')?.textContent?.trim() ?? ''
+}
+
+/** Embed (or YouTube/Vimeo video) block from an iframe src, or null when not allow-listed. */
+function blockFromIframe(src: string | null | undefined, caption: string, indent: number): Block | null {
+  if (!src) {
+    return null
+  }
+
+  const video = parseVideoEmbed(src)
+
+  if (video) {
+    return createBlock('video', {
+      props: { url: video.embedUrl, provider: video.provider, ...(caption ? { caption } : {}), ...(indent ? { indent } : {}) },
+    })
+  }
+
+  const embed = resolveEmbed(src)
+
+  return embed
+    ? createBlock('embed', { props: { url: src, provider: embed.provider.id, ...(caption ? { caption } : {}) } })
+    : null
+}
+
+/** Elements exported by `blocksToHtmlContent` with a `data-xpe-type` marker. */
+function convertXpeElement(el: Element, xpeType: string, indent: number, out: Block[]): boolean {
+  switch (xpeType) {
+    case 'callout': {
+      const p = el.querySelector(':scope > p')
+      const icon = el.getAttribute('data-xpe-icon') || undefined
+      const color = sanitizeCssColor(el.getAttribute('data-xpe-color')) || undefined
+      out.push(createBlock('callout', {
+        content: normalizeSpans(parseInlineNodes((p ?? el).childNodes)),
+        props: {
+          ...(icon ? { icon } : {}),
+          ...(color ? { color } : {}),
+          ...(indent ? { indent } : {}),
+          ...propsWithDir(el),
+        },
+      }))
+      return true
+    }
+    case 'embed': {
+      const url = el.getAttribute('data-xpe-url') ?? el.querySelector('iframe')?.getAttribute('src') ?? ''
+      const caption = figureCaption(el)
+
+      if (resolveEmbed(url)) {
+        out.push(createBlock('embed', { props: { url, ...(caption ? { caption } : {}) } }))
+      }
+
+      return true
+    }
+    case 'video': {
+      const caption = figureCaption(el)
+      const iframe = blockFromIframe(el.getAttribute('data-xpe-url') ?? el.querySelector('iframe')?.getAttribute('src'), caption, indent)
+
+      if (iframe) {
+        out.push(iframe)
+        return true
+      }
+
+      const src = el.querySelector('video')?.getAttribute('src') ?? el.querySelector('video source')?.getAttribute('src')
+      const url = sanitizeMediaUrl(src)
+
+      if (url) {
+        out.push(createBlock('video', { props: { url, provider: 'file', ...(caption ? { caption } : {}) } }))
+      }
+
+      return true
+    }
+    case 'table_of_contents':
+      out.push(createBlock('table_of_contents'))
+      return true
+    default:
+      return false
+  }
+}
+
 function convertHtmlElement(el: Element, indent: number, out: Block[]): void {
   const tag = el.tagName.toLowerCase()
+  const xpeType = el.getAttribute('data-xpe-type')
+
+  if (xpeType && convertXpeElement(el, xpeType, indent, out)) {
+    return
+  }
 
   switch (tag) {
     case 'h1':
@@ -333,8 +420,13 @@ function convertHtmlElement(el: Element, indent: number, out: Block[]): void {
     }
     case 'pre': {
       const codeEl = el.querySelector('code')
+      const classes = `${codeEl?.getAttribute('class') ?? ''} ${el.getAttribute('class') ?? ''}`
+      const language = /(?:^|\s)(?:language|lang)-([\w#+.-]+)/.exec(classes)?.[1]
+        ?? el.getAttribute('data-language')
+        ?? codeEl?.getAttribute('data-language')
+        ?? 'plaintext'
       out.push(createBlock('code', {
-        props: { language: 'plaintext', code: (codeEl ?? el).textContent ?? '' },
+        props: { language: language.toLowerCase(), code: (codeEl ?? el).textContent ?? '' },
       }))
       break
     }
@@ -349,10 +441,26 @@ continue
 
         const nestedLists = Array.from(li.children).filter(c => ['ul', 'ol'].includes(c.tagName.toLowerCase()))
         const inlineNodes = Array.from(li.childNodes).filter(n => !nestedLists.includes(n as Element))
-        out.push(createBlock(itemType, {
-          content: normalizeSpans(parseInlineNodes(inlineNodes)),
-          props: { ...(indent ? { indent } : {}), ...propsWithDir(li) },
-        }))
+        // GitHub / Tiptap / Notion task items: a checkbox or data-checked on the <li>.
+        const checkbox = li.querySelector(':scope > input[type="checkbox"], :scope > label > input[type="checkbox"], :scope > p > input[type="checkbox"]') as HTMLInputElement | null
+        const dataChecked = li.getAttribute('data-checked')
+        const isTask = !!checkbox || dataChecked === 'true' || dataChecked === 'false' || li.getAttribute('data-type') === 'taskItem'
+        const content = normalizeSpans(parseInlineNodes(inlineNodes))
+
+        if (isTask && tag === 'ul') {
+          const checked = dataChecked === 'true' || (!!checkbox && (checkbox.checked || checkbox.hasAttribute('checked')))
+          // Drop the space that separated the checkbox from the label.
+          if (content[0]) content[0] = { ...content[0], text: content[0].text.replace(/^\s+/, '') }
+          out.push(createBlock('to_do', {
+            content: normalizeSpans(content),
+            props: { checked, ...(indent ? { indent } : {}), ...propsWithDir(li) },
+          }))
+        } else {
+          out.push(createBlock(itemType, {
+            content,
+            props: { ...(indent ? { indent } : {}), ...propsWithDir(li) },
+          }))
+        }
 
         for (const nested of nestedLists) {
 convertHtmlElement(nested, indent + 1, out)
@@ -405,7 +513,7 @@ convertHtmlElement(nested, indent + 1, out)
       break
     }
     case 'img': {
-      const src = el.getAttribute('src')
+      const src = sanitizeMediaUrl(el.getAttribute('src'))
 
       if (src) {
 out.push(createBlock('image', { props: { url: src, caption: el.getAttribute('alt') ?? '' } }))
@@ -413,8 +521,71 @@ out.push(createBlock('image', { props: { url: src, caption: el.getAttribute('alt
 
       break
     }
-    case 'audio': {
+    case 'figure': {
+      const caption = figureCaption(el)
+      const img = el.querySelector('img')
+      const video = el.querySelector('video')
+      const iframe = el.querySelector('iframe')
+
+      if (img) {
+        const src = sanitizeMediaUrl(img.getAttribute('src'))
+
+        if (src) {
+          out.push(createBlock('image', { props: { url: src, caption: caption || (img.getAttribute('alt') ?? '') } }))
+        }
+      } else if (video) {
+        convertHtmlElement(video, indent, out)
+
+        if (caption && out[out.length - 1]?.type === 'video') {
+          out[out.length - 1].props.caption = caption
+        }
+      } else if (iframe) {
+        const block = blockFromIframe(iframe.getAttribute('src'), caption, indent)
+
+        if (block) {
+          out.push(block)
+        }
+      } else {
+        const spans = normalizeSpans(parseInlineNodes(el.childNodes))
+
+        if (spans.some(sp => sp.text.trim())) {
+          out.push(createBlock('paragraph', { content: spans }))
+        }
+      }
+
+      break
+    }
+    case 'video': {
       const src = el.getAttribute('src') ?? el.querySelector('source')?.getAttribute('src')
+      const url = sanitizeMediaUrl(src)
+
+      if (url) {
+        out.push(createBlock('video', { props: { url, provider: 'file' } }))
+      }
+
+      break
+    }
+    case 'iframe': {
+      const block = blockFromIframe(el.getAttribute('src'), el.getAttribute('title') ?? '', indent)
+
+      if (block) {
+        out.push(block)
+      }
+
+      break
+    }
+    case 'aside':
+    case 'nav': {
+      const spans = normalizeSpans(parseInlineNodes(el.childNodes))
+
+      if (spans.some(sp => sp.text.trim())) {
+        out.push(createBlock('paragraph', { content: spans }))
+      }
+
+      break
+    }
+    case 'audio': {
+      const src = sanitizeMediaUrl(el.getAttribute('src') ?? el.querySelector('source')?.getAttribute('src'))
 
       if (src) {
 out.push(createBlock('audio', { props: { url: src } }))
@@ -448,7 +619,10 @@ out.push(createBlock('table', { props: { table: normalizeTableData({ hasHeader, 
     }
     case 'div':
     case 'section':
-    case 'article': {
+    case 'article':
+    case 'main':
+    case 'header':
+    case 'footer': {
       if (el.getAttribute('data-xpe-type') === 'button') {
         const styleAttr = el.getAttribute('data-xpe-style')
         const buttonStyle =
@@ -460,10 +634,10 @@ out.push(createBlock('table', { props: { table: normalizeTableData({ hasHeader, 
           alignAttr === 'center' || alignAttr === 'right' || alignAttr === 'left'
             ? alignAttr
             : 'left'
-        const url =
+        const url = sanitizeLinkUrl(
           el.getAttribute('data-xpe-url')
-          ?? el.querySelector('a')?.getAttribute('href')
-          ?? ''
+          ?? el.querySelector('a')?.getAttribute('href'),
+        )
         const color = el.getAttribute('data-xpe-color') || undefined
         const openInNewTab = el.getAttribute('data-xpe-newtab') === 'true'
         const labelEl = el.querySelector('a, span') ?? el
@@ -481,10 +655,10 @@ out.push(createBlock('table', { props: { table: normalizeTableData({ hasHeader, 
       }
 
       if (el.getAttribute('data-xpe-type') === 'bookmark') {
-        const url =
+        const url = sanitizeLinkUrl(
           el.getAttribute('data-xpe-url')
-          ?? el.querySelector('a')?.getAttribute('href')
-          ?? ''
+          ?? el.querySelector('a')?.getAttribute('href'),
+        )
         const title = el.getAttribute('data-xpe-title') || undefined
         const description = el.getAttribute('data-xpe-description') || undefined
         const favicon = el.getAttribute('data-xpe-favicon') || undefined
@@ -525,7 +699,7 @@ out.push(createBlock('paragraph', { content: spans }))
 
           inlineBuffer = []
         }
-        const blockTags = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'blockquote', 'pre', 'ul', 'ol', 'hr', 'img', 'table', 'div', 'section', 'article', 'details'])
+        const blockTags = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'blockquote', 'pre', 'ul', 'ol', 'hr', 'img', 'table', 'div', 'section', 'article', 'details', 'figure', 'video', 'audio', 'iframe', 'aside', 'nav', 'main', 'header', 'footer'])
 
         for (const child of Array.from(el.childNodes)) {
           if (child.nodeType === Node.ELEMENT_NODE && blockTags.has((child as Element).tagName.toLowerCase())) {
@@ -557,7 +731,7 @@ out.push(createBlock('paragraph', { content: spans }))
  * a region of a web page would drop its stylesheet or script source into the
  * document as visible text.
  */
-const NON_CONTENT_SELECTOR = 'script, style, noscript, template, iframe, object'
+const NON_CONTENT_SELECTOR = 'script, style, noscript, template, object, embed, link, meta'
 
 export function htmlToBlocks(html: string): Block[] {
   if (typeof DOMParser === 'undefined') {
@@ -603,15 +777,6 @@ out.push(createBlock('paragraph', { content: spans }))
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
-
-function sanitizeBlocks(blocks: Block[]): Block[] {
-  return blocks.map(b => ({
-    id: typeof b.id === 'string' && b.id ? b.id : generateBlockId(),
-    type: b.type,
-    content: Array.isArray(b.content) ? normalizeSpans(b.content) : [],
-    props: b.props && typeof b.props === 'object' ? b.props : {},
-  }))
-}
 
 /**
  * Convert any stored document content (blocks / legacy TipTap JSON / legacy HTML)

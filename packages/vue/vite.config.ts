@@ -21,7 +21,9 @@ export default defineConfig({
       formats: ['es', 'cjs'],
     },
     rollupOptions: {
-      external: ['vue', '@xproeditor/core'],
+      // Runtime dependencies stay external so apps dedupe and tree-shake them
+      // (highlight.js is additionally loaded on demand by DocRenderer).
+      external: ['vue', '@xproeditor/core', /^highlight\.js(\/.*)?$/, /^lucide-vue-next(\/.*)?$/],
       output: {
         globals: {
           vue: 'Vue',

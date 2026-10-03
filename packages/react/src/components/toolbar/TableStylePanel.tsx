@@ -17,6 +17,7 @@ import {
   TABLE_BORDER_WIDTHS,
   TEXT_COLOR_PRESETS,
 } from '../../ui'
+import { useEditorDictionary } from '../../i18n'
 
 export interface TableStylePanelProps {
   open?: boolean
@@ -41,6 +42,7 @@ export function TableStylePanel({
   onCellBackground,
   onTableStyle,
 }: TableStylePanelProps) {
+  const t = useEditorDictionary().table
   const [activeTab, setActiveTab] = useState<Tab>('text')
   const [pickerColor, setPickerColor] = useState(DEFAULT_TEXT_COLOR)
   const isEditingPicker = useRef(false)
@@ -101,22 +103,22 @@ export function TableStylePanel({
     <Tabs value={activeTab} onValueChange={changeTab} className="w-[300px]">
       <TabsList className="mb-2 grid w-full grid-cols-4">
         <TabsTrigger value="text" className="text-[10px]">
-          Text
+          {t.text}
         </TabsTrigger>
         <TabsTrigger value="cell" className="text-[10px]">
-          Cell
+          {t.cell}
         </TabsTrigger>
         <TabsTrigger value="table" className="text-[10px]">
-          Table
+          {t.table}
         </TabsTrigger>
         <TabsTrigger value="border" className="text-[10px]">
-          Border
+          {t.border}
         </TabsTrigger>
       </TabsList>
 
       <TabsContent value="text" className="mt-0 space-y-3">
         <p className="xpe-menu-heading">
-          Text color
+          {t.textColor}
         </p>
         <div className="grid grid-cols-5 gap-1.5">
           {TEXT_COLOR_PRESETS.map((color) => (
@@ -136,7 +138,7 @@ export function TableStylePanel({
         </div>
 
         <p className="xpe-menu-heading">
-          Highlight
+          {t.highlight}
         </p>
         <div className="grid grid-cols-4 gap-1.5">
           {HIGHLIGHT_PRESETS.map((color) => (
@@ -168,7 +170,7 @@ export function TableStylePanel({
               className="h-7 flex-1 text-xs"
               onClick={() => onMark('color', null)}
             >
-              Reset text
+              {t.resetText}
             </Button>
           )}
           {currentHighlight && (
@@ -178,7 +180,7 @@ export function TableStylePanel({
               className="h-7 flex-1 text-xs"
               onClick={() => onMark('highlight', null)}
             >
-              Reset highlight
+              {t.resetHighlight}
             </Button>
           )}
         </div>
@@ -210,14 +212,14 @@ export function TableStylePanel({
             className="h-7 w-full text-xs"
             onClick={() => onCellBackground(null)}
           >
-            Reset cell background
+            {t.resetCellBackground}
           </Button>
         )}
       </TabsContent>
 
       <TabsContent value="table" className="mt-0 space-y-3">
         <p className="xpe-menu-heading">
-          Table background
+          {t.tableBackground}
         </p>
         <div className="grid grid-cols-5 gap-1.5">
           {TABLE_BG_PRESETS.map((color) => (
@@ -232,7 +234,7 @@ export function TableStylePanel({
         </div>
 
         <p className="xpe-menu-heading">
-          Header background
+          {t.headerBackground}
         </p>
         <div className="grid grid-cols-5 gap-1.5">
           {TABLE_BG_PRESETS.map((color) => (
@@ -252,7 +254,7 @@ export function TableStylePanel({
           className="h-7 w-full text-xs"
           onClick={() => onTableStyle({ background: undefined })}
         >
-          Reset table background
+          {t.resetTableBackground}
         </Button>
         <Button
           variant="ghost"
@@ -260,7 +262,7 @@ export function TableStylePanel({
           className="h-7 w-full text-xs"
           onClick={() => onTableStyle({ headerBackground: undefined })}
         >
-          Reset header background
+          {t.resetHeaderBackground}
         </Button>
       </TabsContent>
 
@@ -271,7 +273,7 @@ export function TableStylePanel({
             border: `${resolvedBorder.width}px ${resolvedBorder.style} ${resolvedBorder.color}`,
           }}
         >
-          <div className="text-xs text-[var(--xpe-muted-foreground)]">Preview</div>
+          <div className="text-xs text-[var(--xpe-muted-foreground)]">{t.preview}</div>
         </div>
 
         <div className="grid grid-cols-4 gap-1.5">
@@ -286,7 +288,7 @@ export function TableStylePanel({
           ))}
         </div>
 
-        <p className="xpe-menu-heading">Width</p>
+        <p className="xpe-menu-heading">{t.width}</p>
         <div className="flex flex-wrap gap-1">
           {TABLE_BORDER_WIDTHS.map((width: TableBorderWidth) => (
             <button
@@ -300,7 +302,7 @@ export function TableStylePanel({
           ))}
         </div>
 
-        <p className="xpe-menu-heading">Style</p>
+        <p className="xpe-menu-heading">{t.style}</p>
         <div className="flex flex-wrap gap-1">
           {TABLE_BORDER_STYLES.map((style: TableBorderStyleKind) => (
             <button
@@ -328,7 +330,7 @@ export function TableStylePanel({
           className="h-7 w-full text-xs"
           onClick={() => onTableStyle({ border: { ...DEFAULT_TABLE_BORDER } })}
         >
-          Reset border
+          {t.resetBorder}
         </Button>
       </TabsContent>
     </Tabs>

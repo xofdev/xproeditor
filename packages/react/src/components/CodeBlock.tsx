@@ -1,6 +1,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Check, Copy, WrapText } from 'lucide-react'
 import type { Block } from '@xproeditor/core'
+import { useEditorDictionary } from '../i18n'
+import { modKeyLabel } from '../utils/shortcut'
 
 export interface CodeBlockHandle {
   focusAt: (pos: number | 'start' | 'end') => void
@@ -56,6 +58,7 @@ export const CodeBlock = forwardRef<CodeBlockHandle, CodeBlockProps>(function Co
   { block, readonly, onPatch, onArrowUp, onArrowDown, onRemoveSelf, onExitBelow },
   ref,
 ) {
+  const t = useEditorDictionary().code
   const textarea = useRef<HTMLTextAreaElement | null>(null)
   const code = block.props.code ?? ''
   const wrap = Boolean(block.props.wrap)
@@ -214,13 +217,17 @@ export const CodeBlock = forwardRef<CodeBlockHandle, CodeBlockProps>(function Co
           className="ecb-lang"
           value={language}
           disabled={readonly}
-          aria-label="Language"
+          aria-label={t.language}
           onChange={(e) => onPatch({ language: e.target.value })}
           onMouseDown={(e) => e.stopPropagation()}
         >
+          {/* Keep languages from imported Markdown/HTML selectable even if not in the list. */}
+          {!LANGUAGES.some((lang) => lang.id === language) && (
+            <option value={language}>{language}</option>
+          )}
           {LANGUAGES.map((lang) => (
             <option key={lang.id} value={lang.id}>
-              {lang.label}
+              {lang.id === 'plaintext' ? t.plainText : lang.label}
             </option>
           ))}
         </select>
@@ -228,8 +235,8 @@ export const CodeBlock = forwardRef<CodeBlockHandle, CodeBlockProps>(function Co
           <button
             type="button"
             className={`ecb-action${wrap ? ' ecb-action--active' : ''}`}
-            title={wrap ? 'Disable wrap' : 'Wrap lines'}
-            aria-label={wrap ? 'Disable wrap' : 'Wrap lines'}
+            title={wrap ? t.disableWrap : t.wrap}
+            aria-label={wrap ? t.disableWrap : t.wrap}
             aria-pressed={wrap}
             disabled={readonly}
             onMouseDown={(e) => e.preventDefault()}
@@ -240,14 +247,14 @@ export const CodeBlock = forwardRef<CodeBlockHandle, CodeBlockProps>(function Co
           <button
             type="button"
             className={`ecb-action${copied ? ' ecb-action--ok' : ''}`}
-            title={copied ? 'Copied' : 'Copy code'}
-            aria-label={copied ? 'Copied' : 'Copy code'}
+            title={copied ? t.copied : t.copy}
+            aria-label={copied ? t.copied : t.copy}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => void copyCode()}
           >
             {copied ? <Check /> : <Copy />}
           </button>
-          <span className="ecb-hint">Ctrl+↵ exit</span>
+          <span className="ecb-hint">{t.exitHint.replace(/^Ctrl\+/, modKeyLabel())}</span>
         </div>
       </div>
       <textarea
@@ -256,7 +263,7 @@ export const CodeBlock = forwardRef<CodeBlockHandle, CodeBlockProps>(function Co
         readOnly={readonly}
         className="ecb-input"
         rows={1}
-        placeholder="Write code…"
+        placeholder={t.placeholder}
         spellCheck={false}
         autoCapitalize="off"
         autoCorrect="off"

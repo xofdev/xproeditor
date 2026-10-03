@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, toRef } from 'vue'
 import {
   blocksToClipboardPayload,
   parseBlocksFromClipboardData,
@@ -42,8 +42,22 @@ import {
   fileToObjectUrl,
   mediaPropsFromFile,
   tryParseMarkdownToBlocks,
+  pasteBlocksIntoTextBlock,
+  plainTextToBlocks,
+  applyInlineMarkdownShortcut,
+  exitMarkAfterShortcut,
+  matchBlockShortcut,
+  moveBlockSubtree,
+  resolveBlockKeyboardShortcut,
+  blocksToHtmlContent,
+  blocksToMarkdownLossy,
+  blocksToPlainText,
+  extractHeadings,
+  getBlockSubtreeLength,
+  getDocumentStats,
+  sanitizeBlocks,
 } from '@xproeditor/core'
-import type { TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, SelectAllStage, TableCellCoord, TableCellAlign, TableStyle, AICommand, AITransport } from '@xproeditor/core'
+import type { DocHeading, EditorDictionaryOverrides, BlockPatch, EditorFocusTarget, BlockKeyboardAction, PasteFocus, TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, SelectAllStage, TableCellCoord, TableCellAlign, TableStyle, AICommand, AITransport } from '@xproeditor/core'
 import EditorBlockItem from './EditorBlockItem.vue'
 import EditorBubbleToolbar from './EditorBubbleToolbar.vue'
 import EditorEmojiTriggerMenu from './EditorEmojiTriggerMenu.vue'
@@ -53,8 +67,9 @@ import type {SlashItem} from './EditorSlashMenu.vue';
 import EditorAIMenu from './EditorAIMenu.vue'
 import { EmojiPicker } from '../ui'
 import { ALL_EMOJIS } from '../ui/emojiData'
+import { provideEditorI18n } from '../i18n'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   /** Live block array — the editor mutates it in place. */
   modelValue: Block[]
   upload?: (file: File) => Promise<string>
@@ -78,14 +93,29 @@ const props = defineProps<{
     transport: AITransport
     commands?: AICommand[]
   }
-}>()
+  /** Placeholder shown in the focused empty paragraph. */
+  placeholder?: string
+  /** Browser spellcheck in text blocks (default `true`). */
+  spellcheck?: boolean
+  /** Focus the editor on mount (`true` = end of document). */
+  autofocus?: boolean | 'start' | 'end'
+  /** UI language (`'en'` default, `'fa'` built in). */
+  locale?: string
+  /** Override any UI string, or supply a whole new language. */
+  dictionary?: EditorDictionaryOverrides
+}>(), {
+  spellcheck: true,
+})
 
 const emit = defineEmits<{
   change: []
   'format-state': [state: FormatToolbarState | null]
+  /** `upload` rejected for a pasted/dropped file (the file is skipped). */
+  'upload-error': [error: unknown, file: File]
 }>()
 
 const blocks = computed(() => props.modelValue)
+const dict = provideEditorI18n(toRef(props, 'locale'), toRef(props, 'dictionary'))
 
 function blockDirOptions(): { defaultDir?: 'ltr' | 'rtl' } | undefined {
   return props.editorDir === 'rtl' ? { defaultDir: 'rtl' } : undefined
@@ -171,23 +201,48 @@ function hasActiveManagedSelection(): boolean {
     && !isTextRangeCollapsed(textRangeSelection.value, visibleBlocks.value)
 }
 
-function textHighlightForBlock(id: string): { start: number; end: number } | null {
+/** Headings for table-of-contents blocks; identity only changes when a heading changes. */
+let tocHeadingsCache: { key: string; value: DocHeading[] } = { key: '', value: [] }
+const tocHeadings = computed(() => {
+  const next = extractHeadings(blocks.value)
+  const key = JSON.stringify(next)
+
+  if (key !== tocHeadingsCache.key) {
+    tocHeadingsCache = { key, value: next }
+  }
+
+  return tocHeadingsCache.value
+})
+
+/** Scroll a block into view and put the caret in it (table of contents links). */
+function navigateToBlock(id: string) {
+  const el = rootEl.value?.querySelector(`[data-block-id="${CSS.escape(id)}"]`)
+
+  if (!el) {
+    return
+  }
+
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  focusBlock(id, 'start')
+}
+
+/** Per-block highlight of the managed multi-block range — computed once, not once per block. */
+const highlightSegments = computed(() => {
   if (!hasActiveManagedSelection() || !textRangeSelection.value) {
     return null
   }
 
-  const segments = getTextRangeSegments(
-    textRangeSelection.value,
-    blocks.value,
-    visibleBlocks.value,
-  )
-  const segment = segments.find(s => s.blockId === id)
+  const map = new Map<string, { start: number; end: number }>()
 
-  if (!segment) {
-    return null
+  for (const segment of getTextRangeSegments(textRangeSelection.value, blocks.value, visibleBlocks.value)) {
+    map.set(segment.blockId, { start: segment.start, end: segment.end })
   }
 
-  return { start: segment.start, end: segment.end }
+  return map
+})
+
+function textHighlightForBlock(id: string): { start: number; end: number } | null {
+  return highlightSegments.value?.get(id) ?? null
 }
 
 function isBlockChromeSelected(id: string): boolean {
@@ -593,6 +648,8 @@ interface SlashState {
 
 const slashState = ref<SlashState | null>(null)
 const aiMenu = ref<{ position: { x: number; y: number } } | null>(null)
+/** Bumped by Mod+K — toolbars open their link editor when it changes. */
+const linkRequest = ref(0)
 const slashMenuRef = ref<InstanceType<typeof EditorSlashMenu> | null>(null)
 const iconPickerRequest = ref<{ blockId: string; tab: 'emoji' | 'icon' } | null>(null)
 
@@ -728,7 +785,7 @@ return
 
   const removeEnd = state.index + 1 + state.query.length
   const spans = deleteRangeInSpans(block.content, state.index, removeEnd)
-  const isInsertType = ['divider', 'image', 'video', 'audio', 'file', 'table', 'code'].includes(item.type)
+  const isInsertType = ['divider', 'image', 'video', 'audio', 'file', 'table', 'code', 'bookmark', 'embed', 'table_of_contents'].includes(item.type)
 
   if (!isInsertType) {
     const defaults = makeBlock(item.type)
@@ -852,26 +909,17 @@ return
 
 // ─── Markdown shortcuts ───────────────────────────────────────────────────────
 
-const MD_PATTERNS: Array<{ prefix: string; type: BlockType }> = [
-  { prefix: '### ', type: 'heading_3' },
-  { prefix: '## ', type: 'heading_2' },
-  { prefix: '# ', type: 'heading_1' },
-  { prefix: '- ', type: 'bulleted_list_item' },
-  { prefix: '* ', type: 'bulleted_list_item' },
-  { prefix: '1. ', type: 'numbered_list_item' },
-  { prefix: '[] ', type: 'to_do' },
-  { prefix: '[ ] ', type: 'to_do' },
-  { prefix: '> ', type: 'quote' },
-]
+/** Mark to stop after an inline Markdown shortcut (see `handleInput`). */
+let pendingMarkExit: { blockId: string; offset: number; mark: MarkName } | null = null
 
 function tryMarkdownShortcut(block: Block, spans: InlineSpan[], caret: number | null): boolean {
-  if (block.type !== 'paragraph' || caret === null) {
+  if (caret === null) {
 return false
 }
 
   const text = spansToText(spans)
 
-  if (text === '```' && caret === 3) {
+  if (block.type === 'paragraph' && text === '```' && caret === 3) {
     const defaults = makeBlock('code')
     block.type = 'code'
     block.content = []
@@ -882,7 +930,7 @@ return false
     return true
   }
 
-  if (text === '---' && caret === 3) {
+  if (block.type === 'paragraph' && text === '---' && caret === 3) {
     block.type = 'divider'
     block.content = []
     const idx = blocks.value.indexOf(block)
@@ -894,14 +942,37 @@ return false
     return true
   }
 
-  for (const { prefix, type } of MD_PATTERNS) {
-    if (caret === prefix.length && text.startsWith(prefix)) {
-      const defaults = makeBlock(type)
-      block.type = type
-      block.content = deleteRangeInSpans(spans, 0, prefix.length)
-      block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+  // Block prefixes (`# `, `- `, `1. `, `[x] `, …) on paragraphs; `[ ] ` also
+  // upgrades a bullet to a to-do, so `- [ ] ` works in one go.
+  const match = block.type === 'paragraph' || block.type === 'bulleted_list_item'
+    ? matchBlockShortcut(text, caret)
+    : null
+
+  if (match && (block.type === 'paragraph' || match.type === 'to_do')) {
+    const defaults = makeBlock(match.type)
+    block.type = match.type
+    block.content = deleteRangeInSpans(spans, 0, match.prefixLength)
+    block.props = {
+      ...defaults.props,
+      ...match.props,
+      indent: block.props.indent,
+      dir: block.props.dir,
+    }
+    pushHistory(true)
+    focusBlock(block.id, 'start')
+
+    return true
+  }
+
+  // Inline marks: **bold**, *italic*, `code`, ~~strike~~ …
+  if (isTextBlock(block.type)) {
+    const inline = applyInlineMarkdownShortcut(spans, caret)
+
+    if (inline) {
+      block.content = inline.spans
+      pendingMarkExit = { blockId: block.id, offset: inline.caret, mark: inline.mark }
       pushHistory(true)
-      focusBlock(block.id, 'start')
+      focusBlock(block.id, inline.caret)
 
       return true
     }
@@ -916,6 +987,21 @@ function handleInput(block: Block, spans: InlineSpan[], caret: number | null) {
   if (props.readonly) {
 return
 }
+
+  // Text typed right after an inline shortcut lands inside the formatted
+  // element; take the mark back off so formatting stops at the delimiter.
+  const pendingExit = pendingMarkExit
+  pendingMarkExit = null
+
+  if (
+    pendingExit
+    && pendingExit.blockId === block.id
+    && caret !== null
+    && caret > pendingExit.offset
+    && rangeHasMark(spans, pendingExit.offset, caret, pendingExit.mark)
+  ) {
+    spans = exitMarkAfterShortcut(spans, pendingExit.offset, caret, pendingExit.mark)
+  }
 
   block.content = spans
 
@@ -1170,19 +1256,41 @@ function insertSpansAt(content: InlineSpan[], offset: number, inserted: InlineSp
   return normalizeSpans([...before, ...inserted, ...after])
 }
 
-/** Insert dropped/pasted files as media blocks (image/video/audio/file by MIME). */
+/**
+ * Insert dropped/pasted files as media blocks (image/video/audio/file by MIME).
+ * Anchored on the block before the insertion point so edits made while an
+ * upload is in flight don't shift where the file lands; a failed upload is
+ * reported through `upload-error` and skipped instead of aborting the rest.
+ */
 async function insertFileBlocks(files: File[], at: number) {
   const doUpload = props.upload ?? fileToObjectUrl
+  let afterId: string | null = blocks.value[at - 1]?.id ?? null
+  let inserted = false
 
-  for (const [i, file] of files.entries()) {
+  for (const file of files) {
+    let url: string
+
+    try {
+      url = await doUpload(file)
+    } catch (error) {
+      emit('upload-error', error, file)
+      continue
+    }
+
     const type = blockTypeForFile(file)
-    const url = await doUpload(file)
     const media = mediaPropsFromFile(file, url)
     const extra = type === 'video' ? { provider: 'file' as const } : {}
-    blocks.value.splice(at + i, 0, makeBlock(type, { props: { ...media, ...extra } }))
+    const nb = makeBlock(type, { props: { ...media, ...extra } })
+    const anchorIdx = afterId ? blocks.value.findIndex(b => b.id === afterId) : -1
+    const insertAt = afterId && anchorIdx === -1 ? Math.min(at, blocks.value.length) : anchorIdx + 1
+    blocks.value.splice(insertAt, 0, nb)
+    afterId = nb.id
+    inserted = true
   }
 
-  pushHistory(true)
+  if (inserted) {
+    pushHistory(true)
+  }
 }
 
 async function handlePasted(
@@ -1202,14 +1310,6 @@ return
     return
   }
 
-  let content = block.content
-
-  if (payload.offsets.end > payload.offsets.start) {
-    content = deleteRangeInSpans(content, payload.offsets.start, payload.offsets.end)
-  }
-
-  const at = payload.offsets.start
-
   let pastedBlocks = payload.html && payload.html.includes('<') ? htmlToBlocks(payload.html) : []
 
   if (pastedBlocks.length === 0) {
@@ -1218,56 +1318,27 @@ return
   }
 
   if (pastedBlocks.length === 0) {
-    const text = payload.text
-
-    if (!text) {
+    if (!payload.text) {
 return
 }
 
-    const lines = text.split(/\r?\n/)
-
-    if (lines.length === 1 || !isTextBlock(block.type)) {
-      block.content = insertSpansAt(content, at, [{ text }])
-      pushHistory(true)
-      focusBlock(block.id, at + text.length)
-    } else {
-      block.content = insertSpansAt(content, at, [{ text: lines[0] }])
-      const newOnes = lines.slice(1).map(line => makeBlock('paragraph', { content: line ? [{ text: line }] : [] }))
-      blocks.value.splice(idx + 1, 0, ...newOnes)
-      pushHistory(true)
-      const last = newOnes[newOnes.length - 1]
-      focusBlock(last.id, 'end')
-    }
-
-    return
+    pastedBlocks = plainTextToBlocks(payload.text, makeBlock)
   }
 
-  const [first, ...others] = pastedBlocks
+  const focus = pasteBlocksIntoTextBlock(blocks.value, block.id, payload.offsets, pastedBlocks, makeBlock)
+  pushHistory(true)
 
-  if (first.type === 'paragraph' || spansToText(block.content).length > 0) {
-    if (isTextBlock(first.type)) {
-      block.content = insertSpansAt(content, at, first.content)
-    } else {
-      others.unshift(first)
-      block.content = content
-    }
-  } else {
-    others.unshift(first)
-    block.content = content
-  }
-
-  if (others.length > 0) {
-    blocks.value.splice(idx + 1, 0, ...others)
-    pushHistory(true)
-    const last = others[others.length - 1]
-
-    if (isTextBlock(last.type)) {
-focusBlock(last.id, 'end')
+  if (focus) {
+applyPasteFocus(focus)
 }
-  } else {
-    pushHistory(true)
-    focusBlock(block.id, at + spansToText(first.content).length)
-  }
+}
+
+function applyPasteFocus(focus: PasteFocus) {
+  if (focus.offset === null) {
+selectBlock(focus.blockId)
+} else {
+focusBlock(focus.blockId, focus.offset)
+}
 }
 
 // ─── Clipboard (multi-block copy / cut / paste) ─────────────────────────────
@@ -1312,49 +1383,12 @@ selectBlock(last.id)
 }
 }
 
-function insertPastedInTextBlock(block: Block, pasted: Block[], offset: number) {
-  const idx = blocks.value.indexOf(block)
-
-  if (idx === -1) {
-    return
-  }
-
-  const [before, afterParts] = splitSpansAt(block.content, offset)
-  const first = pasted[0]
-  const rest = pasted.slice(1)
-
-  if (!first) {
-    return
-  }
-
-  if (isTextBlock(first.type)) {
-    block.content = normalizeSpans([...before, ...first.content])
-    const toInsert = [...rest]
-
-    if (spansToText(afterParts).length > 0) {
-      if (rest.length > 0) {
-        const last = rest[rest.length - 1]
-
-        if (isTextBlock(last.type)) {
-          last.content = normalizeSpans([...last.content, ...afterParts])
-        } else {
-          toInsert.push(makeBlock('paragraph', { content: afterParts }))
-        }
-      } else {
-        block.content = normalizeSpans([...block.content, ...afterParts])
-      }
-    }
-
-    if (toInsert.length > 0) {
-      blocks.value.splice(idx + 1, 0, ...toInsert)
-    }
-  } else {
-    block.content = before
-    const trailing = spansToText(afterParts).length > 0
-      ? [makeBlock('paragraph', { content: afterParts })]
-      : []
-    blocks.value.splice(idx + 1, 0, ...pasted, ...trailing)
-  }
+function insertPastedInTextBlock(
+  block: Block,
+  pasted: Block[],
+  range: { start: number; end: number },
+): PasteFocus | null {
+  return pasteBlocksIntoTextBlock(blocks.value, block.id, range, pasted, makeBlock)
 }
 
 function insertBlocksFromClipboard(pasted: Block[]) {
@@ -1372,9 +1406,13 @@ return
       const block = byId(deleteResult.focusBlockId)
 
       if (block && isTextBlock(block.type)) {
-        insertPastedInTextBlock(block, pasted, deleteResult.focusOffset)
+        const at = deleteResult.focusOffset
+        const focus = insertPastedInTextBlock(block, pasted, { start: at, end: at })
         pushHistory(true)
-        focusAfterPaste(pasted)
+
+        if (focus) {
+applyPasteFocus(focus)
+}
 
         return
       }
@@ -1396,17 +1434,12 @@ return
 
     if (block && isTextBlock(block.type)) {
       const offsets = itemRefs.get(block.id)?.getSelection() ?? { start: 0, end: 0 }
-      let offset = offsets.start
-
-      if (offsets.end > offsets.start) {
-        block.content = deleteRangeInSpans(block.content, offsets.start, offsets.end)
-      } else {
-        offset = offsets.start
-      }
-
-      insertPastedInTextBlock(block, pasted, offset)
+      const focus = insertPastedInTextBlock(block, pasted, offsets)
       pushHistory(true)
-      focusAfterPaste(pasted)
+
+      if (focus) {
+applyPasteFocus(focus)
+}
 
       return
     }
@@ -2736,8 +2769,8 @@ const formatToolbarState = computed(() => {
   return null
 })
 
-watch(formatToolbarState, (state) => {
-  emit('format-state', state)
+watch([formatToolbarState, linkRequest], ([state, request]) => {
+  emit('format-state', state && request ? { ...state, linkRequest: request } : state)
 }, { flush: 'post' })
 
 // ─── Drag & drop ──────────────────────────────────────────────────────────────
@@ -3050,6 +3083,90 @@ function handleSelectAllShortcut(target: HTMLElement) {
   }
 }
 
+/** Turn a text block into `type` keeping the caret (Mod+Alt+1 …); same type again reverts to text. */
+function turnIntoKeepingCaret(block: Block, type: BlockType): boolean {
+  if (!isTextBlock(block.type) || block.type === 'button') {
+    return false
+  }
+
+  const sel = itemRefs.get(block.id)?.getSelection()
+  const target: BlockType = block.type === type && type !== 'paragraph' ? 'paragraph' : type
+  const defaults = makeBlock(target)
+  block.type = target
+  block.props = {
+    ...defaults.props,
+    indent: block.props.indent,
+    dir: block.props.dir,
+    align: block.props.align,
+  }
+  pushHistory(true)
+  focusBlock(block.id, sel?.start ?? 'end')
+
+  return true
+}
+
+function runBlockKeyboardAction(block: Block, action: BlockKeyboardAction, target: HTMLElement): boolean {
+  switch (action.kind) {
+    case 'turn-into':
+      return turnIntoKeepingCaret(block, action.type)
+    case 'move': {
+      const sel = itemRefs.get(block.id)?.getSelection()
+
+      if (!moveBlockSubtree(blocks.value, block.id, action.direction)) {
+        return true
+      }
+
+      pushHistory(true)
+
+      if (focusedBlockId.value === block.id && (isTextBlock(block.type) || block.type === 'code')) {
+        focusBlock(block.id, sel?.start ?? 'end')
+      } else {
+        selectBlock(block.id)
+      }
+
+      return true
+    }
+    case 'duplicate':
+      duplicateBlock(block)
+
+      return true
+    case 'toggle':
+      // Mod+Enter inside a code block keeps its own meaning (exit the block).
+      if (target.closest('textarea')) {
+        return false
+      }
+
+      if (block.type === 'to_do') {
+        block.props.checked = !block.props.checked
+        pushHistory(true)
+
+        return true
+      }
+
+      if (isToggleBlock(block.type)) {
+        block.props.collapsed = !block.props.collapsed
+        pushHistory(true)
+
+        return true
+      }
+
+      return false
+    case 'link': {
+      const sel = window.getSelection()
+
+      if (!sel || sel.isCollapsed) {
+        return false
+      }
+
+      linkRequest.value += 1
+
+      return true
+    }
+    default:
+      return false
+  }
+}
+
 function onKeydownCapture(e: KeyboardEvent) {
   if (props.readonly) {
 return
@@ -3158,6 +3275,29 @@ closeEmojiTrigger()
       } else {
         undo()
       }
+
+      return
+    }
+  }
+
+  // Block shortcuts (turn into, move, duplicate, toggle, link) work from
+  // inside a text block or on a selected block.
+  const blockAction = resolveBlockKeyboardShortcut({
+    key: e.key,
+    code: e.code,
+    ctrlKey: e.ctrlKey,
+    metaKey: e.metaKey,
+    altKey: e.altKey,
+    shiftKey: e.shiftKey,
+  })
+
+  if (blockAction && !hasActiveManagedSelection() && rootEl.value?.contains(e.target as Node)) {
+    const targetId = focusedBlockId.value ?? selectedBlockId.value
+    const targetBlock = targetId ? byId(targetId) : undefined
+
+    if (targetBlock && runBlockKeyboardAction(targetBlock, blockAction, e.target as HTMLElement)) {
+      e.preventDefault()
+      e.stopPropagation()
 
       return
     }
@@ -3424,11 +3564,11 @@ return undefined
 }
 
   if (focusedBlockId.value === block.id) {
-return "Type '/' for commands..."
+return props.placeholder ?? dict.value.placeholders.focused
 }
 
   if (blocks.value.length === 1 && spansToText(block.content) === '') {
-    return '+ Start writing or type / for plugins'
+    return dict.value.placeholders.emptyDocument
   }
 
   return undefined
@@ -3446,6 +3586,153 @@ function onBlockFocus(block: Block) {
 selectedBlockId.value = null
 }
 }
+
+// ─── Public document API (exposed on the component ref) ─────────────────────
+
+/** Deep copy of the current document. */
+function getBlocks(): Block[] {
+  return blocks.value.map(b => cloneBlock(b, false))
+}
+
+function resetTransientState() {
+  clearTextRangeSelection()
+  selectedBlockId.value = null
+  focusedBlockId.value = null
+  closeSlash()
+  emojiTriggerState.value = null
+  bubble.value = null
+}
+
+/**
+ * Replace the whole document (in place, in the bound array). `history:
+ * 'reset'` (for loading a different document) clears undo history and does
+ * not emit `change`; the default `'push'` records an undo step and emits it.
+ */
+function setBlocks(next: Block[], opts: { history?: 'push' | 'reset' } = {}) {
+  const clean = sanitizeBlocks(next)
+  blocks.value.splice(0, blocks.value.length, ...(clean.length ? clean : [makeBlock('paragraph')]))
+  resetTransientState()
+
+  // A read-only viewer still loads content; it just has no history.
+  if (opts.history === 'reset' || props.readonly) {
+    resetHistory()
+  } else {
+    pushHistory(true)
+  }
+}
+
+/**
+ * Insert blocks after/before a block (default: after the focused or
+ * selected block, else at the end). Returns the inserted block ids.
+ */
+function insertBlocks(input: Block[], position: { after?: string; before?: string } = {}): string[] {
+  if (props.readonly) {
+    return []
+  }
+
+  const clean = sanitizeBlocks(input).map(b => cloneBlock(b, true))
+
+  if (clean.length === 0) {
+    return []
+  }
+
+  let at = blocks.value.length
+  const anchorId = position.after ?? position.before ?? focusedBlockId.value ?? selectedBlockId.value
+
+  if (anchorId) {
+    const idx = blocks.value.findIndex(b => b.id === anchorId)
+
+    if (idx !== -1) {
+      at = position.before ? idx : idx + getBlockSubtreeLength(blocks.value, idx)
+    }
+  }
+
+  blocks.value.splice(at, 0, ...clean)
+  pushHistory(true)
+
+  return clean.map(b => b.id)
+}
+
+/** Patch one block: change its type, replace its content, and/or merge props. */
+function updateBlock(id: string, patch: BlockPatch): boolean {
+  if (props.readonly) {
+    return false
+  }
+
+  const block = byId(id)
+
+  if (!block) {
+    return false
+  }
+
+  const [clean] = sanitizeBlocks([{
+    ...block,
+    type: patch.type ?? block.type,
+    content: patch.content ?? block.content,
+    props: { ...block.props, ...(patch.props ?? {}) },
+  }])
+
+  block.type = clean.type
+  block.content = clean.content
+  block.props = clean.props
+  pushHistory(true)
+
+  return true
+}
+
+/** Remove blocks by id (toggle children go with their toggle). */
+function removeBlocks(ids: string[]) {
+  if (props.readonly || ids.length === 0) {
+    return
+  }
+
+  const remove = new Set(ids)
+
+  // A removed toggle takes its (possibly hidden) children with it.
+  blocks.value.forEach((b, idx) => {
+    if (remove.has(b.id) && isToggleBlock(b.type)) {
+      const len = getToggleSubtreeLength(blocks.value, idx)
+      blocks.value.slice(idx, idx + len).forEach(child => remove.add(child.id))
+    }
+  })
+
+  const kept = blocks.value.filter(b => !remove.has(b.id))
+  blocks.value.splice(0, blocks.value.length, ...kept)
+  ensureNotEmpty()
+  resetTransientState()
+  pushHistory(true)
+}
+
+/** Focus the editor: `'start'`, `'end'`, or a block (optionally at a text offset). */
+function focus(target: EditorFocusTarget = 'end') {
+  if (target === 'start') {
+    const first = visibleBlocks.value[0]
+
+    if (first) {
+      focusBlock(first.id, 'start')
+    }
+
+    return
+  }
+
+  if (target === 'end') {
+    const last = visibleBlocks.value[visibleBlocks.value.length - 1]
+
+    if (last) {
+      focusBlock(last.id, 'end')
+    }
+
+    return
+  }
+
+  focusBlock(target.blockId, target.offset ?? 'end')
+}
+
+onMounted(() => {
+  if (props.autofocus && !props.readonly) {
+    focus(props.autofocus === 'start' ? 'start' : 'end')
+  }
+})
 
 defineExpose({
   undo,
@@ -3478,6 +3765,16 @@ focusBlock(first.id, 'start')
 focusBlock(last.id, 'end')
 }
   },
+  focus,
+  getBlocks,
+  setBlocks,
+  insertBlocks,
+  updateBlock,
+  removeBlocks,
+  getMarkdown: () => blocksToMarkdownLossy(blocks.value),
+  getHTML: () => blocksToHtmlContent(blocks.value),
+  getText: () => blocksToPlainText(blocks.value),
+  getStats: () => getDocumentStats(blocks.value),
 })
 </script>
 
@@ -3528,6 +3825,9 @@ focusBlock(last.id, 'end')
       @icon-picker-opened="iconPickerRequest = null"
       @select="selectBlock(block.id)"
       :ai-enabled="typeof props.ai?.transport === 'function'"
+      :spellcheck="props.spellcheck !== false"
+      :toc-headings="block.type === 'table_of_contents' ? tocHeadings : undefined"
+      @navigate-to-block="navigateToBlock"
       @add-below="addBelow(block)"
       @duplicate="duplicateBlock(block)"
       @copy="() => void copyBlock(block)"
@@ -3590,6 +3890,7 @@ focusBlock(last.id, 'end')
       @copy="onBubbleCopy"
       @duplicate="onBubbleDuplicate"
       @delete="onBubbleDelete"
+      :link-request="linkRequest"
     />
 
     <EditorAIMenu

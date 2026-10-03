@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import EmojiPicker from './EmojiPicker.vue'
 import Popover from './Popover.vue'
 import PopoverContent from './PopoverContent.vue'
 import PopoverTrigger from './PopoverTrigger.vue'
+import { useEditorDictionary } from '../i18n'
+
+const dictionary = useEditorDictionary()
+const t = computed(() => dictionary.value.emoji)
 
 withDefaults(
   defineProps<{
@@ -64,11 +68,11 @@ defineExpose({
           v-model="customValue"
           type="text"
           maxlength="8"
-          placeholder="Custom emoji or text"
+          :placeholder="t.customPlaceholder"
           class="xpe-icon-custom-input"
           @keydown.enter.prevent="applyCustom"
         />
-        <button type="button" class="xpe-icon-custom-apply" @click="applyCustom">Set</button>
+        <button type="button" class="xpe-icon-custom-apply" @click="applyCustom">{{ t.set }}</button>
       </div>
     </PopoverContent>
   </Popover>

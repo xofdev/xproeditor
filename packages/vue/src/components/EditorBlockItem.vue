@@ -2,7 +2,7 @@
 import { GripVertical, Plus, ChevronRight } from 'lucide-vue-next'
 import { ref, computed, watch, nextTick } from 'vue'
 import { BUTTON_COLOR_PRESETS, isTextBlock, resolveBlockDirection } from '@xproeditor/core'
-import type { Block, BlockType, InlineSpan, MarkName, TableCellCoord } from '@xproeditor/core'
+import type { Block, BlockType, DocHeading, InlineSpan, MarkName, TableCellCoord } from '@xproeditor/core'
 import {
   IconEmojiPicker,
   IconValueDisplay,
@@ -10,6 +10,8 @@ import {
 import EditorAudioBlock from './EditorAudioBlock.vue'
 import EditorBlockContextMenu from './EditorBlockContextMenu.vue'
 import EditorBookmarkBlock from './EditorBookmarkBlock.vue'
+import EditorEmbedBlock from './EditorEmbedBlock.vue'
+import EditorTableOfContentsBlock from './EditorTableOfContentsBlock.vue'
 import EditorButtonBlock from './EditorButtonBlock.vue'
 import EditorCodeBlock from './EditorCodeBlock.vue'
 import EditorFileBlock from './EditorFileBlock.vue'
@@ -18,8 +20,11 @@ import EditorSelectionHighlight from './EditorSelectionHighlight.vue'
 import EditorTableBlock from './EditorTableBlock.vue'
 import EditorTextBlock from './EditorTextBlock.vue'
 import EditorVideoBlock from './EditorVideoBlock.vue'
+import { useEditorDictionary } from '../i18n'
 
-const props = defineProps<{
+const dict = useEditorDictionary()
+
+const props = withDefaults(defineProps<{
   block: Block
   number?: number
   placeholder?: string
@@ -44,7 +49,13 @@ const props = defineProps<{
   /** When set, opens the callout icon picker (slash command / programmatic). */
   iconPickerRequest?: { tab: 'emoji' | 'icon' } | null
   aiEnabled?: boolean
-}>()
+  /** Browser spellcheck in text blocks (default `true`). */
+  spellcheck?: boolean
+  /** Document headings — only needed by `table_of_contents` blocks. */
+  tocHeadings?: DocHeading[]
+}>(), {
+  spellcheck: true,
+})
 
 const emit = defineEmits<{
   input: [spans: InlineSpan[], caret: number | null]
@@ -76,6 +87,8 @@ const emit = defineEmits<{
   tableCellTab: [payload: { row: number; col: number; shift: boolean }]
   tableCellNavigate: [payload: { row: number; col: number; direction: 'up' | 'down' | 'left' | 'right' }]
   tableCellSelectionChange: [cells: TableCellCoord[]]
+  /** Jump to another block (table of contents links). */
+  navigateToBlock: [blockId: string]
 }>()
 
 const CALLOUT_COLORS = ['#f8fafc', '#fefce8', '#fff7ed', '#fef2f2', '#f0fdf4', '#eff6ff', '#faf5ff']
@@ -198,7 +211,8 @@ defineExpose({
       >
         <button
           class="ebi-gutter-btn"
-          title="Add block below"
+          :title="dict.blockMenu.addBelow"
+          :aria-label="dict.blockMenu.addBelow"
           @pointerdown.stop
           @click="emit('addBelow')"
         >
@@ -207,7 +221,8 @@ defineExpose({
         <button
           type="button"
           class="ebi-gutter-btn ebi-reorder-handle cursor-grab active:cursor-grabbing"
-          title="Drag to move, click for menu"
+          :title="dict.blockMenu.dragHandle"
+          :aria-label="dict.blockMenu.dragHandle"
           draggable="true"
           @pointerdown.stop
           @dragstart="emit('dragHandleStart', $event)"
@@ -225,7 +240,8 @@ defineExpose({
             ref="inner"
             :block="block"
             :readonly="readonly"
-            :placeholder="placeholder ?? 'Quote'"
+            :spellcheck="spellcheck !== false"
+            :placeholder="placeholder ?? dict.placeholders.quote"
             class="flex-1"
             @input="(s, c) => emit('input', s, c)"
             @enter="o => emit('enter', o)"
@@ -258,8 +274,8 @@ defineExpose({
               <template #trigger="{ selected, isIconify, toggle }">
                 <button
                   type="button"
-                  aria-label="Change callout icon"
-                  title="Change callout icon"
+                  :aria-label="dict.blockMenu.changeCalloutIcon"
+                  :title="dict.blockMenu.changeCalloutIcon"
                   class="mt-0.5 text-lg leading-none transition-transform"
                   :class="{ 'hover:scale-110': !readonly }"
                   :disabled="readonly"
@@ -276,12 +292,12 @@ defineExpose({
             <button
               v-if="!readonly"
               type="button"
-              title="Change callout color"
+              :title="dict.blockMenu.changeCalloutColor"
               class="mt-1 block w-full text-[10px] text-[var(--xpe-muted-foreground)] transition-opacity hover:text-[var(--xpe-foreground)] focus-visible:opacity-100"
               :class="showCalloutColors ? 'opacity-100' : 'opacity-0 group-hover/block:opacity-100'"
               @click="showCalloutColors = !showCalloutColors"
             >
-              Color
+              {{ dict.blockMenu.color }}
             </button>
             <div
               v-if="showCalloutColors && !readonly"
@@ -302,7 +318,8 @@ defineExpose({
             ref="inner"
             :block="block"
             :readonly="readonly"
-            :placeholder="placeholder ?? 'Type something...'"
+            :spellcheck="spellcheck !== false"
+            :placeholder="placeholder ?? dict.placeholders.callout"
             class="flex-1"
             @input="(s, c) => emit('input', s, c)"
             @enter="o => emit('enter', o)"
@@ -338,7 +355,7 @@ defineExpose({
               v-else-if="block.type === 'to_do'"
               type="button"
               role="checkbox"
-              aria-label="Toggle to-do"
+              :aria-label="dict.blockMenu.toggleToDo"
               :aria-checked="!!block.props.checked"
               class="ebi-todo"
               :class="{ 'ebi-todo--checked': block.props.checked }"
@@ -350,7 +367,7 @@ defineExpose({
             <button
               v-else
               type="button"
-              :aria-label="block.props.collapsed ? 'Expand toggle' : 'Collapse toggle'"
+              :aria-label="block.props.collapsed ? dict.blockMenu.expandToggle : dict.blockMenu.collapseToggle"
               :aria-expanded="!block.props.collapsed"
               class="ebi-toggle-btn"
               :disabled="readonly"
@@ -370,13 +387,14 @@ defineExpose({
             ref="inner"
             :block="block"
             :readonly="readonly"
+            :spellcheck="spellcheck !== false"
             :placeholder="placeholder ?? (
-              block.type === 'to_do' ? 'To-do'
-              : block.type === 'toggle' ? 'Toggle'
-              : block.type === 'toggle_heading_1' ? 'Heading 1'
-              : block.type === 'toggle_heading_2' ? 'Heading 2'
-              : block.type === 'toggle_heading_3' ? 'Heading 3'
-              : 'List item'
+              block.type === 'to_do' ? dict.placeholders.toDo
+              : block.type === 'toggle' ? dict.placeholders.toggle
+              : block.type === 'toggle_heading_1' ? dict.placeholders.heading1
+              : block.type === 'toggle_heading_2' ? dict.placeholders.heading2
+              : block.type === 'toggle_heading_3' ? dict.placeholders.heading3
+              : dict.placeholders.listItem
             )"
             class="flex-1 min-w-0"
             :class="{ 'line-through !text-[var(--xpe-muted-foreground)]': block.type === 'to_do' && block.props.checked }"
@@ -497,6 +515,23 @@ defineExpose({
           @select="emit('select')"
         />
 
+        <EditorEmbedBlock
+          v-else-if="block.type === 'embed'"
+          :block="block"
+          :selected="selected"
+          :readonly="readonly"
+          @patch="p => emit('patch', p)"
+          @select="emit('select')"
+        />
+
+        <EditorTableOfContentsBlock
+          v-else-if="block.type === 'table_of_contents'"
+          :headings="tocHeadings ?? []"
+          :selected="selected"
+          @select="emit('select')"
+          @navigate="id => emit('navigateToBlock', id)"
+        />
+
         <EditorBookmarkBlock
           v-else-if="block.type === 'bookmark'"
           :block="block"
@@ -513,6 +548,7 @@ defineExpose({
           ref="inner"
           :block="block"
           :readonly="readonly"
+          :spellcheck="spellcheck !== false"
           :placeholder="placeholder"
           @input="(s, c) => emit('input', s, c)"
           @enter="o => emit('enter', o)"

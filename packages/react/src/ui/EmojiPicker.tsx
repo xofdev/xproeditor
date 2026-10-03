@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Clock, Hash, Lightbulb, Leaf, Music, Plane, Search, Smile, UtensilsCrossed } from 'lucide-react'
 import { ALL_EMOJIS, EMOJI_CATEGORIES, type EmojiEntry } from './emojiData'
+import { useEditorDictionary } from '../i18n'
 
 const RECENTS_KEY = 'xpe-emoji-recents'
 const MAX_RECENTS = 24
@@ -47,6 +48,9 @@ export interface EmojiPickerProps {
 }
 
 export function EmojiPicker({ onSelect, autoFocus, query: externalQuery }: EmojiPickerProps) {
+  const t = useEditorDictionary().emoji
+  const categoryLabel = (cat: { id: string; label: string }) =>
+    t.categories[cat.id as keyof typeof t.categories] ?? cat.label
   const controlled = externalQuery !== undefined
   const [internalQuery, setInternalQuery] = useState('')
   const query = controlled ? externalQuery : internalQuery
@@ -83,7 +87,7 @@ export function EmojiPicker({ onSelect, autoFocus, query: externalQuery }: Emoji
 
   const categoriesToRender =
     recents.length > 0
-      ? [{ id: 'recents', label: 'Recently used', emojis: recents.map(charToEntry).filter(Boolean) as EmojiEntry[] }, ...EMOJI_CATEGORIES]
+      ? [{ id: 'recents', label: t.recent, emojis: recents.map(charToEntry).filter(Boolean) as EmojiEntry[] }, ...EMOJI_CATEGORIES]
       : EMOJI_CATEGORIES
 
   return (
@@ -95,7 +99,7 @@ export function EmojiPicker({ onSelect, autoFocus, query: externalQuery }: Emoji
             ref={searchRef}
             type="text"
             value={internalQuery}
-            placeholder="Search emoji..."
+            placeholder={t.search}
             className="xpe-emoji-search-input"
             onChange={(e) => setInternalQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -111,7 +115,7 @@ export function EmojiPicker({ onSelect, autoFocus, query: externalQuery }: Emoji
       <div ref={scrollRef} className="xpe-emoji-scroll">
         {filtered ? (
           filtered.length === 0 ? (
-            <p className="xpe-emoji-empty">No emoji found</p>
+            <p className="xpe-emoji-empty">{t.noResults}</p>
           ) : (
             <div className="xpe-emoji-grid">
               {filtered.map((entry) => (
@@ -130,7 +134,7 @@ export function EmojiPicker({ onSelect, autoFocus, query: externalQuery }: Emoji
         ) : (
           categoriesToRender.map((cat) => (
             <div key={cat.id} ref={(el) => { sectionRefs.current[cat.id] = el }}>
-              <p className="xpe-menu-heading xpe-emoji-heading">{cat.label}</p>
+              <p className="xpe-menu-heading xpe-emoji-heading">{categoryLabel(cat)}</p>
               <div className="xpe-emoji-grid">
                 {cat.emojis.map((entry) => (
                   <button
@@ -151,13 +155,14 @@ export function EmojiPicker({ onSelect, autoFocus, query: externalQuery }: Emoji
 
       {!filtered && (
         <div className="xpe-emoji-catbar">
-          <button type="button" title="Recently used" onClick={() => scrollToCategory('recents')}>
+          <button type="button" title={t.recent}
+            aria-label={t.recent} onClick={() => scrollToCategory('recents')}>
             <Clock className="h-4 w-4" />
           </button>
           {EMOJI_CATEGORIES.map((cat) => {
             const Icon = CATEGORY_ICONS[cat.id] ?? Hash
             return (
-              <button key={cat.id} type="button" title={cat.label} onClick={() => scrollToCategory(cat.id)}>
+              <button key={cat.id} type="button" title={categoryLabel(cat)} aria-label={categoryLabel(cat)} onClick={() => scrollToCategory(cat.id)}>
                 <Icon className="h-4 w-4" />
               </button>
             )

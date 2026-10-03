@@ -32,6 +32,8 @@ import { syncThemeVars } from '@xproeditor/core';
 import type { BlockType, MarkName } from '@xproeditor/core';
 import { Button, Input } from '../ui';
 import EditorToolbarColorPanel from './toolbar/EditorToolbarColorPanel.vue';
+import { useEditorDictionary } from '../i18n';
+import { modKeyLabel, withShortcut } from '../utils/shortcut';
 
 const props = withDefaults(
     defineProps<{
@@ -48,8 +50,11 @@ const props = withDefaults(
         /** Element still inside the editor's themed DOM scope — used to resync
          * `--xpe-*` variables onto this toolbar once it's teleported to `<body>`. */
         themeSource?: HTMLElement | null;
+        /** Increments on Mod+K — opens the link editor. */
+        linkRequest?: number;
     }>(),
     {
+        linkRequest: 0,
         placement: 'above',
         multiBlock: false,
         mixedTypes: false,
@@ -92,9 +97,11 @@ const panel = ref<'none' | 'link' | 'color' | 'turninto'>('none');
 const linkInput = ref('');
 let lastPositionKey: string | null = null;
 
-const turnIntoEntry = computed(() => TURN_INTO.find((t) => t.type === props.blockType));
+const dict = useEditorDictionary();
+const turnIntoEntry = computed(() => TURN_INTO.find((entry) => entry.type === props.blockType));
+const t = computed(() => dict.value.toolbar);
 const turnIntoLabel = computed(() =>
-    props.mixedTypes ? 'Turn into' : (turnIntoEntry.value?.label ?? 'Text'),
+    props.mixedTypes ? t.value.turnInto : (dict.value.blockTypes[props.blockType] ?? dict.value.blockTypes.paragraph),
 );
 const turnIntoIcon = computed(() => turnIntoEntry.value?.icon ?? Type);
 
@@ -164,6 +171,23 @@ watch(
     },
 );
 
+// Mod+K from the editor opens the link editor.
+let handledLinkRequest = props.linkRequest;
+
+watch(
+    () => props.linkRequest,
+    (request) => {
+        if (request === handledLinkRequest) {
+            return;
+        }
+
+        handledLinkRequest = request;
+        linkInput.value = props.currentLink ?? '';
+        panel.value = 'link';
+        requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-xpe-link-input]')?.focus());
+    },
+);
+
 function openLinkPanel(): void {
     linkInput.value = props.currentLink ?? '';
     panel.value = panel.value === 'link' ? 'none' : 'link';
@@ -229,7 +253,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                         :class="{
                             'ebt-active': panel === 'color' || !!currentColor || !!currentHighlight,
                         }"
-                        title="Color"
+                        :title="t.color" :aria-label="t.color"
                         @click="openColorPanel"
                     >
                         <Paintbrush class="size-3.5" />
@@ -238,7 +262,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                         type="button"
                         class="ebt-btn"
                         :class="{ 'ebt-active': activeMarks.bold }"
-                        title="Bold (Ctrl+B)"
+                        :title="withShortcut(t.bold, 'B')" :aria-label="t.bold"
                         @click="emit('mark', 'bold', !activeMarks.bold)"
                     >
                         <Bold class="size-3.5" />
@@ -247,7 +271,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                         type="button"
                         class="ebt-btn"
                         :class="{ 'ebt-active': activeMarks.italic }"
-                        title="Italic (Ctrl+I)"
+                        :title="withShortcut(t.italic, 'I')" :aria-label="t.italic"
                         @click="emit('mark', 'italic', !activeMarks.italic)"
                     >
                         <Italic class="size-3.5" />
@@ -256,7 +280,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                         type="button"
                         class="ebt-btn"
                         :class="{ 'ebt-active': activeMarks.underline }"
-                        title="Underline (Ctrl+U)"
+                        :title="withShortcut(t.underline, 'U')" :aria-label="t.underline"
                         @click="emit('mark', 'underline', !activeMarks.underline)"
                     >
                         <Underline class="size-3.5" />
@@ -264,7 +288,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                     <button
                         type="button"
                         class="ebt-btn"
-                        title="Clear formatting"
+                        :title="t.clearFormatting" :aria-label="t.clearFormatting"
                         @click="emit('clearFormatting')"
                     >
                         <RemoveFormatting class="size-3.5" />
@@ -276,7 +300,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                         type="button"
                         class="ebt-btn"
                         :class="{ 'ebt-active': panel === 'link' || !!currentLink }"
-                        title="Link"
+                        :title="withShortcut(t.link, 'K')" :aria-label="t.link"
                         @click="openLinkPanel"
                     >
                         <Link2 class="size-3.5" />
@@ -285,7 +309,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                         type="button"
                         class="ebt-btn"
                         :class="{ 'ebt-active': activeMarks.strikethrough }"
-                        title="Strikethrough"
+                        :title="withShortcut(t.strikethrough, 'Shift+S')" :aria-label="t.strikethrough"
                         @click="emit('mark', 'strikethrough', !activeMarks.strikethrough)"
                     >
                         <Strikethrough class="size-3.5" />
@@ -294,7 +318,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                         type="button"
                         class="ebt-btn"
                         :class="{ 'ebt-active': activeMarks.code }"
-                        title="Inline code (Ctrl+E)"
+                        :title="withShortcut(t.code, 'E')" :aria-label="t.code"
                         @click="emit('mark', 'code', !activeMarks.code)"
                     >
                         <Code class="size-3.5" />
@@ -308,15 +332,15 @@ function onToolbarMouseDown(e: MouseEvent): void {
                         <span class="xpe-menu-item__icon">
                             <Copy />
                         </span>
-                        <span class="xpe-menu-item__label">Copy</span>
-                        <span class="xpe-menu-item__kbd">⌘C</span>
+                        <span class="xpe-menu-item__label">{{ t.copy }}</span>
+                        <span class="xpe-menu-item__kbd">{{ modKeyLabel() }}C</span>
                     </button>
                     <button type="button" class="xpe-menu-item" @click="emit('duplicate')">
                         <span class="xpe-menu-item__icon">
                             <Files />
                         </span>
-                        <span class="xpe-menu-item__label">Duplicate</span>
-                        <span class="xpe-menu-item__kbd">⌘D</span>
+                        <span class="xpe-menu-item__label">{{ t.duplicate }}</span>
+                        <span class="xpe-menu-item__kbd">{{ modKeyLabel() }}D</span>
                     </button>
                     <button
                         type="button"
@@ -326,7 +350,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                         <span class="xpe-menu-item__icon">
                             <Trash2 />
                         </span>
-                        <span class="xpe-menu-item__label">Delete</span>
+                        <span class="xpe-menu-item__label">{{ t.delete }}</span>
                         <span class="xpe-menu-item__kbd">⌫</span>
                     </button>
                 </div>
@@ -337,7 +361,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                         <span class="xpe-menu-item__icon">
                             <Sparkles />
                         </span>
-                        <span class="xpe-menu-item__label">Ask AI</span>
+                        <span class="xpe-menu-item__label">{{ t.askAI }}</span>
                     </button>
                 </template>
             </div>
@@ -356,7 +380,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                 <button
                     class="ebt-btn"
                     :class="{ 'ebt-active': activeMarks.bold }"
-                    title="Bold (Ctrl+B)"
+                    :title="withShortcut(t.bold, 'B')" :aria-label="t.bold"
                     @click="emit('mark', 'bold', !activeMarks.bold)"
                 >
                     <Bold class="size-3.5" />
@@ -364,7 +388,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                 <button
                     class="ebt-btn"
                     :class="{ 'ebt-active': activeMarks.italic }"
-                    title="Italic (Ctrl+I)"
+                    :title="withShortcut(t.italic, 'I')" :aria-label="t.italic"
                     @click="emit('mark', 'italic', !activeMarks.italic)"
                 >
                     <Italic class="size-3.5" />
@@ -372,7 +396,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                 <button
                     class="ebt-btn"
                     :class="{ 'ebt-active': activeMarks.underline }"
-                    title="Underline (Ctrl+U)"
+                    :title="withShortcut(t.underline, 'U')" :aria-label="t.underline"
                     @click="emit('mark', 'underline', !activeMarks.underline)"
                 >
                     <Underline class="size-3.5" />
@@ -380,7 +404,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                 <button
                     class="ebt-btn"
                     :class="{ 'ebt-active': activeMarks.strikethrough }"
-                    title="Strikethrough"
+                    :title="withShortcut(t.strikethrough, 'Shift+S')" :aria-label="t.strikethrough"
                     @click="emit('mark', 'strikethrough', !activeMarks.strikethrough)"
                 >
                     <Strikethrough class="size-3.5" />
@@ -388,7 +412,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                 <button
                     class="ebt-btn"
                     :class="{ 'ebt-active': activeMarks.code }"
-                    title="Inline code (Ctrl+E)"
+                    :title="withShortcut(t.code, 'E')" :aria-label="t.code"
                     @click="emit('mark', 'code', !activeMarks.code)"
                 >
                     <Code class="size-3.5" />
@@ -399,7 +423,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                 <button
                     class="ebt-btn"
                     :class="{ 'ebt-active': panel === 'link' || !!currentLink }"
-                    title="Link"
+                    :title="withShortcut(t.link, 'K')" :aria-label="t.link"
                     @click="openLinkPanel"
                 >
                     <Link2 class="size-3.5" />
@@ -410,14 +434,14 @@ function onToolbarMouseDown(e: MouseEvent): void {
                         'ebt-active':
                             panel === 'color' || !!currentColor || !!currentHighlight,
                     }"
-                    title="Color"
+                    :title="t.color" :aria-label="t.color"
                     @click="openColorPanel"
                 >
                     <Paintbrush class="size-3.5" />
                 </button>
                 <button
                     class="ebt-btn"
-                    title="Clear formatting"
+                    :title="t.clearFormatting" :aria-label="t.clearFormatting"
                     @click="emit('clearFormatting')"
                 >
                     <RemoveFormatting class="size-3.5" />
@@ -425,7 +449,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
 
                 <template v-if="aiEnabled">
                     <div class="mx-0.5 h-5 w-px bg-[var(--xpe-border)]" />
-                    <button class="ebt-btn" title="Ask AI" @click="emit('askAi')">
+                    <button class="ebt-btn" :title="t.askAI" :aria-label="t.askAI" @click="emit('askAi')">
                         <Sparkles class="size-3.5" />
                     </button>
                 </template>
@@ -438,13 +462,14 @@ function onToolbarMouseDown(e: MouseEvent): void {
                 <Input
                     v-model="linkInput"
                     class="h-8 w-52 text-xs"
-                    placeholder="https://..."
+                    :placeholder="t.linkPlaceholder"
+                    data-xpe-link-input=""
                     @mousedown.stop
                     @keydown.enter.prevent="applyLink"
                     @keydown.escape="panel = 'none'"
                 />
                 <Button type="button" size="sm" class="h-8 px-3 text-xs" @click="applyLink">
-                    Set
+                    {{ dict.common.set }}
                 </Button>
                 <Button
                     v-if="currentLink"
@@ -454,7 +479,7 @@ function onToolbarMouseDown(e: MouseEvent): void {
                     class="h-8 px-2 text-xs text-[var(--xpe-danger)] hover:bg-[var(--xpe-danger-muted)]"
                     @click="emit('mark', 'link', null); panel = 'none'"
                 >
-                    Remove
+                    {{ dict.common.remove }}
                 </Button>
             </div>
 
@@ -475,19 +500,19 @@ function onToolbarMouseDown(e: MouseEvent): void {
                 class="xpe-float xpe-menu-list mt-1.5 w-52 py-1.5"
             >
                 <button
-                    v-for="t in TURN_INTO"
-                    :key="t.type"
+                    v-for="entry in TURN_INTO"
+                    :key="entry.type"
                     type="button"
                     class="xpe-menu-item"
-                    :class="{ 'xpe-menu-item--selected': !mixedTypes && t.type === blockType }"
-                    @click="emit('turnInto', t.type); panel = 'none'"
+                    :class="{ 'xpe-menu-item--selected': !mixedTypes && entry.type === blockType }"
+                    @click="emit('turnInto', entry.type); panel = 'none'"
                 >
                     <span class="xpe-menu-item__icon">
-                        <component :is="t.icon" />
+                        <component :is="entry.icon" />
                     </span>
-                    <span class="xpe-menu-item__label">{{ t.label }}</span>
+                    <span class="xpe-menu-item__label">{{ dict.blockTypes[entry.type] }}</span>
                     <Check
-                        v-if="!mixedTypes && t.type === blockType"
+                        v-if="!mixedTypes && entry.type === blockType"
                         class="xpe-menu-item__meta"
                     />
                 </button>

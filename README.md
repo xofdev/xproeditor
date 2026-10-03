@@ -15,10 +15,15 @@ menu — switchable with a single prop.
 
 ## Features
 
-- **18 block types** — paragraphs, headings, lists, to-dos, toggles & toggle headings, quotes, callouts, code (language / wrap / copy), dividers, buttons, images, video, audio, files, tables, web bookmarks
+- **24 block types** — paragraphs, headings, lists, to-dos, toggles & toggle headings, quotes, callouts, code (language / wrap / copy), dividers, buttons, images, video, audio, files, tables, web bookmarks, **embeds** (YouTube, Figma, CodePen, Loom, Maps…) and a live **table of contents**
+- **Markdown & keyboard shortcuts** — `**bold**`, `` `code` ``, `# `, `- [ ] ` as you type; `⌘⌥1` headings, `⌘⇧↑/↓` move, `⌘D` duplicate, `⌘K` link
 - **Notion-like chrome** — block context menu, multi-select with floating edit popover, two-stage Ctrl/⌘+A
-- **Clipboard** — multi-block copy/cut, Markdown paste, rich HTML/JSON clipboard
+- **Clipboard** — multi-block copy/cut, Markdown paste, rich HTML/JSON clipboard, caret-correct paste
 - **Tables** — width, drag cell select, merge, borders, fills, add row/column
+- **Document API** — `getBlocks`, `setBlocks`, `insertBlocks`, `getMarkdown`, `getHTML`, `getStats`… on the ref
+- **Any language, RTL first-class** — English and Persian UI built in, override any string, per-block auto direction
+- **Secure by default** — links, media, colours, pasted HTML/JSON and AI output are sanitized in core
+- **Fast** — only the edited block re-renders; highlight.js loads on demand
 - **Ask AI** — pluggable transport (`/ai`, toolbar, Accept / Reject); no API keys in the package
 - **DocRenderer** — publish the same `Block[]` as a read-only page
 - **Theming** — precompiled CSS, `--xpe-*` variables, light/dark (`.xpe-dark`), RTL
@@ -93,10 +98,14 @@ top of `@xproeditor/core` — see [`docs/architecture.md`](docs/architecture.md)
 ## Documentation
 
 - [Getting started](docs/getting-started.md)
+- [Editor API](docs/api.md) — ref methods, props, events, core helpers
+- [Keyboard & Markdown shortcuts](docs/keyboard-shortcuts.md)
+- [Localization & RTL](docs/i18n.md)
+- [Security](docs/security.md)
 - [Block model](docs/block-model.md) — the persisted JSON shape
 - [Theming](docs/theming.md)
 - [Architecture](docs/architecture.md)
-- [Releasing](docs/releasing.md)
+- [Changelog](docs/changelog.md) · [Releasing](docs/releasing.md)
 
 ## Development
 

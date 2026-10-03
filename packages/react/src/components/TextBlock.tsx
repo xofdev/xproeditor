@@ -23,6 +23,8 @@ export interface TextBlockProps {
   block: Block
   placeholder?: string
   readonly?: boolean
+  /** Browser spellcheck (default `true`). */
+  spellCheck?: boolean
   className?: string
   onInput: (spans: InlineSpan[], caret: number | null) => void
   onEnter: (offsets: { start: number; end: number }) => void
@@ -47,6 +49,7 @@ export const TextBlock = forwardRef<TextBlockHandle, TextBlockProps>(function Te
     block,
     placeholder,
     readonly,
+    spellCheck = true,
     className,
     onInput,
     onEnter,
@@ -239,7 +242,7 @@ export const TextBlock = forwardRef<TextBlockHandle, TextBlockProps>(function Te
       dir={block.props.dir === 'ltr' || block.props.dir === 'rtl' ? block.props.dir : undefined}
       style={block.props.align ? { textAlign: block.props.align } : undefined}
       data-placeholder={placeholder}
-      spellCheck={false}
+      spellCheck={spellCheck && !readonly}
       onInput={handleInputEvent}
       onPointerDown={handlePointerDown}
       onKeyDown={handleKeyDown}

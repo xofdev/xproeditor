@@ -31,7 +31,11 @@ return block.props.name ?? block.props.caption ?? ''
       .join('\n')
   }
 
-  if (block.type === 'divider') {
+  if (block.type === 'embed') {
+    return block.props.caption?.trim() || block.props.url?.trim() || ''
+  }
+
+  if (block.type === 'divider' || block.type === 'table_of_contents') {
 return ''
 }
 
@@ -43,9 +47,12 @@ export function blocksToPlainText(blocks: Block[]): string {
 }
 
 export interface DocHeading {
+  /** Anchor id (matches the `id` the renderers put on the heading). */
   id: string
   text: string
   level: number
+  /** Id of the heading block, for in-editor navigation. */
+  blockId: string
 }
 
 /** Extract headings with stable anchor ids (deduplicated with numeric suffixes). */
@@ -74,7 +81,7 @@ continue
 id = `${id}-${count}`
 }
 
-    headings.push({ id, text, level: Number(match[1]) })
+    headings.push({ id, text, level: Number(match[1]), blockId: block.id })
   }
 
   return headings
@@ -161,5 +168,41 @@ export function buildBlocksContent(blocks: Block[]): BlocksContent {
     version: 1,
     blocks,
     text: blocksToPlainText(blocks),
+  }
+}
+
+export interface DocumentStats {
+  blocks: number
+  words: number
+  /** Characters including spaces. */
+  characters: number
+  /** Characters excluding whitespace. */
+  charactersNoSpaces: number
+  /** Estimated reading time in whole minutes (0 for an empty document). */
+  readingTimeMinutes: number
+}
+
+// CJK scripts don't separate words with spaces — count each character.
+const CJK_CHAR = /[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯]/gu
+const WORD = /[\p{L}\p{N}][\p{L}\p{M}\p{N}'’‌_-]*/gu
+
+/**
+ * Word / character counts and reading time for a document. Unicode-aware:
+ * Persian/Arabic words joined by ZWNJ count once, CJK characters count as
+ * words. Reading time assumes 200 words per minute.
+ */
+export function getDocumentStats(blocks: Block[], wordsPerMinute = 200): DocumentStats {
+  const text = blocksToPlainText(blocks)
+  const cjk = text.match(CJK_CHAR)?.length ?? 0
+  const words = (text.replace(CJK_CHAR, ' ').match(WORD)?.length ?? 0) + cjk
+  const characters = [...text.replace(/\n/g, '')].length
+  const charactersNoSpaces = [...text.replace(/\s/g, '')].length
+
+  return {
+    blocks: blocks.length,
+    words,
+    characters,
+    charactersNoSpaces,
+    readingTimeMinutes: words === 0 ? 0 : Math.max(1, Math.round(words / Math.max(1, wordsPerMinute))),
   }
 }

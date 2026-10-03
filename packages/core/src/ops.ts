@@ -92,7 +92,7 @@ props.buttonStyle = 'primary'
 props.align = 'left'
 }
 
-  if (type === 'bookmark' && props.url === undefined) {
+  if ((type === 'bookmark' || type === 'embed') && props.url === undefined) {
     props.url = ''
   }
 
@@ -294,18 +294,30 @@ export function insertTextInSpans(spans: InlineSpan[], offset: number, text: str
 
 const RTL_CHAR = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/
 
-export function detectDir(text: string): 'rtl' | 'ltr' {
+// Any letter that isn't RTL is a strong LTR character (Latin, Cyrillic, Greek, CJK, …).
+const LTR_CHAR = /\p{L}/u
+
+/**
+ * Direction of the first strong character, or `null` when the text has none
+ * (digits, punctuation, `/`, emoji, …) — the paragraph direction is then
+ * inherited instead of guessed.
+ */
+export function detectStrongDir(text: string): 'rtl' | 'ltr' | null {
   for (const ch of text) {
     if (RTL_CHAR.test(ch)) {
 return 'rtl'
 }
 
-    if (/[A-Za-z]/.test(ch)) {
+    if (LTR_CHAR.test(ch)) {
 return 'ltr'
 }
   }
 
-  return 'ltr'
+  return null
+}
+
+export function detectDir(text: string): 'rtl' | 'ltr' {
+  return detectStrongDir(text) ?? 'ltr'
 }
 
 /** Resolve layout direction for block chrome (gutter, list markers, callout icon). */
@@ -320,10 +332,10 @@ export function resolveBlockDirection(
   }
 
   if (isTextBlock(block.type)) {
-    const text = spansToText(block.content)
+    const strong = detectStrongDir(spansToText(block.content))
 
-    if (text.trim()) {
-      return detectDir(text)
+    if (strong) {
+      return strong
     }
   }
 

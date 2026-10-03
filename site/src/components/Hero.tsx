@@ -29,7 +29,7 @@ export function Hero() {
         </div>
         <ul className="hero-proof" aria-label="Highlights">
           <li>@xproeditor/core · vue · react</li>
-          <li>18 blocks · Ask AI · Markdown</li>
+          <li>24 blocks · Ask AI · Markdown · RTL</li>
           <li>MIT · themeable CSS vars</li>
         </ul>
       </div>

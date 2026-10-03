@@ -1,16 +1,26 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
+  DocRenderer,
   ProEditor,
   createBlock,
   type AITransport,
   type Block,
+  type DocumentStats,
   type FetchBookmarkMetaFn,
 } from '@xproeditor/vue'
 
-type ToolbarMode = 'fixed' | 'floating' | 'both'
+type ToolbarMode = 'fixed' | 'floating' | 'both' | 'none'
+type Locale = 'en' | 'fa'
+type Panel = 'none' | 'preview' | 'markdown' | 'html'
 
 const mode = ref<ToolbarMode>('floating')
+const locale = ref<Locale>('en')
+const panel = ref<Panel>('none')
+const stats = ref<DocumentStats | null>(null)
+const snapshot = ref<Block[]>([])
+const exported = ref('')
+const editorRef = ref<InstanceType<typeof ProEditor> | null>(null)
 const dark = ref(document.documentElement.classList.contains('xpe-dark'))
 
 /** Demo-only mock transport — replace with your LLM backend in production. */
@@ -40,9 +50,36 @@ const demoAITransport: AITransport = async function* (request) {
 /** Plain object (not a computed) so `ai.transport` is always visible to ProEditor props. */
 const ai = { transport: demoAITransport }
 
+function seedFa(): Block[] {
+  return [
+    createBlock('heading_1', { content: [{ text: 'ویرایشگر XProEditor — نسخه فارسی' }] }),
+    createBlock('table_of_contents'),
+    createBlock('paragraph', {
+      content: [
+        { text: 'این یک ویرایشگر بلوکی ' },
+        { text: 'شبیه نوشن', marks: { bold: true } },
+        { text: ' است. برای منوی دستورها ' },
+        { text: '/', marks: { code: true } },
+        { text: ' را تایپ کنید، یا متن را انتخاب کنید تا نوار ابزار ظاهر شود.' },
+      ],
+    }),
+    createBlock('heading_2', { content: [{ text: 'میانبرهای مارک‌داون' }] }),
+    createBlock('bulleted_list_item', {
+      content: [{ text: '**پررنگ**، *مورب*، `کد` و ~~خط‌خورده~~ را مستقیم تایپ کنید.' }],
+    }),
+    createBlock('to_do', { content: [{ text: 'با [x] یک کار انجام‌شده بسازید' }], props: { checked: true } }),
+    createBlock('heading_2', { content: [{ text: 'بلوک‌ها' }] }),
+    createBlock('callout', {
+      content: [{ text: 'جدول، تصویر، ویدیو، نشانک، جاسازی و کد همه پشتیبانی می‌شوند.' }],
+    }),
+    createBlock('paragraph', { content: [] }),
+  ]
+}
+
 function seed(): Block[] {
   return [
     createBlock('heading_1', { content: [{ text: 'XProEditor — Vue demo' }] }),
+    createBlock('table_of_contents'),
     createBlock('paragraph', {
       content: [
         { text: 'This is a ' },
@@ -76,6 +113,9 @@ function seed(): Block[] {
     createBlock('callout', {
       content: [{ text: 'Callouts, tables, images, videos, bookmarks, and code blocks are all supported.' }],
     }),
+    createBlock('heading_2', { content: [{ text: 'Embeds' }] }),
+    createBlock('embed', { props: { url: 'https://codepen.io/team/codepen/pen/PNaGbb', height: 320 } }),
+    createBlock('heading_2', { content: [{ text: 'Links' }] }),
     createBlock('bookmark', {
       props: {
         url: 'https://github.com',
@@ -105,8 +145,23 @@ const fetchBookmarkMeta: FetchBookmarkMetaFn = async (url) => {
 const blocks = ref<Block[]>(seed())
 
 function reset() {
-  blocks.value = seed()
+  blocks.value = locale.value === 'fa' ? seedFa() : seed()
+  void nextTick(refresh)
 }
+
+function refresh() {
+  const editor = editorRef.value
+  if (!editor) return
+  stats.value = editor.getStats()
+  snapshot.value = editor.getBlocks()
+  exported.value = panel.value === 'markdown' ? editor.getMarkdown() : panel.value === 'html' ? editor.getHTML() : ''
+}
+
+const dir = computed(() => (locale.value === 'fa' ? 'rtl' : 'ltr'))
+
+watch(locale, reset)
+watch(panel, refresh)
+onMounted(() => void nextTick(refresh))
 
 function applyDemoDark(isDark: boolean) {
   document.documentElement.classList.toggle('xpe-dark', isDark)
@@ -147,6 +202,41 @@ watch(dark, (v) => applyDemoDark(v))
           <option value="fixed">Fixed toolbar</option>
           <option value="floating">Floating (Notion-like)</option>
           <option value="both">Both</option>
+          <option value="none">No toolbar</option>
+        </select>
+        <select
+          v-model="locale"
+          aria-label="Language"
+          :style="{
+            height: '32px',
+            borderRadius: '8px',
+            border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`,
+            background: dark ? '#1f2937' : '#fff',
+            color: dark ? '#e5e7eb' : '#111827',
+            padding: '0 8px',
+            fontSize: '13px',
+          }"
+        >
+          <option value="en">English</option>
+          <option value="fa">فارسی (RTL)</option>
+        </select>
+        <select
+          v-model="panel"
+          aria-label="Output panel"
+          :style="{
+            height: '32px',
+            borderRadius: '8px',
+            border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`,
+            background: dark ? '#1f2937' : '#fff',
+            color: dark ? '#e5e7eb' : '#111827',
+            padding: '0 8px',
+            fontSize: '13px',
+          }"
+        >
+          <option value="none">No preview</option>
+          <option value="preview">Read-only preview</option>
+          <option value="markdown">Markdown export</option>
+          <option value="html">HTML export</option>
         </select>
         <button
           type="button"
@@ -193,14 +283,44 @@ watch(dark, (v) => applyDemoDark(v))
       }"
     >
       <ProEditor
-        :key="mode"
+        ref="editorRef"
+        :key="`${mode}-${locale}`"
         :model-value="blocks"
         :toolbar="mode"
+        :locale="locale"
+        :editor-dir="dir"
         :ai="ai"
         :fetch-bookmark-meta="fetchBookmarkMeta"
-        editor-dir="ltr"
+        @change="refresh"
+        @upload-error="(error, file) => console.warn('Upload failed', file.name, error)"
       />
       <div style="padding: 16px 24px 32px" />
     </div>
+
+    <p v-if="stats" :style="{ fontSize: '12px', color: dark ? '#9ca3af' : '#6b7280', margin: '8px 2px' }">
+      {{ stats.words }} words · {{ stats.characters }} characters · {{ stats.readingTimeMinutes }} min read ·
+      {{ stats.blocks }} blocks
+    </p>
+
+    <div
+      v-if="panel === 'preview'"
+      :dir="dir"
+      :style="{ border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: '12px', padding: '24px', marginTop: '12px' }"
+    >
+      <DocRenderer :blocks="snapshot" :locale="locale" :editor-dir="dir" />
+    </div>
+
+    <pre
+      v-if="panel === 'markdown' || panel === 'html'"
+      :style="{
+        border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`,
+        borderRadius: '12px',
+        padding: '16px',
+        marginTop: '12px',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        fontSize: '12px',
+      }"
+    >{{ exported }}</pre>
   </div>
 </template>

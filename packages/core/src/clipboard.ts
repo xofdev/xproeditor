@@ -1,6 +1,10 @@
+import { embedFrameHeight, resolveEmbed } from './embed'
 import { escapeHtml, spansToHtml } from './html'
 import { cloneBlock } from './ops'
-import { blockToPlainText } from './serialize'
+import { sanitizeBlocks, sanitizeCssColor, sanitizeLinkUrl, sanitizeMediaUrl } from './sanitize'
+import { blockToPlainText, extractHeadings, headingAnchorIds } from './serialize'
+import type { DocHeading } from './serialize'
+import { isAllowedEmbedUrl, parseVideoEmbed } from './video-embed'
 import {
   getResolvedTableWidth,
   normalizeTableData,
@@ -54,7 +58,7 @@ function renderTableCellHtml(
   }
 
   if (inlineStyle) {
-    attrs.push(`style="${inlineStyle}"`)
+    attrs.push(`style="${escapeHtml(inlineStyle)}"`)
   }
 
   const attrStr = attrs.length ? ` ${attrs.join(' ')}` : ''
@@ -62,37 +66,110 @@ function renderTableCellHtml(
   return `<${cellTag}${attrStr}>${spansToHtml(cell.content)}</${cellTag}>`
 }
 
-function blockToHtmlFragment(block: Block): string {
+interface HtmlExportContext {
+  /** Heading block id → anchor id (shared with the table of contents). */
+  anchors: Map<string, string>
+  headings: DocHeading[]
+}
+
+function styleAttr(block: Block, extra: string[] = []): string {
+  const styles = [...extra]
   const indent = block.props.indent ?? 0
-  const indentAttr = indent ? ` style="margin-inline-start:${indent * 24}px"` : ''
+
+  if (indent) {
+    styles.push(`margin-inline-start:${indent * 24}px`)
+  }
+
+  if (block.props.align && block.props.align !== 'left') {
+    styles.push(`text-align:${block.props.align}`)
+  }
+
+  return styles.length ? ` style="${escapeHtml(styles.join(';'))}"` : ''
+}
+
+function headingTag(level: number, block: Block, ctx: HtmlExportContext): string {
+  const anchor = ctx.anchors.get(block.id)
+  const id = anchor ? ` id="${escapeHtml(anchor)}"` : ''
+
+  return `<h${level}${id}${dirAttr(block)}${styleAttr(block)}>${spansToHtml(block.content)}</h${level}>`
+}
+
+function iframeHtml(src: string, height: number, title: string): string {
+  return `<iframe src="${escapeHtml(src)}" height="${height}" style="width:100%;border:0" title="${escapeHtml(title)}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-popups allow-presentation allow-forms"></iframe>`
+}
+
+function blockToHtmlFragment(block: Block, ctx: HtmlExportContext): string {
   const direction = dirAttr(block)
 
   switch (block.type) {
     case 'heading_1':
-      return `<h1${direction}${indentAttr}>${spansToHtml(block.content)}</h1>`
+      return headingTag(1, block, ctx)
     case 'heading_2':
-      return `<h2${direction}${indentAttr}>${spansToHtml(block.content)}</h2>`
+      return headingTag(2, block, ctx)
     case 'heading_3':
-      return `<h3${direction}${indentAttr}>${spansToHtml(block.content)}</h3>`
+      return headingTag(3, block, ctx)
     case 'quote':
-      return `<blockquote${direction}${indentAttr}><p>${spansToHtml(block.content)}</p></blockquote>`
-    case 'code':
-      return `<pre><code>${escapeHtml(block.props.code ?? '')}</code></pre>`
+      return `<blockquote${direction}${styleAttr(block)}><p>${spansToHtml(block.content)}</p></blockquote>`
+    case 'callout': {
+      const icon = block.props.icon ?? ''
+      const color = sanitizeCssColor(block.props.color)
+      const attrs = [
+        'data-xpe-type="callout"',
+        icon ? `data-xpe-icon="${escapeHtml(icon)}"` : '',
+        color ? `data-xpe-color="${escapeHtml(color)}"` : '',
+      ].filter(Boolean).join(' ')
+      const iconHtml = icon ? `<span data-xpe-callout-icon>${escapeHtml(icon)}</span> ` : ''
+
+      return `<aside ${attrs}${direction}${styleAttr(block, color ? [`background:${color}`] : [])}>${iconHtml}<p>${spansToHtml(block.content)}</p></aside>`
+    }
+    case 'code': {
+      const lang = block.props.language && block.props.language !== 'plaintext'
+        ? ` class="language-${escapeHtml(block.props.language)}"`
+        : ''
+
+      return `<pre><code${lang}>${escapeHtml(block.props.code ?? '')}</code></pre>`
+    }
     case 'divider':
       return '<hr>'
     case 'image': {
-      const url = block.props.url ?? ''
+      const url = sanitizeMediaUrl(block.props.url)
 
       if (!url) {
 return ''
 }
 
-      const alt = escapeHtml(block.props.caption ?? '')
+      const caption = block.props.caption ?? ''
+      const width = typeof block.props.width === 'number' && block.props.width > 0 && block.props.width < 100
+        ? ` style="width:${Math.round(block.props.width)}%"`
+        : ''
+      const img = `<img src="${escapeHtml(url)}" alt="${escapeHtml(caption)}"${width}>`
 
-      return `<img src="${escapeHtml(url)}" alt="${alt}">`
+      return caption
+        ? `<figure>${img}<figcaption>${escapeHtml(caption)}</figcaption></figure>`
+        : img
+    }
+    case 'video': {
+      const raw = block.props.url ?? ''
+
+      if (!raw) {
+return ''
+}
+
+      const caption = block.props.caption
+        ? `<figcaption>${escapeHtml(block.props.caption)}</figcaption>`
+        : ''
+      const embed = isAllowedEmbedUrl(raw) ? raw : parseVideoEmbed(raw)?.embedUrl
+
+      if (embed) {
+        return `<figure data-xpe-type="video" data-xpe-url="${escapeHtml(embed)}">${iframeHtml(embed, 400, block.props.caption || 'Video')}${caption}</figure>`
+      }
+
+      const url = sanitizeMediaUrl(raw)
+
+      return url ? `<figure data-xpe-type="video"><video controls src="${escapeHtml(url)}"></video>${caption}</figure>` : ''
     }
     case 'audio': {
-      const url = block.props.url ?? ''
+      const url = sanitizeMediaUrl(block.props.url)
 
       if (!url) {
 return ''
@@ -101,7 +178,7 @@ return ''
       return `<audio controls src="${escapeHtml(url)}"></audio>`
     }
     case 'file': {
-      const url = block.props.url ?? ''
+      const url = sanitizeLinkUrl(block.props.url)
 
       if (!url) {
 return ''
@@ -111,17 +188,44 @@ return ''
 
       return `<a href="${escapeHtml(url)}" download>${name}</a>`
     }
+    case 'embed': {
+      const resolved = resolveEmbed(block.props.url)
+
+      if (!resolved) {
+        const url = sanitizeLinkUrl(block.props.url)
+
+        return url ? `<p><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>` : ''
+      }
+
+      const height = embedFrameHeight(block.props.height, resolved.height)
+      const caption = block.props.caption
+        ? `<figcaption>${escapeHtml(block.props.caption)}</figcaption>`
+        : ''
+
+      return `<figure data-xpe-type="embed" data-xpe-url="${escapeHtml(block.props.url ?? '')}" data-xpe-provider="${escapeHtml(resolved.provider.id)}">${iframeHtml(resolved.embedUrl, height, block.props.caption || resolved.provider.name)}${caption}</figure>`
+    }
+    case 'table_of_contents': {
+      if (!ctx.headings.length) {
+        return '<nav data-xpe-type="table_of_contents"></nav>'
+      }
+
+      const items = ctx.headings
+        .map(h => `<li data-level="${h.level}" style="margin-inline-start:${(h.level - 1) * 16}px"><a href="#${escapeHtml(h.id)}">${escapeHtml(h.text)}</a></li>`)
+        .join('')
+
+      return `<nav data-xpe-type="table_of_contents"><ul>${items}</ul></nav>`
+    }
     case 'button': {
-      const url = block.props.url ?? ''
+      const url = sanitizeLinkUrl(block.props.url)
       const label = spansToHtml(block.content) || 'Button'
-      const style = block.props.buttonStyle ?? 'primary'
-      const align = block.props.align ?? 'left'
-      const color = block.props.color ?? ''
+      const style = block.props.buttonStyle === 'outline' || block.props.buttonStyle === 'ghost' ? block.props.buttonStyle : 'primary'
+      const align = block.props.align === 'center' || block.props.align === 'right' ? block.props.align : 'left'
+      const color = sanitizeCssColor(block.props.color)
       const newTab = block.props.openInNewTab ? 'true' : 'false'
       const attrs = [
         'data-xpe-type="button"',
-        `data-xpe-style="${escapeHtml(style)}"`,
-        `data-xpe-align="${escapeHtml(align)}"`,
+        `data-xpe-style="${style}"`,
+        `data-xpe-align="${align}"`,
         `data-xpe-newtab="${newTab}"`,
         url ? `data-xpe-url="${escapeHtml(url)}"` : '',
         color ? `data-xpe-color="${escapeHtml(color)}"` : '',
@@ -131,25 +235,23 @@ return ''
       const target = block.props.openInNewTab ? ' target="_blank" rel="noopener noreferrer"' : ''
 
       if (url) {
-        return `<div ${attrs} style="${alignStyle}${colorStyle}"><a href="${escapeHtml(url)}"${target} class="xpe-btn xpe-btn--${escapeHtml(style)}">${label}</a></div>`
+        return `<div ${attrs} style="${alignStyle}${colorStyle}"><a href="${escapeHtml(url)}"${target} class="xpe-btn xpe-btn--${style}">${label}</a></div>`
       }
 
-      return `<div ${attrs} style="${alignStyle}${colorStyle}"><span class="xpe-btn xpe-btn--${escapeHtml(style)}">${label}</span></div>`
+      return `<div ${attrs} style="${alignStyle}${colorStyle}"><span class="xpe-btn xpe-btn--${style}">${label}</span></div>`
     }
     case 'bookmark': {
-      const url = block.props.url ?? ''
+      const url = sanitizeLinkUrl(block.props.url)
       if (!url) return ''
 
       const title = escapeHtml(block.props.title || blockToPlainText(block) || url)
       const description = block.props.description
         ? `<p data-xpe-bookmark-desc>${escapeHtml(block.props.description)}</p>`
         : ''
-      const favicon = block.props.favicon
-        ? ` data-xpe-favicon="${escapeHtml(block.props.favicon)}"`
-        : ''
-      const image = block.props.image
-        ? ` data-xpe-image="${escapeHtml(block.props.image)}"`
-        : ''
+      const faviconUrl = sanitizeMediaUrl(block.props.favicon)
+      const imageUrl = sanitizeMediaUrl(block.props.image)
+      const favicon = faviconUrl ? ` data-xpe-favicon="${escapeHtml(faviconUrl)}"` : ''
+      const image = imageUrl ? ` data-xpe-image="${escapeHtml(imageUrl)}"` : ''
       const titleAttr = block.props.title
         ? ` data-xpe-title="${escapeHtml(block.props.title)}"`
         : ''
@@ -181,28 +283,30 @@ return ''
         return `<tr>${cells}</tr>`
       }).join('')
 
-      return `<table style="${tableStyle}">${rows}</table>`
+      return `<table style="${escapeHtml(tableStyle)}">${rows}</table>`
     }
     case 'toggle':
     case 'toggle_heading_1':
     case 'toggle_heading_2':
     case 'toggle_heading_3':
-      return toggleToHtmlFragment(block, '')
+      return toggleToHtmlFragment(block, '', ctx)
     default:
       if (isTextBlock(block.type)) {
-        return `<p${direction}${indentAttr}>${spansToHtml(block.content)}</p>`
+        return `<p${direction}${styleAttr(block)}>${spansToHtml(block.content)}</p>`
       }
 
       return ''
   }
 }
 
-function toggleToHtmlFragment(block: Block, childrenHtml: string): string {
+function toggleToHtmlFragment(block: Block, childrenHtml: string, ctx: HtmlExportContext): string {
   const direction = dirAttr(block)
   const open = block.props.collapsed ? '' : ' open'
   const level = toggleHeadingLevel(block.type)
+  const anchor = level ? ctx.anchors.get(block.id) : undefined
+  const id = anchor ? ` id="${escapeHtml(anchor)}"` : ''
   const summaryInner = level
-    ? `<h${level}${direction}>${spansToHtml(block.content)}</h${level}>`
+    ? `<h${level}${id}${direction}>${spansToHtml(block.content)}</h${level}>`
     : `<p${direction}>${spansToHtml(block.content)}</p>`
 
   return `<details data-xpe-type="${block.type}"${open}><summary>${summaryInner}</summary>${childrenHtml}</details>`
@@ -219,35 +323,91 @@ function relativeIndentChildren(blocks: Block[], parentIndent: number): Block[] 
   })
 }
 
-/** HTML body for external apps; lists are grouped into ul/ol; toggles use details. */
-export function blocksToHtmlContent(blocks: Block[]): string {
+const LIST_BLOCK_TYPES = new Set(['bulleted_list_item', 'numbered_list_item', 'to_do'])
+
+function isListBlock(block: Block | undefined): boolean {
+  return !!block && LIST_BLOCK_TYPES.has(block.type)
+}
+
+function listItemHtml(block: Block): string {
+  const direction = dirAttr(block)
+
+  if (block.type === 'to_do') {
+    const checked = block.props.checked ? ' checked' : ''
+
+    return `<li data-checked="${block.props.checked ? 'true' : 'false'}"${direction}><input type="checkbox" disabled${checked}> ${spansToHtml(block.content)}`
+  }
+
+  return `<li${direction}>${spansToHtml(block.content)}`
+}
+
+/**
+ * Render a run of list items starting at `start` whose indent is ≥ `indent`.
+ * Deeper items nest inside the preceding `<li>`, so the flat block model
+ * exports as properly nested `<ul>/<ol>` markup.
+ */
+function renderListGroup(blocks: Block[], start: number, indent: number): { html: string; next: number } {
+  const type = blocks[start].type
+  const items: string[] = []
+  let i = start
+
+  while (i < blocks.length) {
+    const block = blocks[i]
+
+    if (!isListBlock(block)) {
+      break
+    }
+
+    const level = block.props.indent ?? 0
+
+    if (level < indent) {
+      break
+    }
+
+    if (level > indent) {
+      const nested = renderListGroup(blocks, i, level)
+
+      if (items.length === 0) {
+        items.push('<li>')
+      }
+
+      items[items.length - 1] += nested.html
+      i = nested.next
+      continue
+    }
+
+    if (block.type !== type) {
+      break
+    }
+
+    items.push(listItemHtml(block))
+    i++
+  }
+
+  const html = items.map(item => `${item}</li>`).join('')
+
+  if (type === 'numbered_list_item') {
+    return { html: `<ol>${html}</ol>`, next: i }
+  }
+
+  if (type === 'to_do') {
+    return { html: `<ul data-type="taskList">${html}</ul>`, next: i }
+  }
+
+  return { html: `<ul>${html}</ul>`, next: i }
+}
+
+function blocksToHtmlWithContext(blocks: Block[], ctx: HtmlExportContext): string {
   const parts: string[] = []
   let i = 0
 
   while (i < blocks.length) {
     const b = blocks[i]
 
-    if (b.type === 'bulleted_list_item') {
-      const items: string[] = []
-
-      while (i < blocks.length && blocks[i].type === 'bulleted_list_item') {
-        items.push(`<li>${spansToHtml(blocks[i].content)}</li>`)
-        i++
-      }
-
-      parts.push(`<ul>${items.join('')}</ul>`)
-      continue
-    }
-
-    if (b.type === 'numbered_list_item') {
-      const items: string[] = []
-
-      while (i < blocks.length && blocks[i].type === 'numbered_list_item') {
-        items.push(`<li>${spansToHtml(blocks[i].content)}</li>`)
-        i++
-      }
-
-      parts.push(`<ol>${items.join('')}</ol>`)
+    if (isListBlock(b)) {
+      const group = renderListGroup(blocks, i, b.props.indent ?? 0)
+      parts.push(group.html)
+      i = group.next
       continue
     }
 
@@ -255,13 +415,13 @@ export function blocksToHtmlContent(blocks: Block[]): string {
       const len = getToggleSubtreeLength(blocks, i)
       const parentIndent = b.props.indent ?? 0
       const childBlocks = relativeIndentChildren(blocks.slice(i + 1, i + len), parentIndent)
-      const childrenHtml = childBlocks.length ? blocksToHtmlContent(childBlocks) : ''
-      parts.push(toggleToHtmlFragment(b, childrenHtml))
+      const childrenHtml = childBlocks.length ? blocksToHtmlWithContext(childBlocks, ctx) : ''
+      parts.push(toggleToHtmlFragment(b, childrenHtml, ctx))
       i += len
       continue
     }
 
-    const frag = blockToHtmlFragment(b)
+    const frag = blockToHtmlFragment(b, ctx)
 
     if (frag) {
 parts.push(frag)
@@ -271,6 +431,18 @@ parts.push(frag)
   }
 
   return parts.join('')
+}
+
+/**
+ * HTML body for external apps (CMS, email, static sites). Lists nest by
+ * indent, toggles use `<details>`, headings get anchor ids that the table of
+ * contents links to, and every URL/colour is sanitized.
+ */
+export function blocksToHtmlContent(blocks: Block[]): string {
+  return blocksToHtmlWithContext(blocks, {
+    anchors: headingAnchorIds(blocks),
+    headings: extractHeadings(blocks),
+  })
 }
 
 export function blocksToClipboardJson(blocks: Block[]): string {
@@ -298,14 +470,12 @@ function parseBlocksJson(json: string): Block[] | null {
 return null
 }
 
-    if (isBlocksContent(parsed)) {
-      return cloneBlocksForClipboard(parsed.blocks)
-    }
+    // Clipboard data can come from any page — validate before trusting it.
+    const raw = isBlocksContent(parsed) ? parsed.blocks : (parsed as { blocks?: unknown }).blocks
+    const blocks = sanitizeBlocks(raw)
 
-    const blocks = (parsed as { blocks?: Block[] }).blocks
-
-    if (Array.isArray(blocks) && blocks.length > 0) {
-      return blocks.map(b => cloneBlock(b, true))
+    if (blocks.length > 0) {
+      return cloneBlocksForClipboard(blocks)
     }
   } catch {
     /* ignore malformed clipboard */

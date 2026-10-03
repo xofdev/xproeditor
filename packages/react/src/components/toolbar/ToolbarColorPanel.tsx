@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Highlighter } from 'lucide-react'
+import { useEditorDictionary } from '../../i18n'
 import type { MarkName } from '@xproeditor/core'
 import {
   Button,
@@ -26,6 +27,7 @@ export function ToolbarColorPanel({
   currentHighlight,
   onMark,
 }: ToolbarColorPanelProps) {
+  const t = useEditorDictionary().toolbar
   const [activeTab, setActiveTab] = useState<'text' | 'highlight'>('text')
   const [pickerColor, setPickerColor] = useState(currentColor ?? DEFAULT_TEXT_COLOR)
   const isEditingPicker = useRef(false)
@@ -111,10 +113,10 @@ export function ToolbarColorPanel({
     <Tabs value={activeTab} onValueChange={changeTab} className="w-[280px]">
       <TabsList className="mb-2 grid w-full grid-cols-2">
         <TabsTrigger value="text" className="text-xs">
-          Text
+          {t.textColor}
         </TabsTrigger>
         <TabsTrigger value="highlight" className="text-xs">
-          Highlight
+          {t.highlight}
         </TabsTrigger>
       </TabsList>
 
@@ -139,7 +141,7 @@ export function ToolbarColorPanel({
 
         <div className="border-t border-[var(--xpe-border)] pt-3">
           <p className="xpe-menu-heading mb-2">
-            Custom
+            {t.customColor}
           </p>
           <div onFocus={() => (isEditingPicker.current = true)}>
             <ColorPickerPanel
@@ -159,7 +161,7 @@ export function ToolbarColorPanel({
             className="h-7 w-full text-xs text-[var(--xpe-muted-foreground)]"
             onClick={resetCurrent}
           >
-            Reset text color
+            {t.resetTextColor}
           </Button>
         )}
       </TabsContent>
@@ -184,7 +186,7 @@ export function ToolbarColorPanel({
 
         <div className="border-t border-[var(--xpe-border)] pt-3">
           <p className="xpe-menu-heading mb-2">
-            Custom
+            {t.customColor}
           </p>
           <div onFocus={() => (isEditingPicker.current = true)}>
             <ColorPickerPanel
@@ -205,7 +207,7 @@ export function ToolbarColorPanel({
             onClick={resetCurrent}
           >
             <Highlighter className="me-1.5 size-3" />
-            Remove highlight
+            {t.removeHighlight}
           </Button>
         )}
       </TabsContent>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import type { AICommand, AITransport, Block } from '@xproeditor/core'
+import { ref, toRef } from 'vue'
+import type { AICommand, AITransport, Block, BlockPatch, DocumentStats, EditorDictionaryOverrides, EditorFocusTarget } from '@xproeditor/core'
+import { provideEditorI18n } from '../i18n'
 import BlockEditor from './BlockEditor.vue'
 import EditorFormatToolbar from './EditorFormatToolbar.vue'
 import type { FormatToolbarState } from './EditorFormatToolbar.vue'
@@ -37,15 +38,30 @@ const props = withDefaults(
       transport: AITransport
       commands?: AICommand[]
     }
+    /** Placeholder shown in the focused empty paragraph. */
+    placeholder?: string
+    /** Browser spellcheck in text blocks (default `true`). */
+    spellcheck?: boolean
+    /** Focus the editor on mount (`true` = end of document). */
+    autofocus?: boolean | 'start' | 'end'
+    /** UI language (`'en'` default, `'fa'` built in). */
+    locale?: string
+    /** Override any UI string, or supply a whole new language. */
+    dictionary?: EditorDictionaryOverrides
   }>(),
   {
     toolbar: 'floating',
+    spellcheck: true,
   },
 )
 
 const emit = defineEmits<{
   change: []
+  /** `upload` rejected for a pasted/dropped file (the file is skipped). */
+  'upload-error': [error: unknown, file: File]
 }>()
+
+provideEditorI18n(toRef(props, 'locale'), toRef(props, 'dictionary'))
 
 const editorRef = ref<InstanceType<typeof BlockEditor> | null>(null)
 const formatState = ref<FormatToolbarState | null>(null)
@@ -59,6 +75,23 @@ defineExpose({
   openAIMenu: () => editorRef.value?.openAIMenu(),
   focusFirst: () => editorRef.value?.focusFirst(),
   focusEnd: () => editorRef.value?.focusEnd(),
+  focus: (target?: EditorFocusTarget) => editorRef.value?.focus(target),
+  getBlocks: (): Block[] => editorRef.value?.getBlocks() ?? [],
+  setBlocks: (blocks: Block[], options?: { history?: 'push' | 'reset' }) => editorRef.value?.setBlocks(blocks, options),
+  insertBlocks: (blocks: Block[], position?: { after?: string; before?: string }): string[] =>
+    editorRef.value?.insertBlocks(blocks, position) ?? [],
+  updateBlock: (id: string, patch: BlockPatch): boolean => editorRef.value?.updateBlock(id, patch) ?? false,
+  removeBlocks: (ids: string[]) => editorRef.value?.removeBlocks(ids),
+  getMarkdown: (): string => editorRef.value?.getMarkdown() ?? '',
+  getHTML: (): string => editorRef.value?.getHTML() ?? '',
+  getText: (): string => editorRef.value?.getText() ?? '',
+  getStats: (): DocumentStats => editorRef.value?.getStats() ?? {
+    blocks: 0,
+    words: 0,
+    characters: 0,
+    charactersNoSpaces: 0,
+    readingTimeMinutes: 0,
+  },
 })
 </script>
 
@@ -90,7 +123,13 @@ defineExpose({
       :readonly="readonly"
       :show-bubble-toolbar="showBubbleToolbar()"
       :ai="props.ai"
+      :placeholder="placeholder"
+      :spellcheck="spellcheck"
+      :autofocus="autofocus"
+      :locale="locale"
+      :dictionary="dictionary"
       @change="emit('change')"
+      @upload-error="(error, file) => emit('upload-error', error, file)"
       @format-state="formatState = $event"
     />
   </div>
