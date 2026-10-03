@@ -1,5 +1,29 @@
 # @xproeditor/vue
 
+## 0.6.0
+
+### Minor Changes
+
+- 8636314: A document API on the editor ref (`ProEditor` and `BlockEditor` in both adapters): `getBlocks`, `setBlocks` (with `history: 'reset'` for loading another document), `insertBlocks`, `updateBlock`, `removeBlocks`, `focus`, `getMarkdown`, `getHTML`, `getText` and `getStats` (words, characters, reading time — Unicode-aware). New options: `placeholder`, `spellCheck` (React) / `spellcheck` (Vue) — browser spellcheck is now on by default — and `autofocus`. Core exports the `EditorDocumentApi` type and `getDocumentStats`.
+- 8636314: Two new blocks. **Embed** (`/embed`) shows allow-listed iframes for YouTube, Vimeo, Loom, Figma, CodePen, CodeSandbox, Spotify, SoundCloud and Google Maps — paste a link or an `<iframe>` snippet; the frame source is always re-derived from the URL so stored documents can't point it anywhere else. **Table of contents** (`/toc`) lists the document's headings live and links to them in the editor and in `DocRenderer`. Core exports `EMBED_PROVIDERS`, `resolveEmbed`, `extractEmbedSource`, `embedFrameHeight` and `BLOCK_TYPES`; `DocHeading` gains `blockId`. Bookmark, embed and table-of-contents slash items now insert a new block instead of converting a line that already has text.
+- 8636314: Localization. Every label, tooltip, placeholder and message now comes from a typed dictionary: pass `locale="fa"` for the built-in Persian UI (English stays the default) or `dictionary={{ … }}` to override any string or ship another language. Works on `ProEditor`, `BlockEditor` and `DocRenderer`, including portaled menus. Core exports `EN_DICTIONARY`, `FA_DICTIONARY`, `resolveEditorDictionary` and `localeDirection`; React exports `EditorI18nProvider` / `useEditorDictionary`, Vue exports `provideEditorI18n` / `useEditorDictionary`.
+- 8636314: Markdown and keyboard shortcuts. Type `**bold**`, `*italic*` / `_italic_`, `` `code` `` or `~~strike~~` and the formatting is applied as you close it; block prefixes now include `[x] ` (checked to-do), any `N. ` / `N) `, `+ `, `" ` (quote) and `>> ` (toggle), and `[ ] ` turns a bullet into a to-do. New block shortcuts: `Mod+Alt+0…3` (text / headings), `Mod+Shift+7/8/9` (numbered / bulleted / to-do), `Mod+Shift+↑/↓` (move block with its children), `Mod+D` (duplicate), `Mod+Enter` (check a to-do / open a toggle) and `Mod+K` (link). Tooltips show `⌘` on macOS. Core exports `matchBlockShortcut`, `applyInlineMarkdownShortcut`, `resolveBlockKeyboardShortcut`, `moveBlockSubtree` and `BLOCK_KEYBOARD_SHORTCUTS`.
+
+### Patch Changes
+
+- 8636314: Fix pasting into the middle of a block: the text after the caret now stays after the pasted content (`X|Y` + `a⏎b` gives `Xa` / `bY`, not `XaY` / `b`), pasting an image or table into an empty line no longer leaves a stray empty paragraph, and a failed `upload()` for a pasted or dropped file is reported (`onUploadError` in React, `@upload-error` in Vue, plus an inline message in media blocks) instead of being an unhandled rejection. Core exports the shared `pasteBlocksIntoTextBlock` and `plainTextToBlocks` helpers.
+- 8636314: Faster and lighter. Typing in a long document no longer re-renders every block (React rows are memoised; multi-block highlight is computed once per render in both adapters), `DocRenderer` loads highlight.js on demand as a separate chunk instead of eagerly, and the Vue build no longer inlines highlight.js and the icon set (its ESM bundle drops from ~666 KB to ~360 KB, and apps can now dedupe and tree-shake those dependencies).
+- 8636314: Polish and accessibility: icon-only toolbar and gutter buttons now have accessible names, the button block's "Open in new tab" is a real switch, the image lightbox closes with Escape and has a labelled close button, code blocks keep (and show) languages that aren't in the picker list, and `BlockContextMenu` / `EmojiTriggerMenu` (React) and `EditorBlockContextMenu` / `EditorEmojiTriggerMenu` (Vue) are now exported.
+- 8636314: **Security:** links, media sources and colours are now sanitized everywhere content is rendered, imported or exported. `javascript:` / `data:` links pasted from a web page, loaded from storage, pasted as clipboard JSON or returned by an AI model no longer become live links in the editor or in `DocRenderer`, and colour values can no longer break out of a `style` attribute. Unknown block types in stored or pasted documents now degrade to paragraphs instead of breaking the renderer. New core helpers: `sanitizeUrl`, `sanitizeLinkUrl`, `sanitizeMediaUrl`, `sanitizeCssColor`, `sanitizeBlock`, `sanitizeBlocks`.
+- Updated dependencies [8636314]
+- Updated dependencies [8636314]
+- Updated dependencies [8636314]
+- Updated dependencies [8636314]
+- Updated dependencies [8636314]
+- Updated dependencies [8636314]
+- Updated dependencies [8636314]
+  - @xproeditor/core@0.5.0
+
 ## 0.5.0
 
 ### Minor Changes
