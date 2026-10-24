@@ -1,5 +1,14 @@
 # @xproeditor/core
 
+## 0.6.0
+
+### Minor Changes
+
+- 902e1eb: Undo history now stores only the blocks each step changed (new `createBlockHistory` in core) instead of a full-document snapshot per step — far less memory on long documents, untouched rows no longer re-render on undo/redo, and undo never reverts a collaborator's edits.
+- 902e1eb: Code blocks: live syntax highlighting while you type, optional line numbers, a file name in the header, smart Enter (keeps indentation, indents after brackets), `Mod+/` to toggle comments, and language detection when pasting into an empty block — shared core logic in `CODE_LANGUAGES`, `indentCode`, `newlineInCode`, `toggleCodeComment` and `splitHighlightedLines`. Tables: row and column handles (insert, move, duplicate, sort, align, clear, delete), drag-to-resize columns (`colWidths`), a header column (`hasHeaderColumn`), spreadsheet paste from Excel/Google Sheets, `Tab` in the last cell adds a row, and a cleaner floating toolbar instead of always-visible controls. `DocRenderer` and HTML export honour column widths, header columns, code file names and line numbers. Syntax colours are themeable through `--xpe-syntax-*` variables.
+- 902e1eb: Ask AI opens next to what you're working on: anchored to the caret, the selected text or the focused block (never the window corner when opened from the toolbar or block menu), measured instead of assuming a fixed size, flipped above when there's no room below, RTL-aware, scrollable when tall, and it follows its block on scroll. The placement logic is exported from core as `placeFloating` and `resolveEditorAnchor`. Toggle chevrons now rotate smoothly (one `rotate()` per state, 220 ms, reduced-motion aware) in the editor and `DocRenderer`.
+- 902e1eb: Real-time collaboration: pass a session from `createCollabSession` to the new `collaboration` prop and edits sync block by block with live presence markers. Ships with `createBroadcastChannelTransport` (no server), `createWebSocketTransport` (any relay, reconnects and resyncs) and `createMemoryCollabHub`; remote messages are sanitized like pasted content.
+
 ## 0.5.0
 
 ### Minor Changes
