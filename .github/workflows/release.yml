@@ -1,35 +1,65 @@
 name: Release
 
+# Every push to main: if changesets are pending, open/update the
+# "chore: version packages" PR; once that PR is merged (no changesets left),
+# publish the bumped packages to npm.
+#
+# Auth is npm trusted publishing (OIDC) — no NPM_TOKEN secret exists or is
+# needed. One-time setup (see docs/releasing.md):
+#   1. npmjs.com → each of @xproeditor/core, /vue, /react → Settings →
+#      Trusted publisher → GitHub Actions: owner `xofdev`, repository
+#      `xproeditor`, workflow `release.yml`, environment `npm`.
+#   2. GitHub → Settings → Environments → create `npm` (optionally restrict
+#      it to the `main` branch / add required reviewers).
+#   3. GitHub → Settings → Actions → General → Workflow permissions →
+#      enable "Allow GitHub Actions to create and approve pull requests".
+
 on:
   push:
     branches: [main]
+  # Retry a failed publish (e.g. after fixing npm settings) without a new commit.
+  workflow_dispatch:
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+concurrency:
+  group: release-${{ github.ref }}
+  # Never cancel a run that may be half-way through publishing.
+  cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+  contents: read
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    name: Version PR or publish
+    # Forks can't publish (and have no trusted-publisher entry anyway).
+    if: github.repository == 'xofdev/xproeditor'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Must match the environment named in each package's npm trusted publisher.
+    environment: npm
+    permissions:
+      contents: write # version commit + git tags + GitHub releases
+      pull-requests: write # the "chore: version packages" PR
+      id-token: write # npm trusted publishing (OIDC) and provenance
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
 
-      - name: Use Node.js
-        uses: actions/setup-node@v4
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
 
-      # npm trusted publishing (OIDC) needs npm >= 11.5.1.
-      - name: Update npm
-        run: npm install -g npm@latest
+      # Trusted publishing needs npm >= 11.5.1. Stay on npm 11 so a future
+      # major can't silently change publish behaviour.
+      - name: Use npm 11
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
 
       - name: Install dependencies
         run: npm ci
@@ -37,23 +67,36 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Test
         run: npm test
 
-      # Every push to main: if there are pending changesets, open/update a
-      # "Version Packages" PR. Once that PR is merged (so no changesets are
-      # left pending), publish the bumped packages to npm instead.
-      # Publishing authenticates via npm trusted publishing (OIDC, needs the
-      # `id-token: write` permission above) — no NPM_TOKEN secret is used.
-      # Each package must list this repo + release.yml as its trusted
-      # publisher on npmjs.com.
-      - name: Create Release Pull Request or Publish to npm
+      - name: Create version PR or publish to npm
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          version: npm run version-packages
-          publish: npm run release
-          commit: "chore: version packages"
-          title: "chore: version packages"
+          version-script: npm run version-packages
+          publish-script: npm run release
+          commit-message: 'chore: version packages'
+          pr-title: 'chore: version packages'
+          create-github-releases: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
+
+      - name: Summarize published packages
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          PACKAGES: ${{ steps.changesets.outputs.published-packages }}
+        run: |
+          echo "### Published to npm" >> "$GITHUB_STEP_SUMMARY"
+          echo "$PACKAGES" | jq -r '.[] | "- `\(.name)@\(.version)`"' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Explain a failed publish
+        if: failure() && steps.changesets.outcome == 'failure'
+        run: |
+          echo "::error title=Release failed::E404/E401/ENEEDAUTH on 'npm publish' means npm trusted publishing is not configured for that package (owner xofdev, repo xproeditor, workflow release.yml, environment npm). 'GitHub Actions is not permitted to create or approve pull requests' means the repo setting under Settings → Actions → General is off. See docs/releasing.md, then re-run this workflow."
