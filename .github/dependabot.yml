@@ -8,3 +8,7 @@ updates:
     groups:
       actions:
         patterns: ['*']
+    ignore:
+      # changesets/action v2+ needs @changesets/cli v3 — upgrade both together.
+      - dependency-name: changesets/action
+        update-types: ['version-update:semver-major']
