@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { DocRenderer, ProEditor, createBlock, type AITransport, type Block } from '@xproeditor/react'
+import { ClientOnly } from './ClientOnly'
 
 type UseCaseId = 'blog' | 'docs' | 'changelog' | 'notes'
 type ViewMode = 'edit' | 'publish'
@@ -290,23 +291,27 @@ export function UseCases() {
                   <BookOpen size={13} aria-hidden /> Published
                 </button>
               </div>
-              <button type="button" className="nav-link" style={{ fontSize: 12 }} onClick={resetActive}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={resetActive}>
                 Reset sample
               </button>
             </div>
           </div>
 
-          <div className={`usecase-stage editor-theme-bento${view === 'publish' ? ' is-published' : ''}`}>
+          <div className={`usecase-stage editor-theme-site${view === 'publish' ? ' is-published' : ''}`}>
             {view === 'edit' ? (
               <div className="usecase-editor">
-                <ProEditor
-                  key={`${activeId}-${resetKey}`}
-                  defaultValue={blocks}
-                  toolbar="floating"
-                  editorDir="ltr"
-                  ai={ai}
-                  onChange={setBlocks}
-                />
+                <ClientOnly fallback={<DocRenderer blocks={blocks} editorDir="ltr" />}>
+                  {() => (
+                    <ProEditor
+                      key={`${activeId}-${resetKey}`}
+                      defaultValue={blocks}
+                      toolbar="floating"
+                      editorDir="ltr"
+                      ai={ai}
+                      onChange={setBlocks}
+                    />
+                  )}
+                </ClientOnly>
               </div>
             ) : (
               <article className="usecase-article">

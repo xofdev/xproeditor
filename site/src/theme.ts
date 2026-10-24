@@ -2,25 +2,29 @@ export type SiteTheme = 'light' | 'dark'
 
 const STORAGE_KEY = 'xpe-site-theme'
 
-export function initialTheme(): SiteTheme {
-  const stored = localStorage.getItem(STORAGE_KEY)
-
-  if (stored === 'light' || stored === 'dark') return stored
-
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+/** The theme the inline script in index.html applied before first paint. */
+export function currentTheme(): SiteTheme {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
 }
 
-export function applyTheme(theme: SiteTheme) {
+export function applyTheme(theme: SiteTheme, persist = true) {
   const root = document.documentElement
   root.dataset.theme = theme
   // Drive the editor packages' built-in dark theme from the same toggle
   root.classList.toggle('xpe-dark', theme === 'dark')
-  localStorage.setItem(STORAGE_KEY, theme)
+
+  if (persist) {
+    try {
+      localStorage.setItem(STORAGE_KEY, theme)
+    } catch {
+      /* storage blocked — the choice just won't persist */
+    }
+  }
 }
 
 /**
- * Swap themes with the diagonal sweep from the reference design — a
- * View Transitions clip-path wipe. Falls back to an instant swap.
+ * Swap themes with a diagonal sweep (View Transitions clip-path wipe).
+ * Falls back to an instant swap.
  */
 export function transitionTheme(next: SiteTheme) {
   const doc = document as Document & {

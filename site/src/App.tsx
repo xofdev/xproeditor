@@ -1,6 +1,8 @@
-import { Changelog } from './components/Changelog'
-import { Features } from './components/Features'
 import { BlocksShowcase } from './components/BlocksShowcase'
+import { Changelog } from './components/Changelog'
+import { Collaboration } from './components/Collaboration'
+import { FAQ } from './components/FAQ'
+import { Features } from './components/Features'
 import { Footer } from './components/Footer'
 import { Hero } from './components/Hero'
 import { InstallTabs } from './components/InstallTabs'
@@ -19,11 +21,13 @@ export default function App() {
       <main>
         <Hero />
         <LiveDemo />
+        <Collaboration />
+        <Features />
         <UseCases />
         <BlocksShowcase />
-        <Features />
         <InstallTabs />
         <Packages />
+        <FAQ />
         <Changelog />
       </main>
       <Footer />

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
+import { ClientOnly } from './ClientOnly'
 import {
+  DocRenderer,
   ProEditor,
   createBlock,
   type AITransport,
@@ -236,10 +238,10 @@ export function LiveDemo() {
       <div className="container">
         <div className="section-head">
           <span className="eyebrow">Live demo</span>
-          <h2 id="demo-heading">Not a screenshot. Actually try it.</h2>
+          <h2 id="demo-heading">Not a screenshot. The real editor.</h2>
           <p>
-            Same packages you install on npm — with Ask AI wired to a mock transport so you can
-            exercise Accept / Reject without an API key.
+            The exact package you install from npm. Type <code>/</code> for blocks, select text for the
+            toolbar, or try Ask AI — it runs on a mock transport, so no API key is needed.
           </p>
         </div>
 
@@ -290,7 +292,7 @@ export function LiveDemo() {
                     className={editorTheme === t ? 'active' : ''}
                     onClick={() => setEditorTheme(t)}
                   >
-                    {t === 'bento' ? 'Bento theme' : 'Default'}
+                    {t === 'bento' ? 'Neutral' : 'Indigo'}
                   </button>
                 ))}
               </div>
@@ -310,24 +312,27 @@ export function LiveDemo() {
               </div>
               <button
                 type="button"
-                className="nav-link"
-                style={{ fontSize: 12 }}
+                className="btn btn-ghost btn-sm"
                 onClick={() => setResetKey((k) => k + 1)}
               >
                 Reset
               </button>
             </div>
           </div>
-          <div className={`demo-body${editorTheme === 'bento' ? ' editor-theme-bento' : ''}`}>
-            <ProEditor
-              key={`${mode}-${resetKey}-${locale}`}
-              defaultValue={initialBlocks}
-              toolbar={mode}
-              locale={locale}
-              editorDir={locale === 'fa' ? 'rtl' : 'ltr'}
-              ai={ai}
-              fetchBookmarkMeta={fetchBookmarkMeta}
-            />
+          <div className={`demo-body ${editorTheme === 'bento' ? 'editor-theme-site' : 'editor-theme-indigo'}`}>
+            <ClientOnly fallback={<DocRenderer blocks={initialBlocks} />}>
+              {() => (
+                <ProEditor
+                  key={`${mode}-${resetKey}-${locale}`}
+                  defaultValue={initialBlocks}
+                  toolbar={mode}
+                  locale={locale}
+                  editorDir={locale === 'fa' ? 'rtl' : 'ltr'}
+                  ai={ai}
+                  fetchBookmarkMeta={fetchBookmarkMeta}
+                />
+              )}
+            </ClientOnly>
           </div>
         </div>
         <p className="demo-hint">
