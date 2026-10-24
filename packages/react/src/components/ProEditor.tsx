@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
-import type { AICommand, AITransport, Block, EditorDocumentApi } from '@xproeditor/core'
+import type { AICommand, AITransport, Block, CollabSession, EditorDocumentApi } from '@xproeditor/core'
 import { BlockEditor, type BlockEditorHandle } from './BlockEditor'
 import { FormatToolbar } from './FormatToolbar'
 import type { FormatToolbarState } from '../types'
@@ -39,6 +39,12 @@ export interface ProEditorProps {
   locale?: EditorI18nProps['locale']
   /** Override any UI string, or supply a whole new language. */
   dictionary?: EditorI18nProps['dictionary']
+  /**
+   * Real-time collaboration: a session from `createCollabSession`. The
+   * editor shows the session's document, broadcasts local edits and renders
+   * collaborators' presence.
+   */
+  collaboration?: CollabSession
 }
 
 export interface ProEditorHandle extends EditorDocumentApi {
@@ -66,6 +72,7 @@ export const ProEditor = forwardRef<ProEditorHandle, ProEditorProps>(function Pr
     autofocus,
     locale,
     dictionary,
+    collaboration,
   },
   ref,
 ) {
@@ -138,6 +145,7 @@ export const ProEditor = forwardRef<ProEditorHandle, ProEditorProps>(function Pr
           autofocus={autofocus}
           locale={locale}
           dictionary={dictionary}
+          collaboration={collaboration}
         />
       </div>
     </EditorI18nProvider>

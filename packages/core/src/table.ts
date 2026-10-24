@@ -95,8 +95,37 @@ export function normalizeTableData(raw: unknown): TableData {
 
   const width = normalizeTableWidth(data.width)
   const style = normalizeTableStyle(data.style)
+  const out: TableData = { hasHeader, rows, width, style }
 
-  return { hasHeader, rows, width, style }
+  if (data.hasHeaderColumn === true) {
+    out.hasHeaderColumn = true
+  }
+
+  const colWidths = normalizeColumnWidths(data.colWidths, rows[0]?.length ?? 0)
+
+  if (colWidths) {
+    out.colWidths = colWidths
+  }
+
+  return out
+}
+
+/** Narrowest a resized column may get (px). */
+export const MIN_TABLE_COLUMN_WIDTH = 48
+
+function normalizeColumnWidths(raw: unknown, cols: number): (number | null)[] | undefined {
+  if (!Array.isArray(raw) || cols === 0) {
+    return undefined
+  }
+
+  const widths = Array.from({ length: cols }, (_, i) => {
+    const value = raw[i]
+    return typeof value === 'number' && Number.isFinite(value)
+      ? Math.round(Math.min(2000, Math.max(MIN_TABLE_COLUMN_WIDTH, value)))
+      : null
+  })
+
+  return widths.some(w => w !== null) ? widths : undefined
 }
 
 export function normalizeTableWidth(raw: unknown): TableWidth {
@@ -527,6 +556,10 @@ export function addTableColumn(table: TableData, at?: number): TableData {
     return copy
   })
 
+  if (next.colWidths) {
+    next.colWidths.splice(index, 0, null)
+  }
+
   for (let rowIdx = 0; rowIdx < next.rows.length; rowIdx += 1) {
     const row = next.rows[rowIdx]
 
@@ -571,6 +604,14 @@ export function removeTableColumn(table: TableData, colIdx: number): TableData {
 
   const next = cloneTableData(table)
   next.rows = next.rows.map((row) => row.filter((_, i) => i !== colIdx))
+
+  if (next.colWidths) {
+    next.colWidths.splice(colIdx, 1)
+
+    if (next.colWidths.every(w => w === null)) {
+      delete next.colWidths
+    }
+  }
 
   return normalizeMergedTable(next)
 }

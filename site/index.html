@@ -1,69 +1,112 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>XProEditor — Notion-like block editor for Vue &amp; React</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>XProEditor — Notion-style block editor for Vue &amp; React</title>
     <meta
       name="description"
-      content="XProEditor is an open-source Notion-like block editor for Vue 3 and React. Tables, toggles, bookmarks, Markdown paste, multi-select, Ask AI, and DocRenderer — MIT licensed."
+      content="Open-source, Notion-style block editor for Vue 3 and React with real-time collaboration, slash commands, tables, Markdown, Ask AI and RTL. MIT licensed, no Tailwind required."
     />
     <meta name="author" content="XofDev" />
-    <meta name="theme-color" content="#ededed" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#2d2d2d" media="(prefers-color-scheme: dark)" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0b0f" media="(prefers-color-scheme: dark)" />
     <link rel="canonical" href="https://xofdev.github.io/xproeditor/" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="./manifest.webmanifest" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="XProEditor" />
     <meta property="og:url" content="https://xofdev.github.io/xproeditor/" />
-    <meta property="og:title" content="XProEditor — Notion-like block editor for Vue &amp; React" />
+    <meta property="og:title" content="XProEditor — Notion-style block editor for Vue &amp; React" />
     <meta
       property="og:description"
-      content="Draft structured content with ProEditor, publish with DocRenderer. Shared core for Vue and React — tables, toggles, bookmarks, Markdown, Ask AI."
+      content="Slash commands, tables, Markdown, Ask AI and real-time collaboration — one tiny core, native Vue and React adapters. MIT licensed."
     />
+    <meta property="og:image" content="https://xofdev.github.io/xproeditor/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="XProEditor — the Notion-style block editor for Vue and React" />
     <meta property="og:locale" content="en_US" />
 
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="XProEditor — Notion-like block editor for Vue &amp; React" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="XProEditor — Notion-style block editor for Vue &amp; React" />
     <meta
       name="twitter:description"
-      content="Open-source block editor for Vue and React. Live demo, npm packages, MIT license."
+      content="Open-source block editor with real-time collaboration, Ask AI, tables and Markdown. Live demo, npm packages, MIT."
     />
+    <meta name="twitter:image" content="https://xofdev.github.io/xproeditor/og-image.jpg" />
+
+    <!-- Apply the saved/system theme before first paint (no flash). -->
+    <script>
+      ;(function () {
+        var theme
+        try {
+          theme = localStorage.getItem('xpe-site-theme')
+        } catch (e) {}
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        document.documentElement.dataset.theme = theme
+        if (theme === 'dark') document.documentElement.classList.add('xpe-dark')
+      })()
+    </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
 
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "XProEditor",
-        "applicationCategory": "DeveloperApplication",
-        "operatingSystem": "Web",
-        "license": "https://opensource.org/licenses/MIT",
-        "url": "https://xofdev.github.io/xproeditor/",
-        "codeRepository": "https://github.com/xofdev/xproeditor",
-        "description": "Notion-like block editor for Vue 3 and React with a shared TypeScript core, DocRenderer, Markdown paste, tables, toggles, bookmarks, and pluggable Ask AI.",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        },
-        "author": {
-          "@type": "Organization",
-          "name": "XofDev",
-          "url": "https://github.com/xofdev"
-        }
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "name": "XProEditor",
+            "url": "https://xofdev.github.io/xproeditor/"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "XProEditor",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "Web",
+            "license": "https://opensource.org/licenses/MIT",
+            "url": "https://xofdev.github.io/xproeditor/",
+            "image": "https://xofdev.github.io/xproeditor/og-image.jpg",
+            "description": "Open-source, Notion-style block editor for Vue 3 and React with real-time collaboration, slash commands, tables, Markdown, Ask AI, RTL and a read-only DocRenderer.",
+            "featureList": [
+              "Real-time collaboration with presence",
+              "24 block types including tables, toggles, embeds and code",
+              "Markdown shortcuts and paste",
+              "Pluggable Ask AI",
+              "English and Persian UI, right-to-left support",
+              "Sanitized HTML and Markdown export"
+            ],
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "author": { "@type": "Organization", "name": "XofDev", "url": "https://github.com/xofdev" }
+          },
+          {
+            "@type": "SoftwareSourceCode",
+            "name": "xproeditor",
+            "codeRepository": "https://github.com/xofdev/xproeditor",
+            "programmingLanguage": ["TypeScript", "Vue", "React"],
+            "runtimePlatform": "Browser",
+            "license": "https://opensource.org/licenses/MIT"
+          }
+        ]
       }
     </script>
+    <!--faq-jsonld-->
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><!--app-html--></div>
+    <noscript>
+      <p style="text-align: center; padding: 1rem">The live editor demos need JavaScript.</p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

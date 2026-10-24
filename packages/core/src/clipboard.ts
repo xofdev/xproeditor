@@ -35,15 +35,16 @@ function dirAttr(block: Block): string {
 function renderTableCellHtml(
   cell: TableCell,
   rowIdx: number,
-  _colIdx: number,
+  colIdx: number,
   hasHeader: boolean,
   style: ReturnType<typeof normalizeTableData>['style'],
+  hasHeaderColumn = false,
 ): string {
   if (cell.hidden) {
     return ''
   }
 
-  const cellTag = hasHeader && rowIdx === 0 ? 'th' : 'td'
+  const cellTag = (hasHeader && rowIdx === 0) || (hasHeaderColumn && colIdx === 0) ? 'th' : 'td'
   const attrs: string[] = []
   const inlineStyle = Object.entries(tableCellStyle(cell, rowIdx, hasHeader, style))
     .map(([key, value]) => `${key.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)}:${value}`)
@@ -127,7 +128,9 @@ function blockToHtmlFragment(block: Block, ctx: HtmlExportContext): string {
         ? ` class="language-${escapeHtml(block.props.language)}"`
         : ''
 
-      return `<pre><code${lang}>${escapeHtml(block.props.code ?? '')}</code></pre>`
+      const name = block.props.caption ? ` data-filename="${escapeHtml(block.props.caption)}"` : ''
+
+      return `<pre${name}><code${lang}>${escapeHtml(block.props.code ?? '')}</code></pre>`
     }
     case 'divider':
       return '<hr>'
@@ -276,14 +279,18 @@ return ''
 
       const rows = table.rows.map((row, i) => {
         const cells = row
-          .map((cell, cIdx) => renderTableCellHtml(cell, i, cIdx, table.hasHeader, table.style))
+          .map((cell, cIdx) => renderTableCellHtml(cell, i, cIdx, table.hasHeader, table.style, table.hasHeaderColumn))
           .filter(Boolean)
           .join('')
 
         return `<tr>${cells}</tr>`
       }).join('')
 
-      return `<table style="${escapeHtml(tableStyle)}">${rows}</table>`
+      const cols = table.colWidths?.some(w => w !== null)
+        ? `<colgroup>${table.colWidths.map(w => (w ? `<col style="width:${w}px">` : '<col>')).join('')}</colgroup>`
+        : ''
+
+      return `<table style="${escapeHtml(tableStyle)}">${cols}${rows}</table>`
     }
     case 'toggle':
     case 'toggle_heading_1':

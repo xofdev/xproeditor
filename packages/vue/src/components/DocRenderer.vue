@@ -4,6 +4,9 @@ import { Check, ChevronRight, Copy, Link as LinkIcon, X } from 'lucide-vue-next'
 import { ref, computed, watch, toRef, onBeforeUnmount } from 'vue'
 import { highlightCode as highlightCodeHtml, isHighlighterReady, loadHighlighter } from '../utils/highlight'
 import {
+  codeLanguageLabel,
+  normalizeCodeLanguage,
+  splitHighlightedLines,
   computeListNumbering,
   embedFrameHeight,
   escapeHtml,
@@ -14,6 +17,8 @@ import {
   isAllowedEmbedUrl,
   isToggleBlock,
   normalizeTableData,
+  isTableHeaderCell,
+  tableFixedWidth,
   resolveBlockDirection,
   spansToHtml,
   tableCellStyle,
@@ -151,6 +156,15 @@ function highlightCode(code: string, language?: string): string {
   return highlightCodeHtml(code, language)
 }
 
+/** Highlighted code; one element per line when line numbers are on. */
+function codeHtml(code: string, language?: string, numbered?: boolean): string {
+  const html = highlightCode(code, normalizeCodeLanguage(language))
+
+  return numbered
+    ? splitHighlightedLines(html).map(line => `<span class="db-line">${line || '<br>'}</span>`).join('')
+    : html
+}
+
 // Heading anchor / code copy
 const copiedAnchor = ref<string | null>(null)
 const copiedCode = ref<number | null>(null)
@@ -283,10 +297,10 @@ function safeVideoEmbedUrl(block: Block): string {
         @click="toggleOverrides[idx] = !isCollapsed(idx, block)"
       >
         <span
-          class="db-toggle-chevron"
+          class="db-toggle-chevron xpe-chevron"
           :class="{
-            'rotate-90': !isCollapsed(idx, block),
-            'db-toggle-chevron--rtl': blockDirection(block) === 'rtl',
+            'xpe-chevron--rtl': blockDirection(block) === 'rtl',
+            'xpe-chevron--open': !isCollapsed(idx, block),
           }"
         >
           <ChevronRight class="w-4 h-4" />
@@ -324,15 +338,15 @@ function safeVideoEmbedUrl(block: Block): string {
       <div
         v-else-if="block.type === 'code'"
         class="db-code"
-        :class="{ 'db-code--wrap': block.props.wrap }"
+        :class="{ 'db-code--wrap': block.props.wrap, 'db-code--numbered': block.props.lineNumbers }"
         dir="ltr"
       >
         <div class="db-code-header">
-          <span class="db-code-lang">{{
-            (block.props.language ?? 'plaintext') === 'plaintext'
-              ? 'Plain text'
-              : block.props.language
-          }}</span>
+          <span class="db-code-lang">{{ codeLanguageLabel(block.props.language) }}</span>
+          <span
+            v-if="block.props.caption"
+            class="db-code-file"
+          >{{ block.props.caption }}</span>
           <button
             type="button"
             class="db-code-copy"
@@ -345,7 +359,10 @@ function safeVideoEmbedUrl(block: Block): string {
             <Copy v-else />
           </button>
         </div>
-        <pre><code class="hljs" v-html="highlightCode(block.props.code ?? '', block.props.language)" /></pre>
+        <pre><code
+          class="hljs"
+          v-html="codeHtml(block.props.code ?? '', block.props.language, block.props.lineNumbers)"
+        /></pre>
       </div>
 
       <!-- Divider -->
@@ -500,12 +517,22 @@ function safeVideoEmbedUrl(block: Block): string {
         dir="auto"
         :style="tableWrapperStyle(tableForBlock(block).style, tableForBlock(block).width)"
       >
-        <table class="db-table">
+        <table
+          class="db-table"
+          :style="tableFixedWidth(tableForBlock(block)) ? { width: `${tableFixedWidth(tableForBlock(block))}px`, tableLayout: 'fixed' } : undefined"
+        >
+          <colgroup v-if="tableForBlock(block).colWidths">
+            <col
+              v-for="(w, i) in tableForBlock(block).colWidths"
+              :key="i"
+              :style="w ? { width: `${w}px` } : undefined"
+            >
+          </colgroup>
           <tbody>
             <tr v-for="(row, rIdx) in tableForBlock(block).rows" :key="rIdx">
               <template v-for="(cell, cIdx) in row" :key="cIdx">
                 <th
-                  v-if="!cell.hidden && rIdx === 0 && tableForBlock(block).hasHeader"
+                  v-if="!cell.hidden && isTableHeaderCell(tableForBlock(block), rIdx, cIdx)"
                   :colspan="cell.colspan && cell.colspan > 1 ? cell.colspan : undefined"
                   :rowspan="cell.rowspan && cell.rowspan > 1 ? cell.rowspan : undefined"
                   :style="renderCellStyle(cell, rIdx, tableForBlock(block).hasHeader, block)"
@@ -652,21 +679,13 @@ function safeVideoEmbedUrl(block: Block): string {
 .db-toggle-heading_2 { font-size: 1.4em; font-weight: 700; line-height: 1.3; letter-spacing: -0.015em; }
 .db-toggle-heading_3 { font-size: 1.15em; font-weight: 650; line-height: 1.4; letter-spacing: -0.015em; }
 .db-toggle-chevron {
-  flex-shrink: 0;
   display: inline-flex;
   margin-top: 0.4em;
   color: var(--xpe-muted-foreground);
-  transition: transform 0.15s;
 }
 .db-toggle-heading_1 .db-toggle-chevron,
 .db-toggle-heading_2 .db-toggle-chevron,
 .db-toggle-heading_3 .db-toggle-chevron { margin-top: 0.55em; }
-.db-toggle-chevron--rtl {
-  transform: scaleX(-1);
-}
-.db-toggle-chevron--rtl.rotate-90 {
-  transform: scaleX(-1) rotate(90deg);
-}
 
 /* --- Quote --- */
 .db-quote {
@@ -874,6 +893,7 @@ function safeVideoEmbedUrl(block: Block): string {
 }
 .db-table th {
   font-weight: 600;
+  background: var(--xpe-muted);
 }
 
 /* --- Inline marks (from spansToHtml) --- */
@@ -897,74 +917,5 @@ function safeVideoEmbedUrl(block: Block): string {
 }
 .doc-blocks :deep(a:hover) { opacity: 0.8; }
 
-/* --- Syntax highlighting — light-friendly; Catppuccin under dark theme --- */
-.db-code :deep(.hljs-comment), .db-code :deep(.hljs-quote) { color: #6a737d; font-style: italic; }
-.db-code :deep(.hljs-keyword), .db-code :deep(.hljs-selector-tag), .db-code :deep(.hljs-built_in) { color: #8250df; }
-.db-code :deep(.hljs-string), .db-code :deep(.hljs-doctag), .db-code :deep(.hljs-title), .db-code :deep(.hljs-section), .db-code :deep(.hljs-attribute) { color: #116329; }
-.db-code :deep(.hljs-number), .db-code :deep(.hljs-literal) { color: #953800; }
-.db-code :deep(.hljs-type), .db-code :deep(.hljs-class .hljs-title) { color: #953800; }
-.db-code :deep(.hljs-function), .db-code :deep(.hljs-function .hljs-title) { color: #0550ae; }
-.db-code :deep(.hljs-params) { color: #24292f; }
-.db-code :deep(.hljs-variable), .db-code :deep(.hljs-template-variable) { color: #953800; }
-.db-code :deep(.hljs-tag), .db-code :deep(.hljs-name) { color: #0550ae; }
-.db-code :deep(.hljs-attr) { color: #953800; }
-.db-code :deep(.hljs-symbol), .db-code :deep(.hljs-bullet), .db-code :deep(.hljs-deletion) { color: #cf222e; }
-.db-code :deep(.hljs-meta) { color: #953800; }
-.db-code :deep(.hljs-addition) { color: #116329; }
-.db-code :deep(.hljs-emphasis) { font-style: italic; }
-.db-code :deep(.hljs-strong) { font-weight: 700; }
-:global(.xpe-dark) .db-code :deep(.hljs-comment),
-:global(.xpe-dark) .db-code :deep(.hljs-quote),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-comment),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-quote) { color: #6c7086; font-style: italic; }
-:global(.xpe-dark) .db-code :deep(.hljs-keyword),
-:global(.xpe-dark) .db-code :deep(.hljs-selector-tag),
-:global(.xpe-dark) .db-code :deep(.hljs-built_in),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-keyword),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-selector-tag),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-built_in) { color: #cba6f7; }
-:global(.xpe-dark) .db-code :deep(.hljs-string),
-:global(.xpe-dark) .db-code :deep(.hljs-doctag),
-:global(.xpe-dark) .db-code :deep(.hljs-title),
-:global(.xpe-dark) .db-code :deep(.hljs-section),
-:global(.xpe-dark) .db-code :deep(.hljs-attribute),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-string),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-doctag),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-title),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-section),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-attribute) { color: #a6e3a1; }
-:global(.xpe-dark) .db-code :deep(.hljs-number),
-:global(.xpe-dark) .db-code :deep(.hljs-literal),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-number),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-literal) { color: #fab387; }
-:global(.xpe-dark) .db-code :deep(.hljs-type),
-:global(.xpe-dark) .db-code :deep(.hljs-class .hljs-title),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-type),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-class .hljs-title) { color: #f9e2af; }
-:global(.xpe-dark) .db-code :deep(.hljs-function),
-:global(.xpe-dark) .db-code :deep(.hljs-function .hljs-title),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-function),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-function .hljs-title) { color: #89b4fa; }
-:global(.xpe-dark) .db-code :deep(.hljs-params),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-params) { color: #f2cdcd; }
-:global(.xpe-dark) .db-code :deep(.hljs-variable),
-:global(.xpe-dark) .db-code :deep(.hljs-template-variable),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-variable),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-template-variable) { color: #f5c2e7; }
-:global(.xpe-dark) .db-code :deep(.hljs-tag),
-:global(.xpe-dark) .db-code :deep(.hljs-name),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-tag),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-name) { color: #89b4fa; }
-:global(.xpe-dark) .db-code :deep(.hljs-attr),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-attr) { color: #f9e2af; }
-:global(.xpe-dark) .db-code :deep(.hljs-symbol),
-:global(.xpe-dark) .db-code :deep(.hljs-bullet),
-:global(.xpe-dark) .db-code :deep(.hljs-deletion),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-symbol),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-bullet),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-deletion) { color: #f38ba8; }
-:global(.xpe-dark) .db-code :deep(.hljs-meta),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-meta) { color: #fab387; }
-:global(.xpe-dark) .db-code :deep(.hljs-addition),
-:global([data-xpe-theme='dark']) .db-code :deep(.hljs-addition) { color: #a6e3a1; }
+/* Syntax colours come from the shared, variable-driven rules in components.css. */
 </style>

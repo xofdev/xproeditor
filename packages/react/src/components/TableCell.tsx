@@ -7,6 +7,7 @@ import {
   isCaretOnFirstLine,
   isCaretOnLastLine,
   normalizeSpans,
+  parseClipboardGrid,
   setSelectionOffsets,
   spansToHtml,
 } from '@xproeditor/core'
@@ -41,6 +42,8 @@ export interface TableCellProps {
   onArrowLeft: () => void
   onArrowRight: () => void
   onCellClick: (payload: { row: number; col: number; shiftKey: boolean }) => void
+  /** A multi-cell paste from a spreadsheet (TSV or HTML table). */
+  onPasteGrid?: (grid: string[][]) => void
   onCellPointerDown?: (payload: {
     row: number
     col: number
@@ -70,6 +73,7 @@ export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function Ta
     onArrowRight,
     onCellClick,
     onCellPointerDown,
+    onPasteGrid,
   },
   ref,
 ) {
@@ -127,6 +131,25 @@ export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function Ta
       clientY: e.clientY,
     })
     onCellClick({ row: rowIdx, col: colIdx, shiftKey: e.shiftKey })
+  }
+
+  /**
+   * Never let the browser paste raw HTML into the cell: a spreadsheet range
+   * fills the cells around this one, anything else goes in as plain text.
+   */
+  function onPaste(e: React.ClipboardEvent) {
+    if (readonly) return
+
+    const text = e.clipboardData.getData('text/plain')
+    const grid = parseClipboardGrid(text, e.clipboardData.getData('text/html'))
+    e.preventDefault()
+
+    if (grid && onPasteGrid) {
+      onPasteGrid(grid)
+      return
+    }
+
+    document.execCommand('insertText', false, text.replace(/\r?\n/g, ' '))
   }
 
   function onFocus(e: React.FocusEvent) {
@@ -238,7 +261,7 @@ export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function Ta
 
   return (
     <Tag
-      className={`etc-cell border border-[var(--xpe-border)] p-0 relative min-w-[100px] align-top ${isHeader ? 'bg-[var(--xpe-muted)]' : ''} ${selected ? 'ring-2 ring-[var(--xpe-ring)] ring-inset' : ''}`}
+      className={`etc-cell${isHeader ? ' etc-cell--header' : ''}${selected ? ' etc-cell--selected' : ''}`}
       style={cellStyle}
       data-etable-row={rowIdx}
       data-etable-col={colIdx}
@@ -250,7 +273,7 @@ export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function Ta
         ref={el}
         contentEditable={!readonly}
         suppressContentEditableWarning
-        className={`etc-editor outline-none w-full px-3 py-2 text-sm text-[var(--xpe-foreground)] min-h-[2.25rem] ${isHeader ? 'font-semibold text-[var(--xpe-foreground)]' : ''}`}
+        className="etc-editor"
         style={cell.align ? { textAlign: cell.align as TableCellAlign } : undefined}
         dir="auto"
         spellCheck={false}
@@ -258,6 +281,7 @@ export const TableCell = forwardRef<TableCellHandle, TableCellProps>(function Ta
         onPointerDown={onPointerDown}
         onFocus={onFocus}
         onKeyDown={onKeydown}
+        onPaste={onPaste}
       />
     </Tag>
   )

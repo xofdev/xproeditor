@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowUp,
@@ -17,6 +17,7 @@ import {
   DEFAULT_AI_COMMANDS,
   filterAICommands,
   parseAIResponseToBlocks,
+  placeFloating,
   selectionTextFromBlocks,
   syncThemeVars,
   type AIAgentStatus,
@@ -24,12 +25,17 @@ import {
   type AISuggestion,
   type AITransport,
   type Block,
+  type FloatingPlacement,
 } from '@xproeditor/core'
 import { useEditorDictionary } from '../i18n'
 
 export interface AIMenuProps {
   open: boolean
-  position: { x: number; y: number }
+  /** Viewport anchor line: the menu opens below `y`, or above `top` when it doesn't fit. */
+  position: { x: number; y: number; top?: number }
+  /** Element the anchor belongs to (e.g. the block row) — the menu follows it on scroll. */
+  anchorElement?: HTMLElement | null
+  dir?: 'ltr' | 'rtl'
   transport: AITransport
   commands?: AICommand[]
   blocks: Block[]
@@ -49,16 +55,6 @@ const CMD_ICONS: Record<string, typeof Sparkles> = {
   'action-items': ListTodo,
 }
 
-function clampMenuPosition(x: number, y: number, width: number, height: number) {
-  const pad = 8
-  const maxX = Math.max(pad, window.innerWidth - width - pad)
-  const maxY = Math.max(pad, window.innerHeight - height - pad)
-  return {
-    left: Math.min(Math.max(pad, x), maxX),
-    top: Math.min(Math.max(pad, y), maxY),
-  }
-}
-
 function previewFromSuggestion(suggestion: AISuggestion, streamText: string): string {
   if (streamText.trim()) return streamText
   return suggestion.blocks.map((b) => b.content.map((s) => s.text).join('')).join('\n')
@@ -67,6 +63,8 @@ function previewFromSuggestion(suggestion: AISuggestion, streamText: string): st
 export function AIMenu({
   open,
   position,
+  anchorElement,
+  dir,
   transport,
   commands = DEFAULT_AI_COMMANDS,
   blocks,
@@ -123,6 +121,61 @@ export function AIMenu({
       syncThemeVars(themeSource, panelRef.current)
     }
   }, [open, themeSource, position])
+
+  // Place with the panel's real size: below the anchor, flipped above when
+  // it doesn't fit, clamped to the viewport. Re-placed when the panel grows
+  // (streaming), on resize, and on any scroll — following the anchor block.
+  const [placement, setPlacement] = useState<FloatingPlacement | null>(null)
+  const { x, y, top } = position
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current
+    if (!open || !panel) return
+
+    const base = { x, top: top ?? y, bottom: y }
+    // Measured before any scroll: `place` shifts `base` by how far it moved.
+    const start = anchorElement?.getBoundingClientRect() ?? null
+
+    // An off-screen anchor (e.g. opened from a sticky toolbar) is scrolled
+    // into view first; `place` then follows it.
+    if (anchorElement && (base.bottom < 0 || base.top > window.innerHeight)) {
+      anchorElement.scrollIntoView({ block: 'center' })
+    }
+
+    function place() {
+      if (!panel) return
+      let anchor = base
+
+      if (anchorElement && start && anchorElement.isConnected) {
+        const now = anchorElement.getBoundingClientRect()
+        const dx = now.left - start.left
+        const dy = now.top - start.top
+        anchor = { x: base.x + dx, top: base.top + dy, bottom: base.bottom + dy }
+      }
+
+      const width = panel.offsetWidth
+      const next = placeFloating(anchor, { width, height: panel.scrollHeight }, { dir })
+      setPlacement((prev) =>
+        prev &&
+        prev.left === next.left &&
+        prev.top === next.top &&
+        prev.maxHeight === next.maxHeight
+          ? prev
+          : next,
+      )
+    }
+
+    place()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
+    observer?.observe(panel)
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open, x, y, top, anchorElement, dir])
 
   useEffect(() => {
     if (!open) return
@@ -284,13 +337,16 @@ export function AIMenu({
 
   if (!open) return null
 
-  const coords = clampMenuPosition(position.x, position.y, 380, 420)
-
   return createPortal(
     <div
       ref={panelRef}
       className="xpe-ai-menu"
-      style={{ left: coords.left, top: coords.top }}
+      style={
+        placement
+          ? { left: placement.left, top: placement.top, maxHeight: placement.maxHeight }
+          : { left: x, top: y, visibility: 'hidden' }
+      }
+      data-side={placement?.side}
       role="dialog"
       aria-label={t.askAI}
     >

@@ -17,6 +17,11 @@ export default tseslint.config(
     },
   },
   {
+    // Node build scripts
+    files: ['**/scripts/**/*.{js,mjs}'],
+    languageOptions: { globals: { console: 'readonly', process: 'readonly' } },
+  },
+  {
     files: ['packages/react/src/**/*.{ts,tsx}', 'examples/react-demo/src/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: {

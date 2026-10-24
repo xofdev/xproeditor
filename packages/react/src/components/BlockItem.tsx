@@ -427,7 +427,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                     >
                       <ChevronRight
                         size={14}
-                        className={`shrink-0 transition-transform${!block.props.collapsed ? ' rotate-90' : ''}${isRtl ? ' ebi-chevron-rtl' : ''}`}
+                        className={`xpe-chevron${isRtl ? ' xpe-chevron--rtl' : ''}${!block.props.collapsed ? ' xpe-chevron--open' : ''}`}
                       />
                     </button>
                   )}

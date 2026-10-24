@@ -34,6 +34,7 @@ import '@xproeditor/vue/style.css'
 
 const blocks = ref([createBlock('heading_1', { content: [{ text: 'My post' }] })])
 const published = ref(false)
+const save = (doc) => localStorage.setItem('post', JSON.stringify(doc))
 
 // Host-supplied — without this, Ask AI is hidden from / and the toolbar
 const transport: AITransport = async function* (req) {
@@ -45,10 +46,10 @@ const transport: AITransport = async function* (req) {
   <DocRenderer v-if="published" :blocks="blocks" />
   <ProEditor
     v-else
-    :model-value="blocks"
+    v-model="blocks"
     toolbar="floating"
     :ai="{ transport }"
-    @change="/* persist blocks */"
+    @change="save(blocks)"
   />
 </template>`
 

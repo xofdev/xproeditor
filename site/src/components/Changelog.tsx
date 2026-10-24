@@ -112,7 +112,7 @@ export function Changelog() {
         </ol>
 
         {releases.length > 3 && (
-          <button type="button" className="changelog-more nav-link" onClick={() => setShowAll((v) => !v)}>
+          <button type="button" className="changelog-more btn btn-outline btn-sm" onClick={() => setShowAll((v) => !v)}>
             {showAll ? 'Show fewer releases' : `Show all ${releases.length} releases`}
           </button>
         )}

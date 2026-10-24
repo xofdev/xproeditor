@@ -15,6 +15,7 @@ menu — switchable with a single prop.
 
 ## Features
 
+- **Real-time collaboration** — `collaboration={session}`: block-level sync with live presence over BroadcastChannel, WebSocket or your own transport; per-user undo
 - **24 block types** — paragraphs, headings, lists, to-dos, toggles & toggle headings, quotes, callouts, code (language / wrap / copy), dividers, buttons, images, video, audio, files, tables, web bookmarks, **embeds** (YouTube, Figma, CodePen, Loom, Maps…) and a live **table of contents**
 - **Markdown & keyboard shortcuts** — `**bold**`, `` `code` ``, `# `, `- [ ] ` as you type; `⌘⌥1` headings, `⌘⇧↑/↓` move, `⌘D` duplicate, `⌘K` link
 - **Notion-like chrome** — block context menu, multi-select with floating edit popover, two-stage Ctrl/⌘+A
@@ -99,6 +100,7 @@ top of `@xproeditor/core` — see [`docs/architecture.md`](docs/architecture.md)
 
 - [Getting started](docs/getting-started.md)
 - [Editor API](docs/api.md) — ref methods, props, events, core helpers
+- [Real-time collaboration](docs/collaboration.md)
 - [Keyboard & Markdown shortcuts](docs/keyboard-shortcuts.md)
 - [Localization & RTL](docs/i18n.md)
 - [Security](docs/security.md)
@@ -118,8 +120,9 @@ npm run dev:site      # landing page + live demo → http://localhost:5175
 npm test
 ```
 
-Publishing to npm is automated (Changesets bot opens a “Version Packages” PR;
-merging it publishes) — see [docs/releasing.md](docs/releasing.md). The
+Publishing to npm is automated with npm trusted publishing (Changesets bot
+opens a “Version Packages” PR; merging it publishes with provenance) — see
+[docs/releasing.md](docs/releasing.md). The
 [`site/`](site) page redeploys to GitHub Pages on pushes to `main` that touch
 the site or editor packages.
 

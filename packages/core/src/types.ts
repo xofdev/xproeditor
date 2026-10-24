@@ -111,7 +111,11 @@ export interface TableWidth {
 
 export interface TableData {
   hasHeader: boolean
+  /** Style the first column as a header (row labels). */
+  hasHeaderColumn?: boolean
   rows: TableCell[][]
+  /** Per-column width in px (`null` = automatic). Same length as a row. */
+  colWidths?: (number | null)[]
   width?: TableWidth
   style?: TableStyle
 }
@@ -133,8 +137,11 @@ export interface BlockProps {
   code?: string
   /** code: soft-wrap long lines */
   wrap?: boolean
+  /** code: show a line-number gutter */
+  lineNumbers?: boolean
   /** image / video / audio / file / button / bookmark / embed */
   url?: string
+  /** media caption; code: file name shown in the header */
   caption?: string
   /** audio / file: original file name */
   name?: string

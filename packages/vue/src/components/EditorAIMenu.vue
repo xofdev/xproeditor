@@ -11,12 +11,13 @@ import {
   WandSparkles,
   X,
 } from 'lucide-vue-next'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import {
   applyAISuggestion,
   DEFAULT_AI_COMMANDS,
   filterAICommands,
   parseAIResponseToBlocks,
+  placeFloating,
   selectionTextFromBlocks,
   syncThemeVars,
   type AIAgentStatus,
@@ -24,6 +25,7 @@ import {
   type AISuggestion,
   type AITransport,
   type Block,
+  type FloatingPlacement,
 } from '@xproeditor/core'
 import { useEditorDictionary } from '../i18n'
 
@@ -32,7 +34,11 @@ const t = computed(() => dictionary.value.ai)
 
 const props = defineProps<{
   open: boolean
-  position: { x: number; y: number }
+  /** Viewport anchor line: the menu opens below `y`, or above `top` when it doesn't fit. */
+  position: { x: number; y: number; top?: number }
+  /** Element the anchor belongs to (e.g. the block row) — the menu follows it on scroll. */
+  anchorElement?: HTMLElement | null
+  dir?: 'ltr' | 'rtl'
   transport: AITransport
   commands?: AICommand[]
   blocks: Block[]
@@ -74,7 +80,6 @@ const visibleCommands = computed(() =>
 const isBusy = computed(() => status.value === 'thinking' || status.value === 'ai-writing')
 const canSubmit = computed(() => prompt.value.trim().length > 0 && !isBusy.value)
 
-const coords = computed(() => clampMenuPosition(props.position.x, props.position.y, 380, 420))
 
 const previewText = computed(() => {
   if (!suggestion.value) return ''
@@ -82,15 +87,89 @@ const previewText = computed(() => {
   return suggestion.value.blocks.map(b => b.content.map(s => s.text).join('')).join('\n')
 })
 
-function clampMenuPosition(x: number, y: number, width: number, height: number) {
-  const pad = 8
-  const maxX = Math.max(pad, window.innerWidth - width - pad)
-  const maxY = Math.max(pad, window.innerHeight - height - pad)
-  return {
-    left: Math.min(Math.max(pad, x), maxX),
-    top: Math.min(Math.max(pad, y), maxY),
+// Place with the panel's real size: below the anchor, flipped above when it
+// doesn't fit, clamped to the viewport. Re-placed when the panel grows
+// (streaming), on resize, and on any scroll — following the anchor block.
+const placement = shallowRef<FloatingPlacement | null>(null)
+let stopPlacing: (() => void) | null = null
+
+const panelStyle = computed(() =>
+  placement.value
+    ? {
+        left: `${placement.value.left}px`,
+        top: `${placement.value.top}px`,
+        maxHeight: `${placement.value.maxHeight}px`,
+      }
+    : { left: `${props.position.x}px`, top: `${props.position.y}px`, visibility: 'hidden' as const },
+)
+
+function startPlacing() {
+  stopPlacing?.()
+  const panel = panelEl.value
+
+  if (!props.open || !panel) {
+    return
+  }
+
+  const base = { x: props.position.x, top: props.position.top ?? props.position.y, bottom: props.position.y }
+  const anchorEl = props.anchorElement ?? null
+  // Measured before any scroll: `place` shifts `base` by how far it moved.
+  const start = anchorEl?.getBoundingClientRect() ?? null
+
+  // An off-screen anchor (e.g. opened from a sticky toolbar) is scrolled into
+  // view first; `place` then follows it.
+  if (anchorEl && (base.bottom < 0 || base.top > window.innerHeight)) {
+    anchorEl.scrollIntoView({ block: 'center' })
+  }
+
+  function place() {
+    if (!panel) {
+      return
+    }
+
+    let anchor = base
+
+    if (anchorEl && start && anchorEl.isConnected) {
+      const now = anchorEl.getBoundingClientRect()
+      const dx = now.left - start.left
+      const dy = now.top - start.top
+      anchor = { x: base.x + dx, top: base.top + dy, bottom: base.bottom + dy }
+    }
+
+    const next = placeFloating(anchor, { width: panel.offsetWidth, height: panel.scrollHeight }, { dir: props.dir })
+    const prev = placement.value
+
+    if (!prev || prev.left !== next.left || prev.top !== next.top || prev.maxHeight !== next.maxHeight) {
+      placement.value = next
+    }
+  }
+
+  place()
+  const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
+  observer?.observe(panel)
+  window.addEventListener('resize', place)
+  window.addEventListener('scroll', place, true)
+  stopPlacing = () => {
+    observer?.disconnect()
+    window.removeEventListener('resize', place)
+    window.removeEventListener('scroll', place, true)
+    stopPlacing = null
   }
 }
+
+watch(
+  () => [props.open, panelEl.value, props.position.x, props.position.y, props.position.top, props.anchorElement, props.dir],
+  () => {
+    if (!props.open) {
+      stopPlacing?.()
+      placement.value = null
+      return
+    }
+
+    nextTick(startPlacing)
+  },
+  { immediate: true, flush: 'post' },
+)
 
 function resetIdle() {
   status.value = 'user-input'
@@ -162,6 +241,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  stopPlacing?.()
   abort?.abort()
   window.removeEventListener('keydown', onDocKeydown)
   window.removeEventListener('mousedown', onDocMouseDown, true)
@@ -305,7 +385,8 @@ function iconFor(id: string) {
       v-if="open"
       ref="panelEl"
       class="xpe-ai-menu"
-      :style="{ left: `${coords.left}px`, top: `${coords.top}px` }"
+      :style="panelStyle"
+      :data-side="placement?.side"
       role="dialog"
       :aria-label="t.askAI"
     >

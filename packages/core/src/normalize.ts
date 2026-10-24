@@ -425,8 +425,13 @@ function convertHtmlElement(el: Element, indent: number, out: Block[]): void {
         ?? el.getAttribute('data-language')
         ?? codeEl?.getAttribute('data-language')
         ?? 'plaintext'
+      const filename = el.getAttribute('data-filename')
       out.push(createBlock('code', {
-        props: { language: language.toLowerCase(), code: (codeEl ?? el).textContent ?? '' },
+        props: {
+          language: language.toLowerCase(),
+          code: (codeEl ?? el).textContent ?? '',
+          ...(filename ? { caption: filename } : {}),
+        },
       }))
       break
     }

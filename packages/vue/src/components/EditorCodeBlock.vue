@@ -1,10 +1,27 @@
 <script setup lang="ts">
-import { Check, Copy, WrapText } from 'lucide-vue-next'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Check, ChevronDown, Copy, ListOrdered, WrapText } from 'lucide-vue-next'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import {
+  CODE_LANGUAGES,
+  codeLanguageLabel,
+  indentCode,
+  newlineInCode,
+  normalizeCodeLanguage,
+  splitHighlightedLines,
+  toggleCodeComment,
+  type CodeEdit,
+} from '@xproeditor/core'
 import type { Block } from '@xproeditor/core'
 import { useEditorDictionary } from '../i18n'
 import { modKeyLabel } from '../utils/shortcut'
+import { detectLanguage, highlightCode, isHighlighterReady, loadHighlighter } from '../utils/highlight'
 
+/**
+ * Code block: a transparent `<textarea>` over a syntax-highlighted `<pre>`
+ * with identical metrics, so you type into a native, accessible field while
+ * seeing live colours. Line numbers come from CSS counters on the
+ * highlighted lines, so they stay aligned in wrap mode too.
+ */
 const dictionary = useEditorDictionary()
 const t = computed(() => dictionary.value.code)
 
@@ -18,224 +35,286 @@ const emit = defineEmits<{
   exitBelow: []
 }>()
 
-const INDENT = '  '
-
-const LANGUAGES: { id: string; label: string }[] = [
-  { id: 'plaintext', label: 'Plain text' },
-  { id: 'javascript', label: 'JavaScript' },
-  { id: 'typescript', label: 'TypeScript' },
-  { id: 'python', label: 'Python' },
-  { id: 'bash', label: 'Bash' },
-  { id: 'json', label: 'JSON' },
-  { id: 'yaml', label: 'YAML' },
-  { id: 'html', label: 'HTML' },
-  { id: 'css', label: 'CSS' },
-  { id: 'sql', label: 'SQL' },
-  { id: 'go', label: 'Go' },
-  { id: 'rust', label: 'Rust' },
-  { id: 'java', label: 'Java' },
-  { id: 'c', label: 'C' },
-  { id: 'cpp', label: 'C++' },
-  { id: 'csharp', label: 'C#' },
-  { id: 'php', label: 'PHP' },
-  { id: 'ruby', label: 'Ruby' },
-  { id: 'swift', label: 'Swift' },
-  { id: 'kotlin', label: 'Kotlin' },
-  { id: 'dockerfile', label: 'Dockerfile' },
-  { id: 'markdown', label: 'Markdown' },
-  { id: 'xml', label: 'XML' },
-  { id: 'diff', label: 'Diff' },
-]
+const LANGUAGE_IDS = CODE_LANGUAGES.map(lang => lang.id)
 
 const textarea = ref<HTMLTextAreaElement | null>(null)
+const copied = ref(false)
+const detected = ref<string | null>(null)
+const highlighterReady = ref(isHighlighterReady())
+const timers: ReturnType<typeof setTimeout>[] = []
+
 const code = computed(() => props.block.props.code ?? '')
 const wrap = computed(() => Boolean(props.block.props.wrap))
-const language = computed(() => props.block.props.language ?? 'plaintext')
-const copied = ref(false)
-let copiedTimer: ReturnType<typeof setTimeout> | null = null
+const lineNumbers = computed(() => Boolean(props.block.props.lineNumbers))
+const language = computed(() => normalizeCodeLanguage(props.block.props.language))
+const fileName = computed(() => props.block.props.caption ?? '')
+const known = computed(() => CODE_LANGUAGES.some(lang => lang.id === language.value))
+const exitHint = computed(() => t.value.exitHint.replace(/^Ctrl\+/, modKeyLabel()))
 
-function autoresize() {
-  const ta = textarea.value
-  if (!ta) return
-  ta.style.height = 'auto'
-  ta.style.height = `${ta.scrollHeight}px`
-}
+const lines = computed(() => {
+  // Re-highlight once the lazy highlight.js chunk has loaded.
+  void highlighterReady.value
 
-onMounted(autoresize)
-watch([code, wrap], () => nextTick(autoresize))
+  return splitHighlightedLines(highlightCode(code.value, language.value))
+})
+const linesHtml = computed(() => lines.value.map(line => `<span class="ecb-line">${line || '<br>'}</span>`).join(''))
+const gutter = computed(() => `${Math.max(2, String(lines.value.length).length)}ch`)
 
-onUnmounted(() => {
-  if (copiedTimer) clearTimeout(copiedTimer)
+onMounted(() => {
+  if (!highlighterReady.value) {
+    void loadHighlighter().then((hl) => {
+      if (hl) {
+        highlighterReady.value = true
+      }
+    })
+  }
 })
 
-function outdentLine(line: string): { text: string; removed: number } {
-  if (line.startsWith('\t')) return { text: line.slice(1), removed: 1 }
-  if (line.startsWith(INDENT)) return { text: line.slice(INDENT.length), removed: INDENT.length }
-  if (line.startsWith(' ')) return { text: line.slice(1), removed: 1 }
-  return { text: line, removed: 0 }
+onUnmounted(() => timers.forEach(clearTimeout))
+
+function later(fn: () => void, ms: number) {
+  timers.push(setTimeout(fn, ms))
+}
+
+/**
+ * Write the edit to the textarea synchronously, then sync the block. Going
+ * through state first and restoring the selection a frame later would let
+ * keys typed in that frame land on the old value and be overwritten.
+ */
+function apply(edit: CodeEdit) {
+  const ta = textarea.value
+
+  if (!ta) {
+    return
+  }
+
+  ta.value = edit.value
+  ta.setSelectionRange(edit.selectionStart, edit.selectionEnd)
+  emit('patch', { code: edit.value })
 }
 
 function onInput(e: Event) {
-  if (props.readonly) return
-  emit('patch', { code: (e.target as HTMLTextAreaElement).value })
-}
-
-function applyTab(shift: boolean) {
-  const ta = textarea.value
-  if (!ta) return
-
-  const start = ta.selectionStart
-  const end = ta.selectionEnd
-  const value = ta.value
-
-  if (!shift && start === end) {
-    const next = value.slice(0, start) + INDENT + value.slice(end)
-    emit('patch', { code: next })
-    nextTick(() => {
-      ta.selectionStart = ta.selectionEnd = start + INDENT.length
-      autoresize()
-    })
-    return
+  if (!props.readonly) {
+    emit('patch', { code: (e.target as HTMLTextAreaElement).value })
   }
-
-  const lineStart = value.lastIndexOf('\n', start - 1) + 1
-  let lineEnd = end
-  if (end === start || value[end - 1] !== '\n') {
-    const nextNl = value.indexOf('\n', end)
-    lineEnd = nextNl === -1 ? value.length : nextNl
-  } else {
-    lineEnd = end - 1
-  }
-
-  const blockText = value.slice(lineStart, lineEnd)
-  const lines = blockText.split('\n')
-  let startDelta = 0
-  let totalDelta = 0
-
-  const nextLines = lines.map((line, i) => {
-    if (shift) {
-      const { text, removed } = outdentLine(line)
-      if (i === 0) startDelta = -Math.min(removed, Math.max(0, start - lineStart))
-      totalDelta -= removed
-      return text
-    }
-    if (i === 0) startDelta = INDENT.length
-    totalDelta += INDENT.length
-    return INDENT + line
-  })
-
-  const next = value.slice(0, lineStart) + nextLines.join('\n') + value.slice(lineEnd)
-  emit('patch', { code: next })
-  nextTick(() => {
-    ta.selectionStart = Math.max(lineStart, start + startDelta)
-    ta.selectionEnd = Math.max(ta.selectionStart, end + totalDelta)
-    autoresize()
-  })
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (props.readonly) return
-
   const ta = textarea.value
-  if (!ta) return
 
-  if (e.key === 'Tab') {
-    e.preventDefault()
-    applyTab(e.shiftKey)
+  if (props.readonly || !ta || e.isComposing) {
     return
   }
 
-  if (e.key === 'Backspace' && ta.value === '') {
+  const { selectionStart: start, selectionEnd: end, value } = ta
+  const mod = e.metaKey || e.ctrlKey
+
+  if (e.key === 'Tab') {
+    e.preventDefault()
+    apply(indentCode(value, start, end, e.shiftKey))
+    return
+  }
+
+  if (e.key === 'Enter' && mod) {
+    e.preventDefault()
+    emit('exitBelow')
+    return
+  }
+
+  if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+    e.preventDefault()
+    apply(newlineInCode(value, start, end))
+    return
+  }
+
+  if (mod && e.key === '/') {
+    const edit = toggleCodeComment(value, start, end, language.value)
+
+    if (edit) {
+      e.preventDefault()
+      apply(edit)
+    }
+
+    return
+  }
+
+  if (e.key === 'Backspace' && value === '') {
     e.preventDefault()
     emit('removeSelf')
     return
   }
 
-  if (e.key === 'ArrowUp' && ta.selectionStart === 0 && ta.selectionEnd === 0) {
-    const beforeCaret = ta.value.slice(0, ta.selectionStart)
-    if (!beforeCaret.includes('\n')) {
-      e.preventDefault()
-      emit('arrowUp')
-    }
+  if (e.key === 'ArrowUp' && start === 0 && end === 0) {
+    e.preventDefault()
+    emit('arrowUp')
     return
   }
 
-  if (e.key === 'ArrowDown' && ta.selectionStart === ta.value.length && ta.selectionEnd === ta.value.length) {
+  if (e.key === 'ArrowDown' && start === value.length && end === value.length) {
     e.preventDefault()
     emit('arrowDown')
+  }
+}
+
+function onPaste(e: ClipboardEvent) {
+  if (props.readonly || language.value !== 'plaintext' || code.value.trim() !== '') {
     return
   }
 
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+  // Pasting into an empty plain-text block: guess the language.
+  const text = e.clipboardData?.getData('text/plain') ?? ''
+  void loadHighlighter().then(() => {
+    const guess = detectLanguage(text, LANGUAGE_IDS)
+
+    if (!guess) {
+      return
+    }
+
+    emit('patch', { language: guess })
+    detected.value = codeLanguageLabel(guess)
+    later(() => {
+      detected.value = null
+    }, 2400)
+  })
+}
+
+function onFileNameKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' || e.key === 'ArrowDown') {
     e.preventDefault()
-    emit('exitBelow')
+    textarea.value?.focus()
   }
 }
 
 async function copyCode() {
-  const text = code.value
   try {
-    await navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(code.value)
   } catch {
     const ta = textarea.value
+
     if (ta) {
       ta.focus()
       ta.select()
       document.execCommand('copy')
-      const len = ta.value.length
-      ta.selectionStart = ta.selectionEnd = len
+      ta.selectionStart = ta.selectionEnd = ta.value.length
     }
   }
+
   copied.value = true
-  if (copiedTimer) clearTimeout(copiedTimer)
-  copiedTimer = setTimeout(() => {
+  later(() => {
     copied.value = false
   }, 1600)
 }
 
 function focusAt(pos: number | 'start' | 'end' = 'end') {
   const ta = textarea.value
-  if (!ta) return
-  ta.focus()
+
+  if (!ta) {
+    return
+  }
+
+  ta.focus({ preventScroll: true })
   const offset = pos === 'start' ? 0 : pos === 'end' ? ta.value.length : pos
   ta.selectionStart = ta.selectionEnd = offset
+  ta.scrollIntoView({ block: 'nearest' })
 }
 
 defineExpose({ focusAt })
 </script>
 
 <template>
-  <div class="ecb" :class="{ 'ecb--wrap': wrap }" dir="ltr">
-    <div class="ecb-toolbar">
-      <select
+  <div
+    class="ecb"
+    :class="{ 'ecb--wrap': wrap, 'ecb--numbered': lineNumbers }"
+    dir="ltr"
+    :style="{ '--ecb-gutter': gutter }"
+  >
+    <div class="ecb-header">
+      <label
         class="ecb-lang"
-        :value="language"
-        :disabled="readonly"
-        :aria-label="t.language"
-        @change="emit('patch', { language: ($event.target as HTMLSelectElement).value })"
-        @mousedown.stop
+        :title="t.language"
       >
-        <!-- Keep languages from imported Markdown/HTML selectable even if not in the list. -->
-        <option v-if="!LANGUAGES.some(lang => lang.id === language)" :value="language">{{ language }}</option>
-        <option v-for="lang in LANGUAGES" :key="lang.id" :value="lang.id">{{ lang.id === 'plaintext' ? t.plainText : lang.label }}</option>
-      </select>
-      <div class="ecb-actions">
-        <button
-          type="button"
-          class="ecb-action"
-          :class="{ 'ecb-action--active': wrap }"
-          :title="wrap ? t.disableWrap : t.wrap"
-          :aria-label="wrap ? t.disableWrap : t.wrap"
-          :aria-pressed="wrap"
+        <span>{{ language === 'plaintext' ? t.plainText : codeLanguageLabel(language) }}</span>
+        <ChevronDown
+          v-if="!readonly"
+          aria-hidden="true"
+        />
+        <select
+          :value="language"
           :disabled="readonly"
-          @mousedown.prevent
-          @click="emit('patch', { wrap: !wrap })"
+          :aria-label="t.language"
+          @change="emit('patch', { language: ($event.target as HTMLSelectElement).value })"
+          @mousedown.stop
         >
-          <WrapText />
-        </button>
+          <!-- Keep languages from imported Markdown/HTML selectable even if not in the list. -->
+          <option
+            v-if="!known"
+            :value="language"
+          >{{ language }}</option>
+          <option
+            v-for="lang in CODE_LANGUAGES"
+            :key="lang.id"
+            :value="lang.id"
+          >
+            {{ lang.id === 'plaintext' ? t.plainText : lang.label }}
+          </option>
+        </select>
+      </label>
+
+      <span
+        v-if="detected"
+        class="ecb-detected"
+        role="status"
+      >{{ t.detected }}: {{ detected }}</span>
+
+      <template v-if="readonly">
+        <span
+          v-if="fileName"
+          class="ecb-filename"
+        >{{ fileName }}</span>
+      </template>
+      <input
+        v-else
+        class="ecb-filename"
+        :value="fileName"
+        :placeholder="t.fileName"
+        :aria-label="t.fileName"
+        spellcheck="false"
+        :size="Math.max(8, fileName.length + 1)"
+        @input="emit('patch', { caption: ($event.target as HTMLInputElement).value || undefined })"
+        @mousedown.stop
+        @keydown="onFileNameKeydown"
+      >
+
+      <div class="ecb-actions">
+        <template v-if="!readonly">
+          <button
+            type="button"
+            class="ecb-action"
+            :class="{ 'ecb-action--active': lineNumbers }"
+            :title="lineNumbers ? t.hideLineNumbers : t.lineNumbers"
+            :aria-label="lineNumbers ? t.hideLineNumbers : t.lineNumbers"
+            :aria-pressed="lineNumbers"
+            @mousedown.prevent
+            @click="emit('patch', { lineNumbers: !lineNumbers || undefined })"
+          >
+            <ListOrdered />
+          </button>
+          <button
+            type="button"
+            class="ecb-action"
+            :class="{ 'ecb-action--active': wrap }"
+            :title="wrap ? t.disableWrap : t.wrap"
+            :aria-label="wrap ? t.disableWrap : t.wrap"
+            :aria-pressed="wrap"
+            @mousedown.prevent
+            @click="emit('patch', { wrap: !wrap })"
+          >
+            <WrapText />
+          </button>
+        </template>
         <button
           type="button"
-          class="ecb-action"
+          class="ecb-action ecb-action--copy"
           :class="{ 'ecb-action--ok': copied }"
           :title="copied ? t.copied : t.copy"
           :aria-label="copied ? t.copied : t.copy"
@@ -244,23 +323,40 @@ defineExpose({ focusAt })
         >
           <Check v-if="copied" />
           <Copy v-else />
+          <span v-if="copied">{{ t.copied }}</span>
         </button>
-        <span class="ecb-hint">{{ t.exitHint.replace(/^Ctrl\+/, modKeyLabel()) }}</span>
       </div>
     </div>
-    <textarea
-      ref="textarea"
-      :value="code"
-      :readonly="readonly"
-      class="ecb-input"
-      rows="1"
-      :placeholder="t.placeholder"
-      spellcheck="false"
-      autocapitalize="off"
-      autocorrect="off"
-      autocomplete="off"
-      @input="onInput"
-      @keydown="onKeydown"
-    />
+
+    <div class="ecb-body xpe-scroll">
+      <div class="ecb-layer">
+        <!-- eslint-disable-next-line vue/no-v-html -- highlighter output, code is HTML-escaped -->
+        <pre
+          class="ecb-highlight hljs"
+          aria-hidden="true"
+        ><code v-html="linesHtml" /></pre>
+        <textarea
+          ref="textarea"
+          :value="code"
+          :readonly="readonly"
+          class="ecb-input"
+          rows="1"
+          :wrap="wrap ? 'soft' : 'off'"
+          :placeholder="t.placeholder"
+          :aria-label="`${t.language}: ${codeLanguageLabel(language)}`"
+          spellcheck="false"
+          autocapitalize="off"
+          autocorrect="off"
+          autocomplete="off"
+          @input="onInput"
+          @keydown="onKeydown"
+          @paste="onPaste"
+        />
+      </div>
+    </div>
+    <span
+      v-if="!readonly"
+      class="ecb-hint"
+    >{{ exitHint }}</span>
   </div>
 </template>

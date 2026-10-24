@@ -58,7 +58,7 @@ custom chrome.
 
 | Prop (React / Vue) | Type | Notes |
 | --- | --- | --- |
-| `defaultValue` / `model-value` | `Block[]` | React is uncontrolled; Vue mutates the bound array in place. |
+| `defaultValue` / `model-value` (`v-model`) | `Block[]` | React is uncontrolled; Vue mutates the bound array in place and emits `update:modelValue`. |
 | `toolbar` | `'floating' \| 'fixed' \| 'both' \| 'none'` | `ProEditor` only. |
 | `locale` | `string` | `'en'` (default) or `'fa'`; see [i18n.md](i18n.md). |
 | `dictionary` | `EditorDictionaryOverrides` | Override any UI string. |
@@ -71,12 +71,13 @@ custom chrome.
 | `pickMedia` | `(opts) => Promise<{ url, alt?, caption? } \| null>` | Your media library. |
 | `fetchBookmarkMeta` | `(url) => Promise<BookmarkMeta \| null>` | OG metadata for bookmark cards. |
 | `ai` | `{ transport: AITransport; commands?: AICommand[] }` | Pluggable Ask AI. |
+| `collaboration` | `CollabSession` | Real-time editing with presence — see [collaboration.md](collaboration.md). |
 
 ## Events
 
 | React | Vue | Payload |
 | --- | --- | --- |
-| `onChange` | `@change` | React: `(blocks: Block[])`; Vue: none (read your bound array). |
+| `onChange` | `@change` / `@update:modelValue` | React: `(blocks: Block[])`, a fresh array each time (safe for `setState`); Vue: `change` has no payload, `update:modelValue` passes the bound array. |
 | `onUploadError` | `@upload-error` | `(error: unknown, file: File)` |
 | `onFormatState` | `@format-state` | `BlockEditor` only — drives a custom toolbar. |
 
@@ -105,3 +106,6 @@ sanitized.
 | `sanitizeBlocks(raw)` | Validate untrusted block JSON (see [security.md](security.md)). |
 | `resolveEmbed(url)` | Check whether a link can be embedded. |
 | `resolveEditorDictionary(locale, overrides)` | Build a UI dictionary outside the editor. |
+| `createCollabSession(options)` + transports | Real-time collaboration ([collaboration.md](collaboration.md)). |
+| `createBlockHistory()` | The block-level undo engine both adapters use — reuse it in custom editors. |
+| `placeFloating(anchor, size)` / `resolveEditorAnchor(root, blockId)` | Viewport-aware placement (flip/clamp, RTL) for your own popovers. |

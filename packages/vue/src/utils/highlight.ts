@@ -39,3 +39,22 @@ export function highlightCode(code: string, language?: string): string {
 
   return escapeHtml(code)
 }
+
+/**
+ * Best-guess language for pasted code, limited to `candidates` (ids the
+ * picker offers). `null` until highlight.js has loaded or when unsure.
+ */
+export function detectLanguage(code: string, candidates: readonly string[]): string | null {
+  if (!highlighter || code.trim().length < 12) {
+    return null
+  }
+
+  try {
+    const subset = candidates.filter(id => id !== 'plaintext' && highlighter?.getLanguage(id))
+    const result = highlighter.highlightAuto(code, subset)
+
+    return result.language && result.relevance >= 5 ? result.language : null
+  } catch {
+    return null
+  }
+}

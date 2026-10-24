@@ -9,13 +9,29 @@ import {
   MousePointerClick,
   Palette,
   ShieldCheck,
+  Users,
+  History,
   Sparkles,
   Table2,
   Zap,
   type LucideIcon,
 } from 'lucide-react'
 
-const FEATURES: { icon: LucideIcon; title: string; desc: string; points: string[] }[] = [
+const FEATURES: { icon: LucideIcon; title: string; desc: string; points: string[]; wide?: boolean }[] = [
+  {
+    icon: Users,
+    title: 'Real-time collaboration',
+    desc: 'Block-level sync with live presence over any transport — WebSocket relay, BroadcastChannel, or your own backend. Every client converges to the same document.',
+    points: ['collaboration={session}', 'Presence markers', 'Offline resync'],
+    wide: true,
+  },
+  {
+    icon: History,
+    title: 'Undo that scales',
+    desc: 'History stores only the blocks a step changed — not the whole document — and undo never reverts a collaborator’s edits.',
+    points: ['Block-level steps', 'Per-user undo', 'Rows keep identity'],
+    wide: true,
+  },
   {
     icon: Layers,
     title: 'One core, two adapters',
@@ -102,9 +118,10 @@ export function Features() {
       <div className="container">
         <div className="section-head">
           <span className="eyebrow">Capabilities</span>
-          <h2 id="features-heading">Built for product teams shipping docs</h2>
+          <h2 id="features-heading">Everything a writing surface needs</h2>
           <p>
-            Selection, paste, tables, AI, and theming are first-class — not bolted-on demos.
+            Selection, paste, tables, AI, collaboration and theming are first-class — not bolted-on
+            demos.
           </p>
         </div>
 
@@ -116,12 +133,13 @@ export function Features() {
           <span>Multi-select</span>
           <span>Tables &amp; bookmarks</span>
           <span>Ask AI</span>
+          <span>Live collaboration</span>
           <span>Vue + React</span>
         </div>
 
         <div className="feature-grid feature-grid--rich">
-          {FEATURES.map(({ icon: Icon, title, desc, points }) => (
-            <article className="feature-card feature-card--rich" key={title}>
+          {FEATURES.map(({ icon: Icon, title, desc, points, wide }) => (
+            <article className={`feature-card feature-card--rich${wide ? ' feature-card--wide' : ''}`} key={title}>
               <span className="feature-icon" aria-hidden>
                 <Icon size={18} />
               </span>
