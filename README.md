@@ -15,12 +15,13 @@ menu — switchable with a single prop.
 
 ## Features
 
-- **Real-time collaboration** — `collaboration={session}`: block-level sync with live presence over BroadcastChannel, WebSocket or your own transport; per-user undo
-- **24 block types** — paragraphs, headings, lists, to-dos, toggles & toggle headings, quotes, callouts, code (language / wrap / copy), dividers, buttons, images, video, audio, files, tables, web bookmarks, **embeds** (YouTube, Figma, CodePen, Loom, Maps…) and a live **table of contents**
+- **Real-time collaboration** — `collaboration={session}`: block-level sync with live presence over BroadcastChannel, WebSocket or your own transport; undo never reverts a teammate's edit
+- **24 block types** — paragraphs, headings, lists, to-dos, toggles & toggle headings, quotes, callouts, code, dividers, buttons, images, video, audio, files, tables, web bookmarks, **embeds** (YouTube, Figma, CodePen, Loom, Maps…) and a live **table of contents**
 - **Markdown & keyboard shortcuts** — `**bold**`, `` `code` ``, `# `, `- [ ] ` as you type; `⌘⌥1` headings, `⌘⇧↑/↓` move, `⌘D` duplicate, `⌘K` link
 - **Notion-like chrome** — block context menu, multi-select with floating edit popover, two-stage Ctrl/⌘+A
 - **Clipboard** — multi-block copy/cut, Markdown paste, rich HTML/JSON clipboard, caret-correct paste
-- **Tables** — width, drag cell select, merge, borders, fills, add row/column
+- **Code blocks** — live syntax highlighting while you type, line numbers, file name, smart indent, `⌘/` comments, language detection on paste
+- **Tables** — row & column handles (insert, move, duplicate, sort, align, delete), drag-to-resize columns, header row/column, merge, paste from Excel / Google Sheets, `Tab` adds a row
 - **Document API** — `getBlocks`, `setBlocks`, `insertBlocks`, `getMarkdown`, `getHTML`, `getStats`… on the ref
 - **Any language, RTL first-class** — English and Persian UI built in, override any string, per-block auto direction
 - **Secure by default** — links, media, colours, pasted HTML/JSON and AI output are sanitized in core
@@ -74,6 +75,23 @@ const initialBlocks = [createBlock('paragraph', { content: [{ text: 'Hello!' }] 
 
 export default () => <ProEditor defaultValue={initialBlocks} toolbar="floating" />
 ```
+
+### Real-time collaboration
+
+```ts
+import { createCollabSession, createWebSocketTransport } from '@xproeditor/react' // or '@xproeditor/vue'
+
+const session = createCollabSession({
+  transport: createWebSocketTransport('wss://relay.example.com/doc-42'),
+  blocks: savedBlocks, // the same saved document on every client
+  user: { name: 'Sara' },
+})
+```
+
+Pass it as `collaboration={session}` (React) or `:collaboration="session"`
+(Vue). Any relay that forwards messages works — a 20-line server is in
+[docs/collaboration.md](docs/collaboration.md); `createBroadcastChannelTransport`
+syncs browser tabs with no server at all.
 
 See each package’s README for the full API, and [`examples/`](examples) for
 runnable demos (toggle between fixed-toolbar and Notion-like modes).

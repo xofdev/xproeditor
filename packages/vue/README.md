@@ -11,7 +11,9 @@ editing styles built in:
   slash command menu.
 
 Markdown-as-you-type (`**bold**`, `# `, `- [ ] `…), keyboard shortcuts for
-every block action, a full document API on the template ref, built-in
+every block action, **real-time collaboration** with live presence, code
+blocks with live syntax highlighting, spreadsheet-like tables (resize, sort,
+move, paste from Excel), a full document API on the template ref, built-in
 English and Persian UI (any language via a dictionary), and sanitized
 rendering of untrusted content come standard.
 
@@ -47,12 +49,14 @@ const blocks = ref<Block[]>([
 
 <template>
   <!-- toolbar: 'fixed' | 'floating' | 'both' | 'none' (default: 'floating') -->
-  <ProEditor :model-value="blocks" toolbar="floating" @change="() => save(blocks)" />
+  <ProEditor v-model="blocks" toolbar="floating" @change="() => save(blocks)" />
 </template>
 ```
 
-`<ProEditor>` mutates the array you pass to `model-value` in place and emits
-`change` (no payload) whenever it does — read `blocks.value` in the handler.
+`<ProEditor>` mutates the array you bind with `v-model` (or `model-value`) in
+place and emits `change` (no payload) and `update:modelValue` whenever it
+does — read `blocks.value` in the handler. A plain, non-reactive array works
+too.
 To load another document, assign a new array to `blocks.value` (undo history
 resets) or call `editor.value.setBlocks(next, { history: 'reset' })`.
 
@@ -115,14 +119,41 @@ const formatState = ref<FormatToolbarState | null>(null)
 | `spellcheck` | `boolean` | `true` | Browser spellcheck in text blocks |
 | `autofocus` | `boolean \| 'start' \| 'end'` | `false` | Focus on mount |
 | `ai` | `{ transport: AITransport; commands?: AICommand[] }` | — | Pluggable Ask AI |
+| `collaboration` | `CollabSession` | — | Real-time editing with presence ([guide](../../docs/collaboration.md)) |
 
-Emits: `change` (no payload — read the mutated array) and `upload-error`
+Emits: `change` (no payload — read the mutated array), `update:modelValue`
+(the same array, for `v-model`) and `upload-error`
 (`error, file`) when `upload` rejects for a pasted/dropped file.
 
 The template ref exposes the [document API](../../docs/api.md) (`getBlocks`,
 `setBlocks`, `insertBlocks`, `updateBlock`, `removeBlocks`, `focus`,
 `getMarkdown`, `getHTML`, `getText`, `getStats`) plus `undo`, `redo`,
-`openAIMenu`, `focusFirst`, `focusEnd`.
+`openAIMenu`, `focusFirst`, `focusEnd`, `canUndo`, `canRedo`.
+
+## Real-time collaboration
+
+```vue
+<script setup lang="ts">
+import { onBeforeUnmount, ref } from 'vue'
+import { ProEditor, createCollabSession, createWebSocketTransport } from '@xproeditor/vue'
+
+const blocks = ref(savedBlocks)
+const session = createCollabSession({
+  transport: createWebSocketTransport(`wss://relay.example.com/${docId}`),
+  blocks: savedBlocks, // the same saved document on every client
+  user: { name: 'Sara' },
+})
+onBeforeUnmount(() => session.destroy())
+</script>
+
+<template>
+  <ProEditor v-model="blocks" :collaboration="session" @change="save(blocks)" />
+</template>
+```
+
+Edits sync block by block, collaborators' positions show as coloured
+markers, and undo only reverts your own changes. Transports, the relay
+server and the merge model: [`docs/collaboration.md`](../../docs/collaboration.md).
 
 ## `<BlockEditor>` (lower-level)
 
@@ -138,7 +169,9 @@ API.
 
 Type `# `, `- `, `1. `, `[x] `, `> ` at the start of a line, or `**bold**`,
 `` `code` ``, `~~strike~~` inline. `Mod+Alt+1…3` makes headings,
-`Mod+Shift+↑/↓` moves blocks, `Mod+D` duplicates, `Mod+K` links. Full list:
+`Mod+Shift+↑/↓` moves blocks, `Mod+D` duplicates, `Mod+K` links. In code
+blocks `Enter` keeps indentation and `Mod+/` toggles comments; in tables
+`Tab` in the last cell adds a row. Full list:
 [`docs/keyboard-shortcuts.md`](../../docs/keyboard-shortcuts.md).
 
 ## Read-only rendering

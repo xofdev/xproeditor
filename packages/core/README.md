@@ -52,7 +52,12 @@ See [`docs/block-model.md`](../../docs/block-model.md) for the full shape.
 | `normalize` | HTML → `Block[]` (paste from other apps), Tiptap JSON → `Block[]` |
 | `html` | `Block[]`/spans ↔ HTML conversion |
 | `serialize` | Plain-text export, heading anchors, list numbering, word count |
-| `table` | Table cell/row/column operations: merge, unmerge, resize, style, width |
+| `table` | Table model: normalize, merge/unmerge, add/remove rows & columns, style, width |
+| `table-ops` | Move / duplicate / sort / align / clear rows & columns, column widths, spreadsheet paste (`parseClipboardGrid`, `pasteGridIntoTable`) |
+| `code` | Code block editing: `CODE_LANGUAGES`, `indentCode`, `newlineInCode`, `toggleCodeComment`, `splitHighlightedLines` |
+| `history` | `createBlockHistory` — block-level undo/redo that stores only changed blocks and is collaboration-safe |
+| `collab` | `createCollabSession` and BroadcastChannel / WebSocket / memory transports for real-time editing |
+| `floating` | `placeFloating`, `resolveEditorAnchor` — viewport-aware placement (flip, clamp, RTL) for popovers |
 | `toggle` | Toggle / toggle-heading subtree helpers in the flat block model |
 | `bookmark` | URL normalize + display helpers for web bookmark blocks |
 | `markdown` | Markdown ↔ blocks (paste / export) |

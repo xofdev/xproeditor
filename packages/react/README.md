@@ -11,8 +11,10 @@ editing styles built in:
   slash command menu.
 
 Markdown-as-you-type (`**bold**`, `# `, `- [ ] `…), keyboard shortcuts for
-every block action, a full document API on the ref, built-in English and
-Persian UI (any language via a dictionary), and sanitized rendering of
+every block action, **real-time collaboration** with live presence, code
+blocks with live syntax highlighting, spreadsheet-like tables (resize, sort,
+move, paste from Excel), a full document API on the ref, built-in English
+and Persian UI (any language via a dictionary), and sanitized rendering of
 untrusted content come standard.
 
 No Tailwind or Radix required in your app — styles ship as a single
@@ -121,13 +123,41 @@ block rendering entirely.
 | `spellCheck` | `boolean` | `true` | Browser spellcheck in text blocks |
 | `autofocus` | `boolean \| 'start' \| 'end'` | `false` | Focus on mount |
 | `ai` | `{ transport: AITransport; commands?: AICommand[] }` | — | Pluggable Ask AI |
-| `onChange` | `(blocks: Block[]) => void` | — | Called on every persisted change |
+| `collaboration` | `CollabSession` | — | Real-time editing with presence ([guide](../../docs/collaboration.md)) |
+| `onChange` | `(blocks: Block[]) => void` | — | Called on every persisted change, with a fresh array (safe for `setState`) |
 | `onUploadError` | `(error: unknown, file: File) => void` | — | `upload` rejected for a pasted/dropped file |
 
 `ref` exposes the [document API](../../docs/api.md) (`getBlocks`,
 `setBlocks`, `insertBlocks`, `updateBlock`, `removeBlocks`, `focus`,
 `getMarkdown`, `getHTML`, `getText`, `getStats`) plus `undo`, `redo`,
 `openAIMenu`, `focusFirst`, `focusEnd`.
+
+## Real-time collaboration
+
+```tsx
+import { useEffect, useState } from 'react'
+import { ProEditor, createCollabSession, createWebSocketTransport, type Block, type CollabSession } from '@xproeditor/react'
+
+export function SharedDoc({ docId, blocks }: { docId: string; blocks: Block[] }) {
+  const [session, setSession] = useState<CollabSession | null>(null)
+
+  useEffect(() => {
+    const s = createCollabSession({
+      transport: createWebSocketTransport(`wss://relay.example.com/${docId}`),
+      blocks, // the same saved document on every client
+      user: { name: currentUser.name },
+    })
+    setSession(s)
+    return () => s.destroy()
+  }, [docId])
+
+  return <ProEditor defaultValue={blocks} collaboration={session ?? undefined} onChange={save} />
+}
+```
+
+Edits sync block by block, collaborators' positions show as coloured
+markers, and undo only reverts your own changes. Transports, the relay
+server and the merge model: [`docs/collaboration.md`](../../docs/collaboration.md).
 
 ## `<BlockEditor>` (lower-level)
 
@@ -142,7 +172,9 @@ Same props as above (minus `toolbar`) plus `showBubbleToolbar?: boolean` and
 
 Type `# `, `- `, `1. `, `[x] `, `> ` at the start of a line, or `**bold**`,
 `` `code` ``, `~~strike~~` inline. `Mod+Alt+1…3` makes headings,
-`Mod+Shift+↑/↓` moves blocks, `Mod+D` duplicates, `Mod+K` links. Full list:
+`Mod+Shift+↑/↓` moves blocks, `Mod+D` duplicates, `Mod+K` links. In code
+blocks `Enter` keeps indentation and `Mod+/` toggles comments; in tables
+`Tab` in the last cell adds a row. Full list:
 [`docs/keyboard-shortcuts.md`](../../docs/keyboard-shortcuts.md).
 
 ## Read-only rendering
@@ -156,7 +188,8 @@ import { DocRenderer } from '@xproeditor/react'
 <DocRenderer blocks={post.content.blocks} editorDir="ltr" locale="en" />
 ```
 
-Headings get anchor ids, code is highlighted (highlight.js loads on demand),
+Headings get anchor ids, code is highlighted with its file name and optional
+line numbers (highlight.js loads on demand), tables keep their column widths,
 embeds and the table of contents render, and every link and media URL is
 sanitized — see [`docs/security.md`](../../docs/security.md).
 
