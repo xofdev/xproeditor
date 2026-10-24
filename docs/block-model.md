@@ -73,8 +73,9 @@ interface BlockProps {
   language?: string         // code
   code?: string             // code
   wrap?: boolean            // code: soft-wrap long lines
+  lineNumbers?: boolean     // code: show the line-number gutter
   url?: string              // image/video/audio/file/button/bookmark/embed
-  caption?: string          // image/video/audio/embed
+  caption?: string          // image/video/audio/embed; code: file name
   name?: string              // audio/file: original file name
   size?: number              // audio/file: size in bytes
   mime?: string              // audio/file: MIME type
@@ -83,7 +84,8 @@ interface BlockProps {
   height?: number            // embed: frame height in px (80–1200)
   icon?: string              // callout
   color?: string             // callout background
-  table?: TableData          // table
+  table?: TableData          // table — rows, hasHeader, hasHeaderColumn?,
+                             //   colWidths?: (number | null)[] (px per column), width, style
   buttonStyle?: 'primary' | 'outline' | 'ghost' // button
   openInNewTab?: boolean     // button: open url in a new tab
   title?: string             // bookmark: page title

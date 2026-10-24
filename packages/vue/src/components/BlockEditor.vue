@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, toRef } from 'vue'
+import { ref, shallowRef, computed, reactive, watch, nextTick, onMounted, onBeforeUnmount, toRef } from 'vue'
 import {
   blocksToClipboardPayload,
   parseBlocksFromClipboardData,
@@ -31,6 +31,7 @@ import {
   rangeMarkValueAcrossSegments,
   computeListNumbering,
   normalizeTableData,
+  addTableRow,
   nextVisibleCellCoord,
   patchTableCell,
   patchTableCellsBackground,
@@ -56,8 +57,11 @@ import {
   getBlockSubtreeLength,
   getDocumentStats,
   sanitizeBlocks,
+  resolveEditorAnchor,
+  createBlockHistory,
+  reconcileBlocks,
 } from '@xproeditor/core'
-import type { DocHeading, EditorDictionaryOverrides, BlockPatch, EditorFocusTarget, BlockKeyboardAction, PasteFocus, TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, SelectAllStage, TableCellCoord, TableCellAlign, TableStyle, AICommand, AITransport } from '@xproeditor/core'
+import type { CollabPeer, CollabSession, DocHeading, EditorDictionaryOverrides, BlockPatch, EditorFocusTarget, BlockKeyboardAction, PasteFocus, TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, SelectAllStage, TableCellCoord, TableCellAlign, TableStyle, AICommand, AITransport } from '@xproeditor/core'
 import EditorBlockItem from './EditorBlockItem.vue'
 import EditorBubbleToolbar from './EditorBubbleToolbar.vue'
 import EditorEmojiTriggerMenu from './EditorEmojiTriggerMenu.vue'
@@ -65,6 +69,7 @@ import type { FormatToolbarAlign, FormatToolbarState } from './EditorFormatToolb
 import EditorSlashMenu from './EditorSlashMenu.vue'
 import type {SlashItem} from './EditorSlashMenu.vue';
 import EditorAIMenu from './EditorAIMenu.vue'
+import EditorPresenceLayer from './EditorPresenceLayer.vue'
 import { EmojiPicker } from '../ui'
 import { ALL_EMOJIS } from '../ui/emojiData'
 import { provideEditorI18n } from '../i18n'
@@ -103,18 +108,25 @@ const props = withDefaults(defineProps<{
   locale?: string
   /** Override any UI string, or supply a whole new language. */
   dictionary?: EditorDictionaryOverrides
+  /** Real-time collaboration session from `createCollabSession`. */
+  collaboration?: CollabSession
 }>(), {
   spellcheck: true,
 })
 
 const emit = defineEmits<{
   change: []
+  /** Same (mutated in place) array — lets `v-model` hosts react to edits. */
+  'update:modelValue': [blocks: Block[]]
   'format-state': [state: FormatToolbarState | null]
   /** `upload` rejected for a pasted/dropped file (the file is skipped). */
   'upload-error': [error: unknown, file: File]
 }>()
 
-const blocks = computed(() => props.modelValue)
+// `reactive()` returns an already-reactive array as is, and makes a plain
+// array (e.g. a constant passed to `:model-value`) reactive, so in-place
+// edits still re-render.
+const blocks = computed(() => reactive(props.modelValue) as Block[])
 const dict = provideEditorI18n(toRef(props, 'locale'), toRef(props, 'dictionary'))
 
 function blockDirOptions(): { defaultDir?: 'ltr' | 'rtl' } | undefined {
@@ -507,92 +519,93 @@ return null
 
 // ─── History (undo / redo) ────────────────────────────────────────────────────
 
-const history = ref<string[]>([])
-const historyIndex = ref(0)
+// Block-level steps (`createBlockHistory`): only changed blocks are stored,
+// and undo keeps every untouched block object (and its row) intact.
+const history = createBlockHistory()
+/** Bumped when the history changes so `canUndo` / `canRedo` recompute. */
+const historyTick = ref(0)
 let historyTimer: ReturnType<typeof setTimeout> | null = null
 
-const canUndo = computed(() => historyIndex.value > 0 || historyTimer !== null)
-const canRedo = computed(() => historyIndex.value < history.value.length - 1)
-
-function snapshot(): string {
-  return JSON.stringify(blocks.value)
-}
+const canUndo = computed(() => (historyTick.value, history.canUndo() || historyTimer !== null))
+const canRedo = computed(() => (historyTick.value, history.canRedo()))
 
 function commitSnapshot() {
   if (historyTimer) {
- clearTimeout(historyTimer); historyTimer = null 
+    clearTimeout(historyTimer)
+    historyTimer = null
+  }
+
+  if (history.commit(blocks.value)) {
+    historyTick.value++
+  }
 }
 
-  const snap = snapshot()
-
-  if (history.value[historyIndex.value] === snap) {
-return
-}
-
-  history.value = history.value.slice(0, historyIndex.value + 1)
-  history.value.push(snap)
-
-  if (history.value.length > 200) {
-history.value.shift()
-}
-
-  historyIndex.value = history.value.length - 1
+/** Notify the host and collaborators. */
+function emitChange() {
+  emit('change')
+  emit('update:modelValue', blocks.value)
+  props.collaboration?.update(blocks.value)
 }
 
 function pushHistory(immediate = false) {
   if (props.readonly) {
-return
-}
+    return
+  }
 
-  emit('change')
+  emitChange()
 
   if (immediate) {
     commitSnapshot()
   } else {
     if (historyTimer) {
-clearTimeout(historyTimer)
-}
+      clearTimeout(historyTimer)
+    }
 
     historyTimer = setTimeout(commitSnapshot, 400)
+    historyTick.value++
   }
 }
 
-function restoreSnapshot(json: string) {
-  const arr = JSON.parse(json) as Block[]
-  blocks.value.splice(0, blocks.value.length, ...arr)
+function restoreBlocks(next: Block[]) {
+  blocks.value.splice(0, blocks.value.length, ...next)
   ensureNotEmpty()
-  emit('change')
+  historyTick.value++
+  emitChange()
 }
 
 function undo() {
   if (historyTimer) {
-commitSnapshot()
-}
+    clearTimeout(historyTimer)
+    historyTimer = null
+  }
 
-  if (historyIndex.value <= 0) {
-return
-}
+  const next = history.undo(blocks.value)
 
-  historyIndex.value -= 1
-  restoreSnapshot(history.value[historyIndex.value])
+  if (next) {
+    restoreBlocks(next)
+  }
 }
 
 function redo() {
-  if (historyIndex.value >= history.value.length - 1) {
-return
-}
+  if (historyTimer) {
+    commitSnapshot()
+  }
 
-  historyIndex.value += 1
-  restoreSnapshot(history.value[historyIndex.value])
+  const next = history.redo(blocks.value)
+
+  if (next) {
+    restoreBlocks(next)
+  }
 }
 
 function resetHistory() {
   if (historyTimer) {
- clearTimeout(historyTimer); historyTimer = null 
-}
+    clearTimeout(historyTimer)
+    historyTimer = null
+  }
 
-  history.value = [snapshot()]
-  historyIndex.value = 0
+  history.reset(blocks.value)
+  historyTick.value++
 }
 
 function ensureNotEmpty() {
@@ -600,6 +613,73 @@ function ensureNotEmpty() {
     blocks.value.push(makeBlock('paragraph'))
   }
 }
+
+// ─── Collaboration ────────────────────────────────────────────────────────────
+
+const peers = shallowRef<CollabPeer[]>([])
+
+/**
+ * Apply a merged document from collaborators. Unchanged blocks keep their
+ * objects, the caret survives, local pending edits become their own undo
+ * step, and remote edits are never undone locally.
+ */
+function applyRemoteBlocks(next: Block[]) {
+  const merged = reconcileBlocks(blocks.value, next)
+
+  if (!merged) {
+    return
+  }
+
+  commitSnapshot()
+  blocks.value.splice(0, blocks.value.length, ...merged)
+  ensureNotEmpty()
+  history.rebase(blocks.value)
+
+  if (focusedBlockId.value && !byId(focusedBlockId.value)) {
+    focusedBlockId.value = null
+  }
+
+  if (selectedBlockId.value && !byId(selectedBlockId.value)) {
+    selectedBlockId.value = null
+  }
+
+  contentRevision.value++
+  emit('change')
+  emit('update:modelValue', blocks.value)
+}
+
+watch(() => props.collaboration, (session, _previous, onCleanup) => {
+  if (!session) {
+    return
+  }
+
+  // The session is the source of truth: show the room's document (or seed
+  // an empty session with ours).
+  const initial = session.getBlocks()
+
+  if (initial.length) {
+    applyRemoteBlocks(initial)
+  } else {
+    session.update(blocks.value)
+  }
+
+  peers.value = session.getPeers()
+  const offChange = session.onChange(applyRemoteBlocks)
+  const offPeers = session.onPeers((list) => {
+    peers.value = list
+  })
+
+  onCleanup(() => {
+    offChange()
+    offPeers()
+    session.setPresence(null)
+    peers.value = []
+  })
+}, { immediate: true })
+
+watch([() => props.collaboration, focusedBlockId, selectedBlockId], ([session, focused, selected]) => {
+  session?.setPresence(focused ?? selected ?? null)
+})
 
 watch(() => props.modelValue, () => {
   ensureNotEmpty()
@@ -647,7 +727,7 @@ interface SlashState {
 }
 
 const slashState = ref<SlashState | null>(null)
-const aiMenu = ref<{ position: { x: number; y: number } } | null>(null)
+const aiMenu = ref<{ position: { x: number; y: number; top?: number }; anchorBlockId: string | null } | null>(null)
 /** Bumped by Mod+K — toolbars open their link editor when it changes. */
 const linkRequest = ref(0)
 const slashMenuRef = ref<InstanceType<typeof EditorSlashMenu> | null>(null)
@@ -697,13 +777,35 @@ function updateSlash(block: Block, spans: InlineSpan[], caret: number | null) {
   }
 }
 
-function openAIMenu(position?: { x: number; y: number }) {
-  if (!props.ai?.transport || props.readonly) return
+/**
+ * Open Ask AI at `position` (viewport anchor line: opens below `y`, flips
+ * above `top`). Without one — toolbar button, block menu — anchor on the
+ * caret if it is in the editor, else on the focused/selected block, never on
+ * a hard-coded corner.
+ */
+function openAIMenu(position?: { x: number; y: number; top?: number }) {
+  if (!props.ai?.transport || props.readonly) {
+    return
+  }
+
+  const anchorBlockId = focusedBlockId.value ?? selectedBlockId.value ?? textRangeSelection.value?.focus.blockId ?? null
   closeSlash()
   bubble.value = null
-  const pos = position ?? slashPosition()
-  aiMenu.value = { position: { x: pos.x, y: pos.y } }
+  let pos = position
+
+  if (!pos) {
+    const anchor = resolveEditorAnchor(rootEl.value, anchorBlockId)
+    pos = { x: anchor.x, y: anchor.bottom, top: anchor.top }
+  }
+
+  aiMenu.value = { position: pos, anchorBlockId }
 }
+
+const aiAnchorElement = computed(() => {
+  const id = aiMenu.value?.anchorBlockId
+
+  return id ? rootEl.value?.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`) ?? null : null
+})
 
 function closeAIMenu() {
   aiMenu.value = null
@@ -748,7 +850,7 @@ return
   if (item.action === 'ai') {
     const pos = state.position
     closeSlash()
-    openAIMenu({ x: pos.x, y: pos.y })
+    openAIMenu({ x: pos.x, y: pos.y, top: pos.top })
     return
   }
 
@@ -1703,9 +1805,9 @@ selectedBlockId.value = null
 
 function patchProps(block: Block, patch: Record<string, unknown>) {
   Object.assign(block.props, patch)
+  // pushHistory already notifies the host and collaborators.
   pushHistory(true)
   contentRevision.value++
-  emit('change')
 }
 
 function getTableCellContext(blockId: string) {
@@ -1764,7 +1866,7 @@ function onTableCellInput(
   cell.content = payload.content
   block.props.table = table
   contentRevision.value++
-  emit('change')
+  emitChange()
 }
 
 function handleTableFormat(
@@ -1800,6 +1902,18 @@ function handleTableTab(
   const next = nextVisibleCellCoord(table, payload.row, payload.col, payload.shift ? -1 : 1)
 
   if (!next) {
+    // Tab in the last cell adds a row, like a spreadsheet.
+    if (payload.shift) {
+      return
+    }
+
+    const grown = addTableRow(table)
+    const row = grown.rows.length - 1
+    patchProps(block, { table: grown })
+    focusedTableCell.value = { blockId: block.id, row, col: 0 }
+    tableSelectedCells.value = [{ row, col: 0 }]
+    nextTick(() => itemRefs.get(block.id)?.focusTableCell?.(row, 0, 'start'))
+
     return
   }
 
@@ -1858,7 +1972,7 @@ function patchTableStyleForFocused(partial: Partial<TableStyle>) {
   block.props.table = patchTableStyle(normalizeTableData(block.props.table), partial)
   pushHistory(true)
   contentRevision.value++
-  emit('change')
+  emitChange()
 }
 
 function patchTableCellBackgroundForFocused(color: string | null) {
@@ -1887,7 +2001,7 @@ function patchTableCellBackgroundForFocused(color: string | null) {
   block.props.table = patchTableCellsBackground(normalizeTableData(block.props.table), cells, color)
   pushHistory(true)
   contentRevision.value++
-  emit('change')
+  emitChange()
 }
 
 function applyMarkToFocusedTableCell(mark: MarkName, value: boolean | string | null) {
@@ -2329,8 +2443,10 @@ function onBubbleDelete() {
 }
 
 function onBubbleAskAI() {
-  const pos = bubble.value?.position
-  openAIMenu(pos ? { x: pos.x, y: pos.y } : undefined)
+  // Anchor on the selected text itself (the bubble sits above it), so the
+  // menu opens right below the selection instead of covering it.
+  const rect = getSelectionClientRect()
+  openAIMenu(rect ? { x: rect.left, y: rect.bottom, top: rect.top } : undefined)
 }
 
 function onBubbleTurnInto(type: BlockType) {
@@ -2535,7 +2651,7 @@ return
     block.props.table = nextTable
     pushHistory(true)
     contentRevision.value++
-    emit('change')
+    emitChange()
 
     return
   }
@@ -3375,6 +3491,14 @@ function onBlockPointerDown(block: Block, e: PointerEvent) {
 
   resetSelectAllStage()
 
+  // A press inside a native field of a non-text block (code textarea, table
+  // cell, caption/URL inputs, selects) belongs to that field: its own text
+  // selection and shift-extend must work, and starting the cross-block
+  // drag-select here would steal focus and select the block.
+  if (!isTextBlock(block.type) && isNativeInputTarget(target)) {
+    return
+  }
+
   // Text blocks handle shift-extend via selection-pointer-down on `.etb`.
   if (e.shiftKey && !target.closest('.etb')) {
     const point = rootEl.value
@@ -3793,6 +3917,13 @@ focusBlock(last.id, 'end')
     @drop="onDrop"
     @dragend="onDragEnd"
   >
+    <EditorPresenceLayer
+      v-if="peers.length"
+      :peers="peers"
+      :root="rootEl"
+      :revision="contentRevision"
+    />
+
     <EditorBlockItem
       v-for="block in visibleBlocks"
       :key="block.id"
@@ -3897,6 +4028,8 @@ focusBlock(last.id, 'end')
       v-if="aiMenu && props.ai?.transport && !readonly"
       :open="true"
       :position="aiMenu.position"
+      :anchor-element="aiAnchorElement"
+      :dir="editorDir"
       :transport="props.ai.transport"
       :commands="props.ai.commands"
       :blocks="blocks"

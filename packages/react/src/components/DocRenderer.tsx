@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronRight, Copy, Link as LinkIcon, X } from 'lucide-react'
 import {
+  codeLanguageLabel,
+  normalizeCodeLanguage,
+  splitHighlightedLines,
   computeListNumbering,
   embedFrameHeight,
   escapeHtml,
@@ -13,6 +16,8 @@ import {
   isAllowedEmbedUrl,
   isToggleBlock,
   normalizeTableData,
+  isTableHeaderCell,
+  tableFixedWidth,
   resolveBlockDirection,
   spansToHtml,
   tableCellStyle,
@@ -238,7 +243,7 @@ function DocRendererContent({ blocks, editorDir }: Omit<DocRendererProps, 'local
               onClick={() => setToggleOverrides((prev) => ({ ...prev, [idx]: !collapsed }))}
             >
               <span
-                className={`db-toggle-chevron${!collapsed ? ' rotate-90' : ''}${blockDir === 'rtl' ? ' db-toggle-chevron--rtl' : ''}`}
+                className={`db-toggle-chevron xpe-chevron${blockDir === 'rtl' ? ' xpe-chevron--rtl' : ''}${!collapsed ? ' xpe-chevron--open' : ''}`}
               >
                 <ChevronRight className="w-4 h-4" />
               </span>
@@ -285,17 +290,24 @@ function DocRendererContent({ blocks, editorDir }: Omit<DocRendererProps, 'local
         }
 
         if (block.type === 'code') {
-          const lang = block.props.language ?? 'plaintext'
+          const lang = normalizeCodeLanguage(block.props.language)
           const text = block.props.code ?? ''
           const isCopied = copiedCode === idx
+          const highlighted = highlightCode(text, lang)
+          const codeHtml = block.props.lineNumbers
+            ? splitHighlightedLines(highlighted)
+                .map((line) => `<span class="db-line">${line || '<br>'}</span>`)
+                .join('')
+            : highlighted
           return (
             <div
               key={idx}
-              className={`db-code${block.props.wrap ? ' db-code--wrap' : ''}`}
+              className={`db-code${block.props.wrap ? ' db-code--wrap' : ''}${block.props.lineNumbers ? ' db-code--numbered' : ''}`}
               dir="ltr"
             >
               <div className="db-code-header">
-                <span className="db-code-lang">{lang === 'plaintext' ? 'Plain text' : lang}</span>
+                <span className="db-code-lang">{codeLanguageLabel(lang)}</span>
+                {block.props.caption && <span className="db-code-file">{block.props.caption}</span>}
                 <button
                   type="button"
                   className={`db-code-copy${isCopied ? ' db-code-copy--ok' : ''}`}
@@ -309,9 +321,7 @@ function DocRendererContent({ blocks, editorDir }: Omit<DocRendererProps, 'local
               <pre>
                 <code
                   className="hljs"
-                  dangerouslySetInnerHTML={{
-                    __html: highlightCode(text, block.props.language),
-                  }}
+                  dangerouslySetInnerHTML={{ __html: codeHtml }}
                 />
               </pre>
             </div>
@@ -521,6 +531,7 @@ function DocRendererContent({ blocks, editorDir }: Omit<DocRendererProps, 'local
 
         if (block.type === 'table' && block.props.table) {
           const table = normalizeTableData(block.props.table)
+          const fixedWidth = tableFixedWidth(table)
 
           return (
             <div
@@ -529,13 +540,23 @@ function DocRendererContent({ blocks, editorDir }: Omit<DocRendererProps, 'local
               dir="auto"
               style={tableWrapperStyle(table.style, table.width)}
             >
-              <table className="db-table">
+              <table
+                className="db-table"
+                style={fixedWidth ? { width: `${fixedWidth}px`, tableLayout: 'fixed' } : undefined}
+              >
+                {table.colWidths && (
+                  <colgroup>
+                    {table.colWidths.map((w, i) => (
+                      <col key={i} style={w ? { width: `${w}px` } : undefined} />
+                    ))}
+                  </colgroup>
+                )}
                 <tbody>
                   {table.rows.map((row, rIdx) => (
                     <tr key={rIdx}>
                       {row.map((cell, cIdx) => {
                         if (cell.hidden) return null
-                        const Tag = rIdx === 0 && table.hasHeader ? 'th' : 'td'
+                        const Tag = isTableHeaderCell(table, rIdx, cIdx) ? 'th' : 'td'
 
                         return (
                           <Tag

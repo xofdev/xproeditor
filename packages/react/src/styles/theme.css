@@ -34,6 +34,15 @@
   --xpe-code-fg: #1f2937;
   --xpe-code-header-bg: #e8ecf1;
   --xpe-code-muted: #6b7280;
+  /* syntax colours (code blocks in the editor and DocRenderer) */
+  --xpe-syntax-comment: #6a737d;
+  --xpe-syntax-keyword: #8250df;
+  --xpe-syntax-string: #116329;
+  --xpe-syntax-number: #953800;
+  --xpe-syntax-type: #953800;
+  --xpe-syntax-function: #0550ae;
+  --xpe-syntax-variable: #24292f;
+  --xpe-syntax-danger: #cf222e;
 }
 
 /**
@@ -64,6 +73,14 @@
   --xpe-code-fg: #cdd6f4;
   --xpe-code-header-bg: #16182a;
   --xpe-code-muted: #8b8fa3;
+  --xpe-syntax-comment: #6c7086;
+  --xpe-syntax-keyword: #cba6f7;
+  --xpe-syntax-string: #a6e3a1;
+  --xpe-syntax-number: #fab387;
+  --xpe-syntax-type: #f9e2af;
+  --xpe-syntax-function: #89b4fa;
+  --xpe-syntax-variable: #f2cdcd;
+  --xpe-syntax-danger: #f38ba8;
 }
 
 /**

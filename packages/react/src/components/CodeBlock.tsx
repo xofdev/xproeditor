@@ -1,41 +1,23 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { Check, Copy, WrapText } from 'lucide-react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { Check, ChevronDown, Copy, ListOrdered, WrapText } from 'lucide-react'
+import {
+  CODE_LANGUAGES,
+  codeLanguageLabel,
+  indentCode,
+  newlineInCode,
+  normalizeCodeLanguage,
+  splitHighlightedLines,
+  toggleCodeComment,
+  type CodeEdit,
+} from '@xproeditor/core'
 import type { Block } from '@xproeditor/core'
 import { useEditorDictionary } from '../i18n'
 import { modKeyLabel } from '../utils/shortcut'
+import { detectLanguage, highlightCode, isHighlighterReady, loadHighlighter } from '../utils/highlight'
 
 export interface CodeBlockHandle {
   focusAt: (pos: number | 'start' | 'end') => void
 }
-
-const INDENT = '  '
-
-const LANGUAGES: { id: string; label: string }[] = [
-  { id: 'plaintext', label: 'Plain text' },
-  { id: 'javascript', label: 'JavaScript' },
-  { id: 'typescript', label: 'TypeScript' },
-  { id: 'python', label: 'Python' },
-  { id: 'bash', label: 'Bash' },
-  { id: 'json', label: 'JSON' },
-  { id: 'yaml', label: 'YAML' },
-  { id: 'html', label: 'HTML' },
-  { id: 'css', label: 'CSS' },
-  { id: 'sql', label: 'SQL' },
-  { id: 'go', label: 'Go' },
-  { id: 'rust', label: 'Rust' },
-  { id: 'java', label: 'Java' },
-  { id: 'c', label: 'C' },
-  { id: 'cpp', label: 'C++' },
-  { id: 'csharp', label: 'C#' },
-  { id: 'php', label: 'PHP' },
-  { id: 'ruby', label: 'Ruby' },
-  { id: 'swift', label: 'Swift' },
-  { id: 'kotlin', label: 'Kotlin' },
-  { id: 'dockerfile', label: 'Dockerfile' },
-  { id: 'markdown', label: 'Markdown' },
-  { id: 'xml', label: 'XML' },
-  { id: 'diff', label: 'Diff' },
-]
 
 export interface CodeBlockProps {
   block: Block
@@ -47,13 +29,14 @@ export interface CodeBlockProps {
   onExitBelow: () => void
 }
 
-function outdentLine(line: string): { text: string; removed: number } {
-  if (line.startsWith('\t')) return { text: line.slice(1), removed: 1 }
-  if (line.startsWith(INDENT)) return { text: line.slice(INDENT.length), removed: INDENT.length }
-  if (line.startsWith(' ')) return { text: line.slice(1), removed: 1 }
-  return { text: line, removed: 0 }
-}
+const LANGUAGE_IDS = CODE_LANGUAGES.map((lang) => lang.id)
 
+/**
+ * Code block: a transparent `<textarea>` over a syntax-highlighted `<pre>`
+ * with identical metrics, so you type into a native, accessible field while
+ * seeing live colours. Line numbers come from CSS counters on the
+ * highlighted lines, so they stay aligned in wrap mode too.
+ */
 export const CodeBlock = forwardRef<CodeBlockHandle, CodeBlockProps>(function CodeBlock(
   { block, readonly, onPatch, onArrowUp, onArrowDown, onRemoveSelf, onExitBelow },
   ref,
@@ -62,215 +45,269 @@ export const CodeBlock = forwardRef<CodeBlockHandle, CodeBlockProps>(function Co
   const textarea = useRef<HTMLTextAreaElement | null>(null)
   const code = block.props.code ?? ''
   const wrap = Boolean(block.props.wrap)
-  const language = block.props.language ?? 'plaintext'
+  const lineNumbers = Boolean(block.props.lineNumbers)
+  const language = normalizeCodeLanguage(block.props.language)
+  const fileName = block.props.caption ?? ''
   const [copied, setCopied] = useState(false)
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  function autoresize() {
-    const ta = textarea.current
-    if (!ta) return
-    ta.style.height = 'auto'
-    ta.style.height = `${ta.scrollHeight}px`
-  }
+  const [detected, setDetected] = useState<string | null>(null)
+  const [highlighterReady, setHighlighterReady] = useState(isHighlighterReady)
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
-    autoresize()
-  }, [code, wrap])
+    if (highlighterReady) return
+    let alive = true
+    void loadHighlighter().then((hl) => alive && hl && setHighlighterReady(true))
+    return () => {
+      alive = false
+    }
+  }, [highlighterReady])
 
-  useEffect(
-    () => () => {
-      if (copiedTimer.current) clearTimeout(copiedTimer.current)
-    },
-    [],
+  useEffect(() => () => timers.current.forEach(clearTimeout), [])
+
+  const lines = useMemo(
+    () => splitHighlightedLines(highlightCode(code, language)),
+    // highlighterReady: re-highlight once the lazy chunk has loaded
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [code, language, highlighterReady],
+  )
+  const linesHtml = useMemo(
+    () => lines.map((line) => `<span class="ecb-line">${line || '<br>'}</span>`).join(''),
+    [lines],
   )
 
-  function onInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    if (readonly) return
-    onPatch({ code: e.target.value })
+  function later(fn: () => void, ms: number) {
+    timers.current.push(setTimeout(fn, ms))
   }
 
-  function applyTab(shift: boolean) {
+  /**
+   * Write the edit to the textarea synchronously, then sync the block. Going
+   * through state first and restoring the selection a frame later would let
+   * keys typed in that frame land on the old value and be overwritten.
+   */
+  function apply(edit: CodeEdit) {
     const ta = textarea.current
     if (!ta) return
-
-    const start = ta.selectionStart
-    const end = ta.selectionEnd
-    const value = ta.value
-
-    if (!shift && start === end) {
-      const next = value.slice(0, start) + INDENT + value.slice(end)
-      onPatch({ code: next })
-      requestAnimationFrame(() => {
-        ta.selectionStart = ta.selectionEnd = start + INDENT.length
-        autoresize()
-      })
-      return
-    }
-
-    const lineStart = value.lastIndexOf('\n', start - 1) + 1
-    let lineEnd = end
-    if (end === start || value[end - 1] !== '\n') {
-      const nextNl = value.indexOf('\n', end)
-      lineEnd = nextNl === -1 ? value.length : nextNl
-    } else {
-      lineEnd = end - 1
-    }
-
-    const blockText = value.slice(lineStart, lineEnd)
-    const lines = blockText.split('\n')
-    let startDelta = 0
-    let totalDelta = 0
-
-    const nextLines = lines.map((line, i) => {
-      if (shift) {
-        const { text, removed } = outdentLine(line)
-        if (i === 0) startDelta = -Math.min(removed, Math.max(0, start - lineStart))
-        totalDelta -= removed
-        return text
-      }
-      if (i === 0) startDelta = INDENT.length
-      totalDelta += INDENT.length
-      return INDENT + line
-    })
-
-    const next = value.slice(0, lineStart) + nextLines.join('\n') + value.slice(lineEnd)
-    onPatch({ code: next })
-    requestAnimationFrame(() => {
-      ta.selectionStart = Math.max(lineStart, start + startDelta)
-      ta.selectionEnd = Math.max(ta.selectionStart, end + totalDelta)
-      autoresize()
-    })
+    ta.value = edit.value
+    ta.setSelectionRange(edit.selectionStart, edit.selectionEnd)
+    onPatch({ code: edit.value })
   }
 
-  function onKeydown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (readonly) return
-
+  function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     const ta = textarea.current
-    if (!ta) return
+    if (readonly || !ta || e.nativeEvent.isComposing) return
+
+    const { selectionStart: start, selectionEnd: end, value } = ta
+    const mod = e.metaKey || e.ctrlKey
 
     if (e.key === 'Tab') {
       e.preventDefault()
-      applyTab(e.shiftKey)
+      apply(indentCode(value, start, end, e.shiftKey))
       return
     }
 
-    if (e.key === 'Backspace' && ta.value === '') {
+    if (e.key === 'Enter' && mod) {
+      e.preventDefault()
+      onExitBelow()
+      return
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      apply(newlineInCode(value, start, end))
+      return
+    }
+
+    if (mod && e.key === '/') {
+      const edit = toggleCodeComment(value, start, end, language)
+      if (edit) {
+        e.preventDefault()
+        apply(edit)
+      }
+      return
+    }
+
+    if (e.key === 'Backspace' && value === '') {
       e.preventDefault()
       onRemoveSelf()
       return
     }
 
-    if (e.key === 'ArrowUp' && ta.selectionStart === 0 && ta.selectionEnd === 0) {
-      const beforeCaret = ta.value.slice(0, ta.selectionStart)
-      if (!beforeCaret.includes('\n')) {
-        e.preventDefault()
-        onArrowUp()
-      }
+    if (e.key === 'ArrowUp' && start === 0 && end === 0) {
+      e.preventDefault()
+      onArrowUp()
       return
     }
 
-    if (e.key === 'ArrowDown' && ta.selectionStart === ta.value.length && ta.selectionEnd === ta.value.length) {
+    if (e.key === 'ArrowDown' && start === value.length && end === value.length) {
       e.preventDefault()
       onArrowDown()
-      return
-    }
-
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault()
-      onExitBelow()
     }
   }
 
+  function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    if (readonly || language !== 'plaintext' || code.trim() !== '') return
+
+    // Pasting into an empty plain-text block: guess the language.
+    const text = e.clipboardData.getData('text/plain')
+    void loadHighlighter().then(() => {
+      const guess = detectLanguage(text, LANGUAGE_IDS)
+      if (!guess) return
+      onPatch({ language: guess })
+      setDetected(codeLanguageLabel(guess))
+      later(() => setDetected(null), 2400)
+    })
+  }
+
   async function copyCode() {
-    const text = code
     try {
-      await navigator.clipboard.writeText(text)
+      await navigator.clipboard.writeText(code)
     } catch {
       const ta = textarea.current
       if (ta) {
         ta.focus()
         ta.select()
         document.execCommand('copy')
-        const len = ta.value.length
-        ta.selectionStart = ta.selectionEnd = len
+        ta.selectionStart = ta.selectionEnd = ta.value.length
       }
     }
     setCopied(true)
-    if (copiedTimer.current) clearTimeout(copiedTimer.current)
-    copiedTimer.current = setTimeout(() => setCopied(false), 1600)
+    later(() => setCopied(false), 1600)
   }
 
   useImperativeHandle(ref, () => ({
     focusAt: (pos = 'end') => {
       const ta = textarea.current
       if (!ta) return
-      ta.focus()
+      ta.focus({ preventScroll: true })
       const offset = pos === 'start' ? 0 : pos === 'end' ? ta.value.length : pos
       ta.selectionStart = ta.selectionEnd = offset
+      ta.scrollIntoView({ block: 'nearest' })
     },
   }))
 
+  const known = CODE_LANGUAGES.some((lang) => lang.id === language)
+  const gutterChars = String(lines.length).length
+
   return (
-    <div className={`ecb${wrap ? ' ecb--wrap' : ''}`} dir="ltr">
-      <div className="ecb-toolbar">
-        <select
-          className="ecb-lang"
-          value={language}
-          disabled={readonly}
-          aria-label={t.language}
-          onChange={(e) => onPatch({ language: e.target.value })}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          {/* Keep languages from imported Markdown/HTML selectable even if not in the list. */}
-          {!LANGUAGES.some((lang) => lang.id === language) && (
-            <option value={language}>{language}</option>
-          )}
-          {LANGUAGES.map((lang) => (
-            <option key={lang.id} value={lang.id}>
-              {lang.id === 'plaintext' ? t.plainText : lang.label}
-            </option>
-          ))}
-        </select>
-        <div className="ecb-actions">
-          <button
-            type="button"
-            className={`ecb-action${wrap ? ' ecb-action--active' : ''}`}
-            title={wrap ? t.disableWrap : t.wrap}
-            aria-label={wrap ? t.disableWrap : t.wrap}
-            aria-pressed={wrap}
+    <div
+      className={`ecb${wrap ? ' ecb--wrap' : ''}${lineNumbers ? ' ecb--numbered' : ''}`}
+      dir="ltr"
+      style={{ ['--ecb-gutter' as string]: `${Math.max(2, gutterChars)}ch` }}
+    >
+      <div className="ecb-header">
+        <label className="ecb-lang" title={t.language}>
+          <span>{language === 'plaintext' ? t.plainText : codeLanguageLabel(language)}</span>
+          {!readonly && <ChevronDown aria-hidden />}
+          <select
+            value={language}
             disabled={readonly}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => onPatch({ wrap: !wrap })}
+            aria-label={t.language}
+            onChange={(e) => onPatch({ language: e.target.value })}
+            onMouseDown={(e) => e.stopPropagation()}
           >
-            <WrapText />
-          </button>
+            {/* Keep languages from imported Markdown/HTML selectable even if not in the list. */}
+            {!known && <option value={language}>{language}</option>}
+            {CODE_LANGUAGES.map((lang) => (
+              <option key={lang.id} value={lang.id}>
+                {lang.id === 'plaintext' ? t.plainText : lang.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {detected && (
+          <span className="ecb-detected" role="status">
+            {t.detected}: {detected}
+          </span>
+        )}
+
+        {readonly ? (
+          fileName && <span className="ecb-filename">{fileName}</span>
+        ) : (
+          <input
+            className="ecb-filename"
+            value={fileName}
+            placeholder={t.fileName}
+            aria-label={t.fileName}
+            spellCheck={false}
+            size={Math.max(8, fileName.length + 1)}
+            onChange={(e) => onPatch({ caption: e.target.value || undefined })}
+            onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === 'ArrowDown') {
+                e.preventDefault()
+                textarea.current?.focus()
+              }
+            }}
+          />
+        )}
+
+        <div className="ecb-actions">
+          {!readonly && (
+            <>
+              <button
+                type="button"
+                className={`ecb-action${lineNumbers ? ' ecb-action--active' : ''}`}
+                title={lineNumbers ? t.hideLineNumbers : t.lineNumbers}
+                aria-label={lineNumbers ? t.hideLineNumbers : t.lineNumbers}
+                aria-pressed={lineNumbers}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onPatch({ lineNumbers: !lineNumbers || undefined })}
+              >
+                <ListOrdered />
+              </button>
+              <button
+                type="button"
+                className={`ecb-action${wrap ? ' ecb-action--active' : ''}`}
+                title={wrap ? t.disableWrap : t.wrap}
+                aria-label={wrap ? t.disableWrap : t.wrap}
+                aria-pressed={wrap}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onPatch({ wrap: !wrap })}
+              >
+                <WrapText />
+              </button>
+            </>
+          )}
           <button
             type="button"
-            className={`ecb-action${copied ? ' ecb-action--ok' : ''}`}
+            className={`ecb-action ecb-action--copy${copied ? ' ecb-action--ok' : ''}`}
             title={copied ? t.copied : t.copy}
             aria-label={copied ? t.copied : t.copy}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => void copyCode()}
           >
             {copied ? <Check /> : <Copy />}
+            {copied && <span>{t.copied}</span>}
           </button>
-          <span className="ecb-hint">{t.exitHint.replace(/^Ctrl\+/, modKeyLabel())}</span>
         </div>
       </div>
-      <textarea
-        ref={textarea}
-        value={code}
-        readOnly={readonly}
-        className="ecb-input"
-        rows={1}
-        placeholder={t.placeholder}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoCorrect="off"
-        autoComplete="off"
-        onChange={onInput}
-        onKeyDown={onKeydown}
-      />
+
+      <div className="ecb-body xpe-scroll">
+        <div className="ecb-layer">
+          <pre className="ecb-highlight hljs" aria-hidden="true">
+            <code dangerouslySetInnerHTML={{ __html: linesHtml }} />
+          </pre>
+          <textarea
+            ref={textarea}
+            value={code}
+            readOnly={readonly}
+            className="ecb-input"
+            rows={1}
+            wrap={wrap ? 'soft' : 'off'}
+            placeholder={t.placeholder}
+            aria-label={`${t.language}: ${codeLanguageLabel(language)}`}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            autoComplete="off"
+            onChange={(e) => !readonly && onPatch({ code: e.target.value })}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+          />
+        </div>
+      </div>
+      {!readonly && <span className="ecb-hint">{t.exitHint.replace(/^Ctrl\+/, modKeyLabel())}</span>}
     </div>
   )
 })

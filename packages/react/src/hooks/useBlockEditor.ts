@@ -10,6 +10,9 @@ import {
   getBlockSubtreeLength,
   getDocumentStats,
   sanitizeBlocks,
+  resolveEditorAnchor,
+  createBlockHistory,
+  reconcileBlocks,
   applyMarkToRange,
   applyMarkToTextRange,
   blocksToClipboardPayload,
@@ -48,6 +51,7 @@ import {
   selectionEndOffset,
   normalizeSpans,
   normalizeTableData,
+  addTableRow,
   nextVisibleCellCoord,
   parseBlocksFromClipboardData,
   pasteBlocksIntoTextBlock,
@@ -70,6 +74,9 @@ import type {
   AICommand,
   AITransport,
   Block,
+  BlockHistory,
+  CollabPeer,
+  CollabSession,
   BlockKeyboardAction,
   BlockType,
   DocHeading,
@@ -120,6 +127,8 @@ export interface UseBlockEditorOptions {
   spellCheck?: boolean
   /** Focus the editor on mount (`true` = end of document). */
   autofocus?: boolean | 'start' | 'end'
+  /** Real-time collaboration session from `createCollabSession` (see docs/collaboration.md). */
+  collaboration?: CollabSession
 }
 
 interface SlashState {
@@ -234,7 +243,10 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     tab: 'emoji' | 'icon'
   } | null>(null)
   const [bubble, setBubble] = useState<BubbleState | null>(null)
-  const [aiMenu, setAiMenu] = useState<{ position: { x: number; y: number } } | null>(null)
+  const [aiMenu, setAiMenu] = useState<{
+    position: { x: number; y: number; top?: number }
+    anchorBlockId: string | null
+  } | null>(null)
   /** Bumped by Mod+K — toolbars open their link editor when it changes. */
   const [linkRequest, setLinkRequest] = useState(0)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -300,14 +312,15 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   }
 
   // ─── History (undo / redo) ────────────────────────────────────────────────
-  const historyRef = useRef<string[]>([])
-  const historyIndexRef = useRef(0)
+  // Block-level steps (`createBlockHistory`): only changed blocks are stored,
+  // and undo keeps every untouched block object — so its row skips render.
+  const historyRef = useRef<BlockHistory | null>(null)
+  historyRef.current ??= createBlockHistory()
+  const history = historyRef.current
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [, setHistoryTick] = useState(0)
-
-  function snapshot(): string {
-    return JSON.stringify(blocksRef.current)
-  }
+  const collaborationRef = useRef(options.collaboration)
+  collaborationRef.current = options.collaboration
 
   function commitSnapshot() {
     if (historyTimerRef.current) {
@@ -315,22 +328,19 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       historyTimerRef.current = null
     }
 
-    const snap = snapshot()
-    if (historyRef.current[historyIndexRef.current] === snap) return
+    if (history.commit(blocksRef.current)) setHistoryTick((t) => t + 1)
+  }
 
-    historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1)
-    historyRef.current.push(snap)
-
-    if (historyRef.current.length > 200) historyRef.current.shift()
-
-    historyIndexRef.current = historyRef.current.length - 1
-    setHistoryTick((t) => t + 1)
+  /** Notify the host (a fresh array, safe to keep in state) and collaborators. */
+  function emitChange() {
+    onChangeRef.current?.(blocksRef.current.slice())
+    collaborationRef.current?.update(blocksRef.current)
   }
 
   function pushHistory(immediate = false) {
     if (readonly) return
 
-    onChangeRef.current?.(blocksRef.current)
+    emitChange()
 
     if (immediate) {
       commitSnapshot()
@@ -344,29 +354,33 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
   /** Bumps a re-render + notifies `onChange` without committing an undo step (mirrors bare `contentRevision++`). */
   function bumpRevision() {
-    onChangeRef.current?.(blocksRef.current)
+    emitChange()
     rerender()
   }
 
-  function restoreSnapshot(json: string) {
-    const arr = JSON.parse(json) as Block[]
-    blocksRef.current = arr
+  function restoreBlocks(next: Block[]) {
+    blocksRef.current = next
     ensureNotEmpty()
-    onChangeRef.current?.(blocksRef.current)
+    emitChange()
+    setHistoryTick((t) => t + 1)
     rerender()
   }
 
   function undo() {
-    if (historyTimerRef.current) commitSnapshot()
-    if (historyIndexRef.current <= 0) return
-    historyIndexRef.current -= 1
-    restoreSnapshot(historyRef.current[historyIndexRef.current])
+    if (historyTimerRef.current) {
+      clearTimeout(historyTimerRef.current)
+      historyTimerRef.current = null
+    }
+
+    const next = history.undo(blocksRef.current)
+    if (next) restoreBlocks(next)
   }
 
   function redo() {
-    if (historyIndexRef.current >= historyRef.current.length - 1) return
-    historyIndexRef.current += 1
-    restoreSnapshot(historyRef.current[historyIndexRef.current])
+    if (historyTimerRef.current) commitSnapshot()
+
+    const next = history.redo(blocksRef.current)
+    if (next) restoreBlocks(next)
   }
 
   function resetHistory() {
@@ -375,8 +389,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       historyTimerRef.current = null
     }
 
-    historyRef.current = [snapshot()]
-    historyIndexRef.current = 0
+    history.reset(blocksRef.current)
   }
 
   function ensureNotEmpty() {
@@ -403,8 +416,61 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     }
   }, [])
 
-  const canUndo = historyIndexRef.current > 0 || historyTimerRef.current !== null
-  const canRedo = historyIndexRef.current < historyRef.current.length - 1
+  const canUndo = history.canUndo() || historyTimerRef.current !== null
+  const canRedo = history.canRedo()
+
+  // ─── Collaboration ────────────────────────────────────────────────────────
+
+  const [peers, setPeers] = useState<CollabPeer[]>([])
+
+  /**
+   * Apply a merged document from collaborators. Unchanged blocks keep their
+   * objects (no re-render), the caret survives, local pending edits become
+   * their own undo step, and remote edits are never undone locally.
+   */
+  function applyRemoteBlocks(next: Block[]) {
+    const merged = reconcileBlocks(blocksRef.current, next)
+    if (!merged) return
+
+    commitSnapshot()
+    blocksRef.current = merged
+    ensureNotEmpty()
+    history.rebase(blocksRef.current)
+
+    if (focusedBlockId && !byId(focusedBlockId)) setFocusedBlockId(null)
+    if (selectedBlockId && !byId(selectedBlockId)) setSelectedBlockId(null)
+
+    onChangeRef.current?.(blocksRef.current.slice())
+    rerender()
+  }
+
+  const applyRemoteRef = useRef(applyRemoteBlocks)
+  applyRemoteRef.current = applyRemoteBlocks
+
+  useEffect(() => {
+    const session = options.collaboration
+    if (!session) return
+
+    // The session is the source of truth: show the room's document (or
+    // seed an empty session with ours).
+    const initial = session.getBlocks()
+    if (initial.length) applyRemoteRef.current(initial)
+    else session.update(blocksRef.current)
+    setPeers(session.getPeers())
+    const offChange = session.onChange((blocks) => applyRemoteRef.current(blocks))
+    const offPeers = session.onPeers(setPeers)
+
+    return () => {
+      offChange()
+      offPeers()
+      session.setPresence(null)
+      setPeers([])
+    }
+  }, [options.collaboration])
+
+  useEffect(() => {
+    options.collaboration?.setPresence(focusedBlockId ?? selectedBlockId ?? null)
+  }, [options.collaboration, focusedBlockId, selectedBlockId])
 
   // ─── Focus / selection helpers ────────────────────────────────────────────
 
@@ -724,12 +790,24 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     })
   }
 
-  function openAIMenu(position?: { x: number; y: number }) {
+  /**
+   * Open Ask AI at `position` (viewport anchor line: opens below `y`, flips
+   * above `top`). Without one — toolbar button, block menu — anchor on the
+   * caret if it is in the editor, else on the focused/selected block, never
+   * on a hard-coded corner.
+   */
+  function openAIMenu(position?: { x: number; y: number; top?: number }) {
     if (!ai?.transport || readonly) return
+    const anchorBlockId =
+      focusedBlockId ?? selectedBlockId ?? textRangeSelectionRef.current?.focus.blockId ?? null
     closeSlash()
     setBubble(null)
-    const pos = position ?? slashPosition()
-    setAiMenu({ position: { x: pos.x, y: pos.y } })
+    let pos = position
+    if (!pos) {
+      const anchor = resolveEditorAnchor(rootRef.current, anchorBlockId)
+      pos = { x: anchor.x, y: anchor.bottom, top: anchor.top }
+    }
+    setAiMenu({ position: pos, anchorBlockId })
   }
 
   function closeAIMenu() {
@@ -775,7 +853,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     if (item.action === 'ai') {
       const pos = state.position
       closeSlash()
-      openAIMenu({ x: pos.x, y: pos.y })
+      openAIMenu({ x: pos.x, y: pos.y, top: pos.top })
       return
     }
 
@@ -1631,7 +1709,18 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   function handleTableTab(block: Block, payload: { row: number; col: number; shift: boolean }) {
     const table = normalizeTableData(block.props.table)
     const next = nextVisibleCellCoord(table, payload.row, payload.col, payload.shift ? -1 : 1)
-    if (!next) return
+
+    if (!next) {
+      // Tab in the last cell adds a row, like a spreadsheet.
+      if (payload.shift) return
+      const grown = addTableRow(table)
+      const row = grown.rows.length - 1
+      patchProps(block, { table: grown })
+      setFocusedTableCell({ blockId: block.id, row, col: 0 })
+      setTableSelectedCells([{ row, col: 0 }])
+      afterRender(() => itemRefs.current.get(block.id)?.focusTableCell?.(row, 0, 'start'))
+      return
+    }
 
     setFocusedTableCell({ blockId: block.id, row: next.row, col: next.col })
     setTableSelectedCells([{ row: next.row, col: next.col }])
@@ -2139,8 +2228,10 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   }
 
   function onBubbleAskAI() {
-    const pos = bubble?.position
-    openAIMenu(pos ? { x: pos.x, y: pos.y } : undefined)
+    // Anchor on the selected text itself (the bubble sits above it), so the
+    // menu opens right below the selection instead of covering it.
+    const rect = getSelectionClientRect()
+    openAIMenu(rect ? { x: rect.left, y: rect.bottom, top: rect.top } : undefined)
   }
 
   function onBubbleTurnInto(type: BlockType) {
@@ -2985,6 +3076,12 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     resetSelectAllStage()
 
+    // A press inside a native field of a non-text block (code textarea,
+    // table cell, caption/URL inputs, selects) belongs to that field: its
+    // own text selection and shift-extend must work, and starting the
+    // cross-block drag-select here would steal focus and select the block.
+    if (!isTextBlock(block.type) && isNativeInputTarget(target)) return
+
     // Text blocks handle shift-extend via selection-pointer-down on `.etb`.
     if (e.shiftKey && !target.closest('.etb')) {
       const point = rootRef.current
@@ -3376,6 +3473,9 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     closeAIMenu,
     getAISelectionBlocks,
     replaceDocumentBlocks,
+    peers,
+    version,
+    applyRemoteBlocks,
     focusFirst: () => focus('start'),
     focusEnd: () => focus('end'),
     focus,

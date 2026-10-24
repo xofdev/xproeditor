@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, toRef } from 'vue'
-import type { AICommand, AITransport, Block, BlockPatch, DocumentStats, EditorDictionaryOverrides, EditorFocusTarget } from '@xproeditor/core'
+import type { AICommand, AITransport, Block, CollabSession, BlockPatch, DocumentStats, EditorDictionaryOverrides, EditorFocusTarget } from '@xproeditor/core'
 import { provideEditorI18n } from '../i18n'
 import BlockEditor from './BlockEditor.vue'
 import EditorFormatToolbar from './EditorFormatToolbar.vue'
@@ -48,6 +48,12 @@ const props = withDefaults(
     locale?: string
     /** Override any UI string, or supply a whole new language. */
     dictionary?: EditorDictionaryOverrides
+    /**
+     * Real-time collaboration: a session from `createCollabSession`. The
+     * editor shows the session's document, broadcasts local edits and
+     * renders collaborators' presence.
+     */
+    collaboration?: CollabSession
   }>(),
   {
     toolbar: 'floating',
@@ -57,6 +63,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   change: []
+  'update:modelValue': [blocks: Block[]]
   /** `upload` rejected for a pasted/dropped file (the file is skipped). */
   'upload-error': [error: unknown, file: File]
 }>()
@@ -71,6 +78,8 @@ const showBubbleToolbar = () => props.toolbar === 'floating' || props.toolbar ==
 
 defineExpose({
   undo: () => editorRef.value?.undo(),
+  canUndo: () => editorRef.value?.canUndo ?? false,
+  canRedo: () => editorRef.value?.canRedo ?? false,
   redo: () => editorRef.value?.redo(),
   openAIMenu: () => editorRef.value?.openAIMenu(),
   focusFirst: () => editorRef.value?.focusFirst(),
@@ -128,7 +137,9 @@ defineExpose({
       :autofocus="autofocus"
       :locale="locale"
       :dictionary="dictionary"
+      :collaboration="collaboration"
       @change="emit('change')"
+      @update:model-value="(blocks) => emit('update:modelValue', blocks)"
       @upload-error="(error, file) => emit('upload-error', error, file)"
       @format-state="formatState = $event"
     />

@@ -105,6 +105,28 @@ function seed(): Block[] {
     createBlock('callout', {
       content: [{ text: 'Callouts, tables, images, videos, bookmarks, and code blocks are all supported.' }],
     }),
+    createBlock('heading_2', { content: [{ text: 'Code & tables' }] }),
+    createBlock('code', {
+      props: {
+        language: 'typescript',
+        caption: 'editor.ts',
+        lineNumbers: true,
+        code: "import { ProEditor, createBlock } from '@xproeditor/react'\n\nexport function save(blocks: Block[]) {\n  // Persist the document anywhere\n  return fetch('/api/doc', { method: 'PUT', body: JSON.stringify(blocks) })\n}",
+      },
+    }),
+    createBlock('table', {
+      props: {
+        table: {
+          hasHeader: true,
+          rows: [
+            [{ content: [{ text: 'Feature' }] }, { content: [{ text: 'Vue' }] }, { content: [{ text: 'React' }] }],
+            [{ content: [{ text: 'Collaboration' }] }, { content: [{ text: '✓' }] }, { content: [{ text: '✓' }] }],
+            [{ content: [{ text: 'Ask AI' }] }, { content: [{ text: '✓' }] }, { content: [{ text: '✓' }] }],
+            [{ content: [{ text: 'RTL' }] }, { content: [{ text: '✓' }] }, { content: [{ text: '✓' }] }],
+          ],
+        },
+      },
+    }),
     createBlock('heading_2', { content: [{ text: 'Embeds' }] }),
     createBlock('embed', { props: { url: 'https://codepen.io/team/codepen/pen/PNaGbb', height: 320 } }),
     createBlock('heading_2', { content: [{ text: 'Links' }] }),

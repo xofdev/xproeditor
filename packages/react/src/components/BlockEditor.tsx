@@ -1,10 +1,11 @@
 import { forwardRef, memo, useCallback, useImperativeHandle, useRef, type MutableRefObject } from 'react'
-import type { AICommand, AITransport, Block, EditorDocumentApi, InlineSpan } from '@xproeditor/core'
+import type { AICommand, AITransport, Block, CollabSession, EditorDocumentApi, InlineSpan } from '@xproeditor/core'
 import { useBlockEditor, type UseBlockEditorOptions } from '../hooks/useBlockEditor'
 import { AIMenu } from './AIMenu'
 import { BlockItem, type BlockItemProps } from './BlockItem'
 import { BubbleToolbar } from './BubbleToolbar'
 import { EmojiTriggerMenu } from './EmojiTriggerMenu'
+import { PresenceLayer } from './PresenceLayer'
 import { SlashMenu } from './SlashMenu'
 import type { FormatToolbarState } from '../types'
 import { EditorI18nProvider, type EditorI18nProps } from '../i18n'
@@ -38,6 +39,8 @@ export interface BlockEditorProps {
   locale?: EditorI18nProps['locale']
   /** Override any UI string, or supply a whole new language. */
   dictionary?: EditorI18nProps['dictionary']
+  /** Real-time collaboration session from `createCollabSession`. */
+  collaboration?: CollabSession
 }
 
 export interface BlockEditorHandle extends EditorDocumentApi {
@@ -93,10 +96,12 @@ const BlockEditorInner = forwardRef<
     placeholder,
     spellCheck,
     autofocus,
+    collaboration,
   },
   ref,
 ) {
   const ed = useBlockEditor({
+    collaboration,
     onUploadError,
     placeholder,
     spellCheck,
@@ -162,6 +167,8 @@ const BlockEditorInner = forwardRef<
       onDrop={ed.onDrop}
       onDragEnd={ed.onDragEnd}
     >
+      {ed.peers.length > 0 && <PresenceLayer peers={ed.peers} root={ed.rootRef.current} revision={ed.version} />}
+
       {ed.visibleBlocks.map((block) => {
         const highlight = ed.textHighlightForBlock(block.id)
 
@@ -248,6 +255,14 @@ const BlockEditorInner = forwardRef<
         <AIMenu
           open
           position={ed.aiMenu.position}
+          anchorElement={
+            ed.aiMenu.anchorBlockId
+              ? ed.rootRef.current?.querySelector<HTMLElement>(
+                  `[data-block-id="${CSS.escape(ed.aiMenu.anchorBlockId)}"]`,
+                )
+              : null
+          }
+          dir={ed.editorDir}
           transport={ed.ai.transport}
           commands={ed.ai.commands}
           blocks={ed.blocks}

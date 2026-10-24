@@ -130,6 +130,10 @@ export interface EditorDictionary {
     copy: string
     copied: string
     exitHint: string
+    lineNumbers: string
+    hideLineNumbers: string
+    fileName: string
+    detected: string
   }
   table: {
     addRow: string
@@ -158,6 +162,29 @@ export interface EditorDictionary {
     resetTableBackground: string
     resetHeaderBackground: string
     preview: string
+    headerRow: string
+    headerColumn: string
+    rowActions: string
+    columnActions: string
+    insertAbove: string
+    insertBelow: string
+    insertLeft: string
+    insertRight: string
+    moveUp: string
+    moveDown: string
+    moveLeft: string
+    moveRight: string
+    duplicate: string
+    clearContents: string
+    deleteRow: string
+    deleteColumn: string
+    sortAscending: string
+    sortDescending: string
+    alignLeft: string
+    alignCenter: string
+    alignRight: string
+    resizeColumn: string
+    mergedHint: string
     width: string
     style: string
     resetBorder: string
@@ -428,6 +455,10 @@ export const EN_DICTIONARY: EditorDictionary = {
     copy: 'Copy code',
     copied: 'Copied',
     exitHint: 'Ctrl+↵ exit',
+    lineNumbers: 'Show line numbers',
+    hideLineNumbers: 'Hide line numbers',
+    fileName: 'File name',
+    detected: 'Detected',
   },
   table: {
     addRow: 'Add row',
@@ -456,6 +487,29 @@ export const EN_DICTIONARY: EditorDictionary = {
     resetTableBackground: 'Reset table background',
     resetHeaderBackground: 'Reset header background',
     preview: 'Preview',
+    headerRow: 'Header row',
+    headerColumn: 'Header column',
+    rowActions: 'Row options',
+    columnActions: 'Column options',
+    insertAbove: 'Insert above',
+    insertBelow: 'Insert below',
+    insertLeft: 'Insert left',
+    insertRight: 'Insert right',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    moveLeft: 'Move left',
+    moveRight: 'Move right',
+    duplicate: 'Duplicate',
+    clearContents: 'Clear contents',
+    deleteRow: 'Delete row',
+    deleteColumn: 'Delete column',
+    sortAscending: 'Sort A → Z',
+    sortDescending: 'Sort Z → A',
+    alignLeft: 'Align left',
+    alignCenter: 'Align center',
+    alignRight: 'Align right',
+    resizeColumn: 'Drag to resize · double-click to reset',
+    mergedHint: 'Unmerge cells to move or sort',
     width: 'Width',
     style: 'Style',
     resetBorder: 'Reset border',
@@ -726,6 +780,10 @@ export const FA_DICTIONARY: EditorDictionary = {
     copy: 'کپی کد',
     copied: 'کپی شد',
     exitHint: 'Ctrl+↵ خروج',
+    lineNumbers: 'نمایش شماره خطوط',
+    hideLineNumbers: 'پنهان کردن شماره خطوط',
+    fileName: 'نام فایل',
+    detected: 'تشخیص داده شد',
   },
   table: {
     addRow: 'افزودن سطر',
@@ -754,6 +812,29 @@ export const FA_DICTIONARY: EditorDictionary = {
     resetTableBackground: 'بازنشانی پس‌زمینه جدول',
     resetHeaderBackground: 'بازنشانی پس‌زمینه سرستون',
     preview: 'پیش‌نمایش',
+    headerRow: 'سطر سرستون',
+    headerColumn: 'ستون سرستون',
+    rowActions: 'گزینه‌های سطر',
+    columnActions: 'گزینه‌های ستون',
+    insertAbove: 'درج در بالا',
+    insertBelow: 'درج در پایین',
+    insertLeft: 'درج در چپ',
+    insertRight: 'درج در راست',
+    moveUp: 'انتقال به بالا',
+    moveDown: 'انتقال به پایین',
+    moveLeft: 'انتقال به چپ',
+    moveRight: 'انتقال به راست',
+    duplicate: 'تکثیر',
+    clearContents: 'پاک کردن محتوا',
+    deleteRow: 'حذف سطر',
+    deleteColumn: 'حذف ستون',
+    sortAscending: 'مرتب‌سازی صعودی',
+    sortDescending: 'مرتب‌سازی نزولی',
+    alignLeft: 'چپ‌چین',
+    alignCenter: 'وسط‌چین',
+    alignRight: 'راست‌چین',
+    resizeColumn: 'برای تغییر عرض بکشید · دوبار کلیک برای بازنشانی',
+    mergedHint: 'برای جابه‌جایی یا مرتب‌سازی، ادغام خانه‌ها را بردارید',
     width: 'عرض',
     style: 'سبک',
     resetBorder: 'بازنشانی حاشیه',

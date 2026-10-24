@@ -10,6 +10,7 @@ import {
   elementToSpans,
   spansToHtml,
   normalizeSpans,
+  parseClipboardGrid,
 } from '@xproeditor/core'
 import type { InlineSpan, MarkName, TableCell, TableCellAlign } from '@xproeditor/core'
 
@@ -33,6 +34,8 @@ const emit = defineEmits<{
   arrowLeft: []
   arrowRight: []
   cellClick: [payload: { row: number; col: number; shiftKey: boolean }]
+  /** A multi-cell paste from a spreadsheet (TSV or HTML table). */
+  pasteGrid: [grid: string[][]]
   cellPointerDown: [payload: {
     row: number
     col: number
@@ -105,6 +108,27 @@ function onInput() {
   lastJson = JSON.stringify(spans)
   const caret = getSelectionOffsets(el.value)?.start ?? null
   emit('input', spans, caret)
+}
+
+/**
+ * Never let the browser paste raw HTML into the cell: a spreadsheet range
+ * fills the cells around this one, anything else goes in as plain text.
+ */
+function onPaste(e: ClipboardEvent) {
+  if (props.readonly || !e.clipboardData) {
+    return
+  }
+
+  const text = e.clipboardData.getData('text/plain')
+  const grid = parseClipboardGrid(text, e.clipboardData.getData('text/html'))
+  e.preventDefault()
+
+  if (grid) {
+    emit('pasteGrid', grid)
+    return
+  }
+
+  document.execCommand('insertText', false, text.replace(/\r?\n/g, ' '))
 }
 
 function onPointerDown(e: PointerEvent) {
@@ -248,11 +272,8 @@ defineExpose({ focusAt, getSelection, setSelection, el })
 <template>
   <component
     :is="isHeader ? 'th' : 'td'"
-    class="etc-cell border border-[var(--xpe-border)] p-0 relative min-w-[100px] align-top"
-    :class="[
-      isHeader ? 'bg-[var(--xpe-muted)]' : '',
-      selected ? 'ring-2 ring-[var(--xpe-ring)] ring-inset' : '',
-    ]"
+    class="etc-cell"
+    :class="{ 'etc-cell--header': isHeader, 'etc-cell--selected': selected }"
     :style="cellStyle"
     :data-etable-row="rowIdx"
     :data-etable-col="colIdx"
@@ -263,8 +284,7 @@ defineExpose({ focusAt, getSelection, setSelection, el })
     <div
       ref="el"
       :contenteditable="!readonly"
-      class="etc-editor outline-none w-full px-3 py-2 text-sm text-[var(--xpe-foreground)] min-h-[2.25rem]"
-      :class="isHeader ? 'font-semibold text-[var(--xpe-foreground)]' : ''"
+      class="etc-editor"
       :style="cell.align ? { textAlign: cell.align as TableCellAlign } : undefined"
       dir="auto"
       spellcheck="false"
@@ -272,16 +292,12 @@ defineExpose({ focusAt, getSelection, setSelection, el })
       @pointerdown="onPointerDown"
       @focus="onFocus"
       @keydown="onKeydown"
+      @paste="onPaste"
     />
   </component>
 </template>
 
 <style scoped>
-.etc-editor {
-  white-space: pre-wrap;
-  word-break: break-word;
-  caret-color: var(--xpe-primary, #4f46e5);
-}
 .etc-editor:empty::before {
   content: ' ';
   pointer-events: none;

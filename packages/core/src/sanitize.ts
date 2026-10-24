@@ -210,6 +210,12 @@ function sanitizeProps(raw: unknown): BlockProps {
     }
   }
 
+  for (const key of ['checked', 'collapsed', 'wrap', 'lineNumbers', 'openInNewTab'] as const) {
+    if (props[key] !== undefined && typeof props[key] !== 'boolean') {
+      delete props[key]
+    }
+  }
+
   return props
 }
 

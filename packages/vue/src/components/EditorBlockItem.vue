@@ -375,10 +375,10 @@ defineExpose({
             >
               <ChevronRight
                 :size="14"
-                class="shrink-0 transition-transform"
+                class="xpe-chevron"
                 :class="{
-                  'rotate-90': !block.props.collapsed,
-                  'ebi-chevron-rtl': isRtl,
+                  'xpe-chevron--rtl': isRtl,
+                  'xpe-chevron--open': !block.props.collapsed,
                 }"
               />
             </button>

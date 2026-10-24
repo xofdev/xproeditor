@@ -71,3 +71,27 @@ plain text. `snake_case` and `2*3*4` are left alone.
 | `Escape` | Clear a multi-block selection / close menus |
 | `/` | Slash menu |
 | `:` | Inline emoji search |
+
+## Code blocks
+
+| Keys | Action |
+| --- | --- |
+| `Tab` / `Shift+Tab` | Indent / outdent the selected lines |
+| `Enter` | New line keeping the indentation (one level deeper after `{`, `[`, `(` or `:`) |
+| `Shift+Enter` | Plain new line |
+| `Mod+/` | Toggle line comments (languages with a line-comment syntax) |
+| `Mod+Enter` | Leave the block (new paragraph below) |
+| `Backspace` in an empty block | Remove it |
+
+Pasting code into an empty *Plain text* block detects the language.
+
+## Tables
+
+| Keys / gesture | Action |
+| --- | --- |
+| `Tab` / `Shift+Tab` | Next / previous cell — `Tab` in the last cell adds a row |
+| Arrow keys at a cell edge | Move to the neighbouring cell |
+| Drag across cells, or `Shift+click` | Select a range (merge from the toolbar) |
+| Row / column handle (hover) | Insert, move, duplicate, sort, align, clear or delete |
+| Drag a column border | Resize the column; double-click it to reset |
+| Paste a range from Excel / Google Sheets | Fills the cells from the caret, adding rows and columns as needed |
