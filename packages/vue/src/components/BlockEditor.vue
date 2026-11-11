@@ -71,6 +71,8 @@ import {
   blockColumn,
   columnsOwnerIndex,
   getColumnsGroupLength,
+  placementProps,
+  columnArrowTarget,
   columnTemplate,
   columnGap,
   columnAlign,
@@ -956,7 +958,7 @@ return
     const defaults = makeBlock(item.type)
     block.type = item.type
     block.content = spans
-    block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+    block.props = { ...defaults.props, ...placementProps(block.props) }
     pushHistory(true)
     focusBlock(block.id, Math.min(state.index, spansToText(spans).length))
 
@@ -968,6 +970,11 @@ return
   }
 
   const newBlock = makeBlock(item.type)
+
+  // An image, video, table… added in a column stays in that column.
+  if (blockColumn(block) !== null) {
+    newBlock.props.column = block.props.column
+  }
 
   if (spansToText(spans).trim() === '') {
     const idx = blocks.value.indexOf(block)
@@ -1088,7 +1095,8 @@ return false
     const defaults = makeBlock('code')
     block.type = 'code'
     block.content = []
-    block.props = { ...defaults.props, indent: block.props.indent }
+    block.props = { ...defaults.props, ...placementProps(block.props) }
+    delete block.props.dir
     pushHistory(true)
     focusBlock(block.id, 'start')
 
@@ -1099,7 +1107,7 @@ return false
     block.type = 'divider'
     block.content = []
     const idx = blocks.value.indexOf(block)
-    const nb = makeBlock('paragraph')
+    const nb = makeBlock('paragraph', blockColumn(block) !== null ? { props: { column: block.props.column } } : {})
     blocks.value.splice(idx + 1, 0, nb)
     pushHistory(true)
     focusBlock(nb.id, 'start')
@@ -1120,8 +1128,7 @@ return false
     block.props = {
       ...defaults.props,
       ...match.props,
-      indent: block.props.indent,
-      dir: block.props.dir,
+      ...placementProps(block.props),
     }
     pushHistory(true)
     focusBlock(block.id, 'start')
@@ -1388,7 +1395,9 @@ block.props.indent = next
 }
 
 function handleArrow(block: Block, dir: 1 | -1) {
-  const neighbor = neighborBlock(block.id, dir)
+  // Arrows follow the layout: up/down within a column, out of a group at its edges.
+  const list = visibleBlocks.value
+  const neighbor = list[columnArrowTarget(list, list.indexOf(block), dir)] ?? null
 
   if (!neighbor) {
 return
@@ -1860,7 +1869,7 @@ function turnBlockInto(block: Block, type: BlockType) {
   if (props.readonly || !isTextBlock(block.type)) return
   const defaults = makeBlock(type)
   block.type = type
-  block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+  block.props = { ...defaults.props, ...placementProps(block.props) }
   pushHistory(true)
   selectBlock(block.id)
 }
@@ -2604,7 +2613,7 @@ function turnIntoBlock(type: BlockType) {
       if (!block || !isTextBlock(block.type)) continue
       const defaults = makeBlock(type)
       block.type = type
-      block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+      block.props = { ...defaults.props, ...placementProps(block.props) }
       changed = true
     }
 
@@ -2628,7 +2637,7 @@ function turnIntoBlock(type: BlockType) {
   const range = state?.range ?? itemRefs.get(block.id)?.getSelection() ?? { start: 0, end: 0 }
   const defaults = makeBlock(type)
   block.type = type
-  block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+  block.props = { ...defaults.props, ...placementProps(block.props) }
   pushHistory(true)
   nextTick(() => itemRefs.get(block.id)?.setSelection(range.start, range.end))
 }
@@ -3368,8 +3377,7 @@ function turnIntoKeepingCaret(block: Block, type: BlockType): boolean {
   block.type = target
   block.props = {
     ...defaults.props,
-    indent: block.props.indent,
-    dir: block.props.dir,
+    ...placementProps(block.props),
     align: block.props.align,
   }
   pushHistory(true)
@@ -3827,7 +3835,9 @@ return
 
   const last = blocks.value[blocks.value.length - 1]
 
-  if (last && last.type === 'paragraph' && spansToText(last.content) === '') {
+  // Below a columns group, the tail starts a new top-level paragraph rather than
+  // reusing the empty placeholder of the last column.
+  if (last && last.type === 'paragraph' && spansToText(last.content) === '' && blockColumn(last) === null) {
     focusBlock(last.id, 'start')
 
     return
@@ -3912,6 +3922,16 @@ return props.placeholder ?? dict.value.placeholders.focused
 
   if (blocks.value.length === 1 && spansToText(block.content) === '') {
     return dict.value.placeholders.emptyDocument
+  }
+
+  // An empty column says what it is for, so a new group never looks like a gap.
+  const column = blockColumn(block)
+  if (column !== null && spansToText(block.content) === '') {
+    const idx = blocks.value.indexOf(block)
+    const owner = columnsOwnerIndex(blocks.value, idx)
+    const end = owner === -1 ? idx + 1 : owner + getColumnsGroupLength(blocks.value, owner)
+    const alone = blocks.value.slice(owner + 1, end).filter(b => blockColumn(b) === column).length === 1
+    if (alone) return dict.value.columns.emptyColumn.replace('{n}', String(column + 1))
   }
 
   return undefined

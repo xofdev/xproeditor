@@ -80,6 +80,8 @@ import {
   blockColumn,
   columnsOwnerIndex,
   getColumnsGroupLength,
+  placementProps,
+  columnArrowTarget,
 } from '@xproeditor/core'
 import type {
   AICommand,
@@ -946,7 +948,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       const defaults = makeBlockLocal(item.type)
       block.type = item.type
       block.content = spans
-      block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+      block.props = { ...defaults.props, ...placementProps(block.props) }
       pushHistory(true)
       focusBlock(block.id, Math.min(state.index, spansToText(spans).length))
 
@@ -956,6 +958,11 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     }
 
     const newBlock = makeBlockLocal(item.type)
+
+    // An image, video, table… added in a column stays in that column.
+    if (blockColumn(block) !== null) {
+      newBlock.props.column = block.props.column
+    }
 
     if (spansToText(spans).trim() === '') {
       const idx = blocksRef.current.indexOf(block)
@@ -1038,7 +1045,8 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       const defaults = makeBlockLocal('code')
       block.type = 'code'
       block.content = []
-      block.props = { ...defaults.props, indent: block.props.indent }
+      block.props = { ...defaults.props, ...placementProps(block.props) }
+      delete block.props.dir
       pushHistory(true)
       focusBlock(block.id, 'start')
       return true
@@ -1048,7 +1056,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       block.type = 'divider'
       block.content = []
       const idx = blocksRef.current.indexOf(block)
-      const nb = makeBlockLocal('paragraph')
+      const nb = makeBlockLocal('paragraph', blockColumn(block) !== null ? { props: { column: block.props.column } } : {})
       blocksRef.current.splice(idx + 1, 0, nb)
       pushHistory(true)
       focusBlock(nb.id, 'start')
@@ -1069,8 +1077,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       block.props = {
         ...defaults.props,
         ...match.props,
-        indent: block.props.indent,
-        dir: block.props.dir,
+        ...placementProps(block.props),
       }
       pushHistory(true)
       focusBlock(block.id, 'start')
@@ -1281,7 +1288,8 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   }
 
   function handleArrow(block: Block, dir: 1 | -1) {
-    const neighbor = neighborBlock(block.id, dir)
+    // Arrows follow the layout: up/down within a column, out of a group at its edges.
+    const neighbor = visibleBlocks[columnArrowTarget(visibleBlocks, visibleBlocks.indexOf(block), dir)] ?? null
     if (!neighbor) return
 
     if (isTextBlock(neighbor.type) || neighbor.type === 'code')
@@ -1686,7 +1694,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     if (readonly || !isTextBlock(block.type)) return
     const defaults = makeBlockLocal(type)
     block.type = type
-    block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+    block.props = { ...defaults.props, ...placementProps(block.props) }
     pushHistory(true)
     selectBlock(block.id)
   }
@@ -2379,7 +2387,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
         if (!block || !isTextBlock(block.type)) continue
         const defaults = makeBlockLocal(type)
         block.type = type
-        block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+        block.props = { ...defaults.props, ...placementProps(block.props) }
         changed = true
       }
 
@@ -2403,7 +2411,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       itemRefs.current.get(block.id)?.getSelection() ?? { start: 0, end: 0 }
     const defaults = makeBlockLocal(type)
     block.type = type
-    block.props = { ...defaults.props, indent: block.props.indent, dir: block.props.dir }
+    block.props = { ...defaults.props, ...placementProps(block.props) }
     pushHistory(true)
     afterRender(() => itemRefs.current.get(block.id)?.setSelection(range.start, range.end))
   }
@@ -2988,8 +2996,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     block.type = target
     block.props = {
       ...defaults.props,
-      indent: block.props.indent,
-      dir: block.props.dir,
+      ...placementProps(block.props),
       align: block.props.align,
     }
     pushHistory(true)
@@ -3376,7 +3383,9 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     const last = blocksRef.current[blocksRef.current.length - 1]
 
-    if (last && last.type === 'paragraph' && spansToText(last.content) === '') {
+    // Below a columns group, the tail starts a new top-level paragraph rather than
+    // reusing the empty placeholder of the last column.
+    if (last && last.type === 'paragraph' && spansToText(last.content) === '' && blockColumn(last) === null) {
       focusBlock(last.id, 'start')
       return
     }
@@ -3392,6 +3401,16 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     if (focusedBlockId === block.id) return options.placeholder ?? dict.placeholders.focused
     if (blocksRef.current.length === 1 && spansToText(block.content) === '') {
       return dict.placeholders.emptyDocument
+    }
+    // An empty column says what it is for, so a new group never looks like a gap.
+    const column = blockColumn(block)
+    if (column !== null && spansToText(block.content) === '') {
+      const list = blocksRef.current
+      const idx = list.indexOf(block)
+      const owner = columnsOwnerIndex(list, idx)
+      const end = owner === -1 ? idx + 1 : owner + getColumnsGroupLength(list, owner)
+      const alone = list.slice(owner + 1, end).filter((b) => blockColumn(b) === column).length === 1
+      if (alone) return dict.columns.emptyColumn.replace('{n}', String(column + 1))
     }
     return undefined
   }
