@@ -60,7 +60,23 @@ import {
   resolveEditorAnchor,
   createBlockHistory,
   reconcileBlocks,
+  ownsSubtree,
+  normalizeColumns,
+  fitInsertedBlocks,
+  groupColumns,
+  createColumnsGroup,
+  setColumnCount,
+  moveBlockToColumn,
+  unwrapColumns,
+  blockColumn,
+  columnsOwnerIndex,
+  getColumnsGroupLength,
+  columnTemplate,
+  columnGap,
+  columnAlign,
+  columnStack,
 } from '@xproeditor/core'
+import type { ColumnCount } from '@xproeditor/core'
 import type { CollabPeer, CollabSession, DocHeading, EditorDictionaryOverrides, BlockPatch, EditorFocusTarget, BlockKeyboardAction, PasteFocus, TextPoint, TextRangeSelection, Block, BlockType, InlineSpan, MarkName, SelectAllStage, TableCellCoord, TableCellAlign, TableStyle, AICommand, AITransport } from '@xproeditor/core'
 import EditorBlockItem from './EditorBlockItem.vue'
 import EditorBubbleToolbar from './EditorBubbleToolbar.vue'
@@ -479,12 +495,14 @@ function selectBlock(id: string) {
 const visibleBlocks = computed<Block[]>(() => {
   const out: Block[] = []
   let hideDeeperThan: number | null = null
+  let hideColumn: number | undefined
 
   for (const b of blocks.value) {
     const ind = b.props.indent ?? 0
 
     if (hideDeeperThan !== null) {
-      if (ind > hideDeeperThan) {
+      // A collapsed toggle hides its children only inside its own column.
+      if (ind > hideDeeperThan && b.props.column === hideColumn) {
 continue
 }
 
@@ -495,11 +513,23 @@ continue
 
     if (isToggleBlock(b.type) && b.props.collapsed) {
 hideDeeperThan = ind
+hideColumn = b.props.column
 }
   }
 
   return out
 })
+
+/** Top-level blocks and columns groups, for the template. */
+const layoutRows = computed(() => groupColumns(visibleBlocks.value.map((block, index) => ({ block, index }))))
+
+function columnsGroupStyle(block: Block): Record<string, string> {
+  return {
+    gridTemplateColumns: columnTemplate(block),
+    columnGap: `${columnGap(block)}px`,
+    alignItems: ({ top: 'start', center: 'center', bottom: 'end' } as const)[columnAlign(block)],
+  }
+}
 
 const numbering = computed<Map<string, number>>(() => computeListNumbering(visibleBlocks.value))
 
@@ -552,6 +582,8 @@ function pushHistory(immediate = false) {
     return
   }
 
+  // Keep columns groups valid after any edit (order, empty columns, strays).
+  normalizeColumns(blocks.value)
   emitChange()
 
   if (immediate) {
@@ -840,6 +872,31 @@ function replaceDocumentBlocks(next: Block[], focusId: string | null) {
   }
 }
 
+/**
+ * `/2 columns`, `/3 columns`: a new group with an empty paragraph per column,
+ * focused in the first. An empty line becomes the group; text stays above it.
+ * Inside a column the group goes after the current group (groups do not nest).
+ */
+function insertColumnsFromSlash(block: Block, spans: InlineSpan[], count: ColumnCount) {
+  const idx = blocks.value.indexOf(block)
+  if (idx === -1) return
+  const group = createColumnsGroup(count, { dir: blockDirOptions()?.defaultDir })
+  const owner = columnsOwnerIndex(blocks.value, idx)
+
+  block.content = spans
+
+  if (owner !== -1) {
+    blocks.value.splice(owner + getColumnsGroupLength(blocks.value, owner), 0, ...group)
+  } else if (spansToText(spans).trim() === '') {
+    blocks.value.splice(idx, 1, ...group)
+  } else {
+    blocks.value.splice(idx + 1, 0, ...group)
+  }
+
+  pushHistory(true)
+  focusBlock(group[1].id, 'start')
+}
+
 function onSlashSelect(item: SlashItem) {
   const state = slashState.value
 
@@ -887,6 +944,12 @@ return
 
   const removeEnd = state.index + 1 + state.query.length
   const spans = deleteRangeInSpans(block.content, state.index, removeEnd)
+
+  if (item.type === 'columns') {
+    insertColumnsFromSlash(block, spans, item.id === 'columns_3' ? 3 : 2)
+    return
+  }
+
   const isInsertType = ['divider', 'image', 'video', 'audio', 'file', 'table', 'code', 'bookmark', 'embed', 'table_of_contents'].includes(item.type)
 
   if (!isInsertType) {
@@ -1195,6 +1258,10 @@ newProps.indent = block.props.indent
 newProps.dir = block.props.dir
 }
 
+  if (blockColumn(block) !== null) {
+    newProps.column = block.props.column
+  }
+
   if (isToggleBlock(block.type)) {
     newProps.indent = (block.props.indent ?? 0) + 1
     block.props.collapsed = false
@@ -1237,6 +1304,20 @@ return
 return
 }
 
+  // Never merge across a column edge: an empty block there is removed instead
+  // (unless it keeps its column open), anything else stays.
+  if (prev.type === 'columns' || blockColumn(prev) !== blockColumn(block)) {
+    const column = blockColumn(block)
+    const sameColumn = blocks.value.filter(b => b !== block && column !== null && blockColumn(b) === column && columnsOwnerIndex(blocks.value, blocks.value.indexOf(b)) === columnsOwnerIndex(blocks.value, idx))
+    if (spansToText(block.content) === '' && (column === null || sameColumn.length > 0)) {
+      blocks.value.splice(idx, 1)
+      pushHistory(true)
+      if (prev.type === 'columns' || !isTextBlock(prev.type)) selectBlock(prev.id)
+      else focusBlock(prev.id, 'end')
+    }
+    return
+  }
+
   if (isTextBlock(prev.type)) {
     const prevLen = spansToText(prev.content).length
     prev.content = normalizeSpans([...prev.content, ...block.content])
@@ -1271,6 +1352,11 @@ function handleDeleteEnd(block: Block) {
   if (!next) {
 return
 }
+
+  // Never pull the next column's (or the group's) content into this block.
+  if (next.type === 'columns' || blockColumn(next) !== blockColumn(block)) {
+    return
+  }
 
   if (isTextBlock(next.type)) {
     const len = spansToText(block.content).length
@@ -1385,6 +1471,7 @@ async function insertFileBlocks(files: File[], at: number) {
     const nb = makeBlock(type, { props: { ...media, ...extra } })
     const anchorIdx = afterId ? blocks.value.findIndex(b => b.id === afterId) : -1
     const insertAt = afterId && anchorIdx === -1 ? Math.min(at, blocks.value.length) : anchorIdx + 1
+    fitInsertedBlocks(blocks.value, insertAt, [nb])
     blocks.value.splice(insertAt, 0, nb)
     afterId = nb.id
     inserted = true
@@ -1459,7 +1546,7 @@ function getBlocksForClipboard(): Block[] | null {
   if (selectedBlockId.value) {
     const block = byId(selectedBlockId.value)
     if (!block) return null
-    if (isToggleBlock(block.type)) {
+    if (ownsSubtree(block.type)) {
       const idx = blocks.value.indexOf(block)
       if (idx === -1) return [block]
       const len = getToggleSubtreeLength(blocks.value, idx)
@@ -1494,6 +1581,12 @@ function insertPastedInTextBlock(
 }
 
 function insertBlocksFromClipboard(pasted: Block[]) {
+  // Pasted blocks take the column they land in; a copied group pastes whole at
+  // the top level and is unwrapped inside a column (groups do not nest).
+  const anchorId = focusedBlockId.value ?? selectedBlockId.value
+  const anchorIdx = anchorId ? blocks.value.findIndex(b => b.id === anchorId) : blocks.value.length - 1
+  pasted = fitInsertedBlocks(blocks.value, anchorIdx + 1, pasted)
+
   if (pasted.length === 0) {
 return
 }
@@ -1705,14 +1798,21 @@ return
 }
 
   const idx = blocks.value.indexOf(block)
-  const nb = makeBlock('paragraph', { props: block.props.indent ? { indent: block.props.indent } : {} })
-  blocks.value.splice(idx + 1, 0, nb)
+  const nb = makeBlock('paragraph', {
+    props: {
+      ...(block.props.indent ? { indent: block.props.indent } : {}),
+      ...(blockColumn(block) !== null ? { column: block.props.column } : {}),
+    },
+  })
+  // Below a columns group means after the whole group.
+  const at = block.type === 'columns' ? idx + getColumnsGroupLength(blocks.value, idx) : idx + 1
+  blocks.value.splice(at, 0, nb)
   pushHistory(true)
   focusBlock(nb.id, 'start')
 }
 
 function blocksForToggleAction(block: Block): Block[] {
-  if (!isToggleBlock(block.type)) return [block]
+  if (!ownsSubtree(block.type)) return [block]
   const idx = blocks.value.indexOf(block)
   if (idx === -1) return [block]
   return cloneToggleSubtree(blocks.value, idx)
@@ -1777,13 +1877,13 @@ return
 }
 
   const prev = neighborBlock(block.id, -1)
-  const subtreeLen = isToggleBlock(block.type)
+  const subtreeLen = ownsSubtree(block.type)
     ? getToggleSubtreeLength(blocks.value, idx)
     : 1
   const afterIdx = idx + subtreeLen
   const next = afterIdx < blocks.value.length ? blocks.value[afterIdx] : null
 
-  if (isToggleBlock(block.type)) removeToggleSubtree(blocks.value, idx)
+  if (ownsSubtree(block.type)) removeToggleSubtree(blocks.value, idx)
   else blocks.value.splice(idx, 1)
 
   ensureNotEmpty()
@@ -1804,10 +1904,48 @@ selectedBlockId.value = null
 }
 
 function patchProps(block: Block, patch: Record<string, unknown>) {
+  // A new column count moves blocks between columns, not just a prop.
+  if (block.type === 'columns' && patch.columnCount !== undefined && patch.columnCount !== block.props.columnCount) {
+    const { columnCount: count, ...rest } = patch
+    Object.assign(block.props, rest)
+    setColumnCount(blocks.value, block.id, (Number(count) >= 3 ? 3 : 2) as ColumnCount)
+    pushHistory(true)
+    contentRevision.value++
+    return
+  }
+
   Object.assign(block.props, patch)
   // pushHistory already notifies the host and collaborators.
   pushHistory(true)
   contentRevision.value++
+}
+
+/** Block menu: move a block (and its nested children) into another column. */
+function moveToColumn(block: Block, column: number) {
+  if (props.readonly) return
+  if (moveBlockToColumn(blocks.value, block.id, column)) {
+    pushHistory(true)
+    if (isTextBlock(block.type)) focusBlock(block.id, 'end')
+    else selectBlock(block.id)
+  }
+}
+
+/** Columns toolbar: drop the group, keep its blocks in reading order. */
+function unwrapGroup(block: Block) {
+  if (props.readonly) return
+  const idx = blocks.value.indexOf(block)
+  if (unwrapColumns(blocks.value, block.id)) {
+    ensureNotEmpty()
+    pushHistory(true)
+    const first = blocks.value[Math.min(idx, blocks.value.length - 1)]
+    if (first) selectBlock(first.id)
+  }
+}
+
+/** Number of columns of the group a block sits in (0 outside a group). */
+function groupColumnCount(block: Block): number {
+  const owner = columnsOwnerIndex(blocks.value, blocks.value.indexOf(block))
+  return owner === -1 ? 0 : (blocks.value[owner].props.columnCount ?? 2)
 }
 
 function getTableCellContext(blockId: string) {
@@ -2956,7 +3094,15 @@ return
 e.dataTransfer.dropEffect = 'move'
 }
 
-  const target = (e.target as HTMLElement).closest('[data-block-id]')
+  let target = (e.target as HTMLElement).closest('[data-block-id]')
+  let below = false
+
+  // The empty space under a column's last block drops after that block.
+  if (!target) {
+    const items = (e.target as HTMLElement).closest('.xpe-column')?.querySelectorAll(':scope > [data-block-id]')
+    target = items?.length ? items[items.length - 1] : null
+    below = !!target
+  }
 
   if (!target) {
  dropTarget.value = null;
@@ -2973,7 +3119,7 @@ e.dataTransfer.dropEffect = 'move'
 }
 
   const rect = target.getBoundingClientRect()
-  const position = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+  const position = below || e.clientY >= rect.top + rect.height / 2 ? 'after' : 'before'
   dropTarget.value = { id, position }
 }
 
@@ -3021,9 +3167,15 @@ return
 }
 
   const fromBlock = blocks.value[fromIdx]
-  const moveLen = isToggleBlock(fromBlock.type)
+  const moveLen = ownsSubtree(fromBlock.type)
     ? getToggleSubtreeLength(blocks.value, fromIdx)
     : 1
+
+  // Groups do not nest: a columns group cannot be dropped inside a column.
+  const dropOn = byId(target.id)
+  if (fromBlock.type === 'columns' && dropOn && blockColumn(dropOn) !== null) {
+    return
+  }
 
   // Don't drop a toggle onto one of its own children.
   const targetIdxBefore = blocks.value.findIndex(b => b.id === target.id)
@@ -3045,13 +3197,18 @@ return
 
   if (target.position === 'after') {
     const targetBlock = blocks.value[toIdx]
-    const targetSpan = isToggleBlock(targetBlock.type)
+    const targetSpan = ownsSubtree(targetBlock.type)
       ? getToggleSubtreeLength(blocks.value, toIdx)
       : 1
     toIdx += targetSpan
   }
 
-  blocks.value.splice(toIdx, 0, ...moved)
+  // The moved block joins the column it lands in (or leaves its old one); a drop
+  // under a group's header lands after the whole group, at the top level.
+  const droppedOn = blocks.value.find(b => b.id === target.id)
+  const fitAnchor = target.position === 'before' || droppedOn?.type === 'columns' ? 'before' : 'after'
+  const fitted = fitInsertedBlocks(blocks.value, toIdx, moved, fitAnchor)
+  blocks.value.splice(toIdx, 0, ...fitted)
   pushHistory(true)
 }
 
@@ -3682,6 +3839,68 @@ return
   focusBlock(nb.id, 'start')
 }
 
+// ─── Block item bindings (shared by top-level blocks and column children) ─────
+
+function itemBindings(block: Block) {
+  return {
+    block,
+    number: numbering.value.get(block.id),
+    placeholder: placeholderFor(block),
+    selected: isBlockChromeSelected(block.id),
+    textHighlight: textHighlightForBlock(block.id),
+    dropPosition: dropTarget.value && dropTarget.value.id === block.id ? dropTarget.value.position : null,
+    upload: props.upload,
+    pickMedia: props.pickMedia,
+    fetchBookmarkMeta: props.fetchBookmarkMeta,
+    editorDir: props.editorDir,
+    readonly: props.readonly,
+    themeSource: rootEl.value,
+    class: { 'opacity-40': draggingId.value === block.id },
+    iconPickerRequest: iconPickerRequest.value && iconPickerRequest.value.blockId === block.id ? { tab: iconPickerRequest.value.tab } : null,
+    aiEnabled: typeof props.ai?.transport === 'function',
+    spellcheck: props.spellcheck !== false,
+    tocHeadings: block.type === 'table_of_contents' ? tocHeadings.value : undefined,
+    columnCount: blockColumn(block) !== null ? groupColumnCount(block) : 0,
+  }
+}
+
+function itemEvents(block: Block) {
+  return {
+    input: (s: InlineSpan[], c: number | null) => handleInput(block, s, c),
+    enter: (o: { start: number; end: number }) => handleEnter(block, o),
+    backspaceStart: () => handleBackspaceStart(block),
+    deleteEnd: () => handleDeleteEnd(block),
+    arrowUp: () => handleArrow(block, -1),
+    arrowDown: () => handleArrow(block, 1),
+    tab: (shift: boolean) => handleTab(block, shift),
+    format: (m: MarkName) => handleFormat(block, m),
+    pasted: (payload: Parameters<typeof handlePasted>[1]) => handlePasted(block, payload),
+    focus: () => onBlockFocus(block),
+    patch: (patch: Record<string, unknown>) => patchProps(block, patch),
+    iconPickerOpened: () => { iconPickerRequest.value = null },
+    select: () => selectBlock(block.id),
+    navigateToBlock,
+    addBelow: () => addBelow(block),
+    duplicate: () => duplicateBlock(block),
+    copy: () => void copyBlock(block),
+    cut: () => void cutBlock(block),
+    remove: () => removeBlock(block),
+    turnInto: (type: BlockType) => turnBlockInto(block, type),
+    askAI: () => openAIMenu(),
+    dragHandleStart: (e: DragEvent) => onDragHandleStart(block, e),
+    pointerdown: (e: PointerEvent) => onBlockPointerDown(block, e),
+    selectionPointerDown: (payload: { shiftKey: boolean; clientX: number; clientY: number }) => onSelectionPointerDown(block, payload),
+    tableCellFocus: (payload: { row: number; col: number; shiftKey: boolean }) => onTableCellFocus(block, payload),
+    tableCellInput: (payload: { row: number; col: number; content: InlineSpan[]; caret: number | null }) => onTableCellInput(block, payload),
+    tableCellFormat: (payload: { row: number; col: number; mark: MarkName }) => handleTableFormat(block, payload),
+    tableCellTab: (payload: { row: number; col: number; shift: boolean }) => handleTableTab(block, payload),
+    tableCellNavigate: (payload: { row: number; col: number; direction: 'up' | 'down' | 'left' | 'right' }) => handleTableNavigate(block, payload),
+    tableCellSelectionChange: (cells: TableCellCoord[]) => onTableCellSelectionChange(block, cells),
+    moveToColumn: (column: number) => moveToColumn(block, column),
+    unwrapColumns: () => unwrapGroup(block),
+  }
+}
+
 function placeholderFor(block: Block): string | undefined {
   if (block.type !== 'paragraph') {
 return undefined
@@ -3771,10 +3990,14 @@ function insertBlocks(input: Block[], position: { after?: string; before?: strin
     }
   }
 
-  blocks.value.splice(at, 0, ...clean)
+  // After a whole columns group means after it, at the top level.
+  const anchorBlock = anchorId ? byId(anchorId) : undefined
+  const fitAnchor = position.before || anchorBlock?.type === 'columns' ? 'before' : 'after'
+  const fitted = fitInsertedBlocks(blocks.value, at, clean, fitAnchor)
+  blocks.value.splice(at, 0, ...fitted)
   pushHistory(true)
 
-  return clean.map(b => b.id)
+  return fitted.map(b => b.id)
 }
 
 /** Patch one block: change its type, replace its content, and/or merge props. */
@@ -3814,7 +4037,7 @@ function removeBlocks(ids: string[]) {
 
   // A removed toggle takes its (possibly hidden) children with it.
   blocks.value.forEach((b, idx) => {
-    if (remove.has(b.id) && isToggleBlock(b.type)) {
+    if (remove.has(b.id) && ownsSubtree(b.type)) {
       const len = getToggleSubtreeLength(blocks.value, idx)
       blocks.value.slice(idx, idx + len).forEach(child => remove.add(child.id))
     }
@@ -3924,58 +4147,38 @@ focusBlock(last.id, 'end')
       :revision="contentRevision"
     />
 
-    <EditorBlockItem
-      v-for="block in visibleBlocks"
-      :key="block.id"
-      :ref="(el) => setItemRef(block.id, el)"
-      :block="block"
-      :number="numbering.get(block.id)"
-      :placeholder="placeholderFor(block)"
-      :selected="isBlockChromeSelected(block.id)"
-      :text-highlight="textHighlightForBlock(block.id)"
-      :drop-position="dropTarget && dropTarget.id === block.id ? dropTarget.position : null"
-      :upload="upload"
-      :pick-media="pickMedia"
-      :fetch-bookmark-meta="fetchBookmarkMeta"
-      :editor-dir="editorDir"
-      :readonly="readonly"
-      :theme-source="rootEl"
-      :class="{ 'opacity-40': draggingId === block.id }"
-      :icon-picker-request="iconPickerRequest && iconPickerRequest.blockId === block.id ? { tab: iconPickerRequest.tab } : null"
-      @input="(s, c) => handleInput(block, s, c)"
-      @enter="o => handleEnter(block, o)"
-      @backspace-start="handleBackspaceStart(block)"
-      @delete-end="handleDeleteEnd(block)"
-      @arrow-up="handleArrow(block, -1)"
-      @arrow-down="handleArrow(block, 1)"
-      @tab="s => handleTab(block, s)"
-      @format="m => handleFormat(block, m)"
-      @pasted="p => handlePasted(block, p)"
-      @focus="onBlockFocus(block)"
-      @patch="p => patchProps(block, p)"
-      @icon-picker-opened="iconPickerRequest = null"
-      @select="selectBlock(block.id)"
-      :ai-enabled="typeof props.ai?.transport === 'function'"
-      :spellcheck="props.spellcheck !== false"
-      :toc-headings="block.type === 'table_of_contents' ? tocHeadings : undefined"
-      @navigate-to-block="navigateToBlock"
-      @add-below="addBelow(block)"
-      @duplicate="duplicateBlock(block)"
-      @copy="() => void copyBlock(block)"
-      @cut="() => void cutBlock(block)"
-      @remove="removeBlock(block)"
-      @turn-into="t => turnBlockInto(block, t)"
-      @ask-ai="openAIMenu()"
-      @drag-handle-start="e => onDragHandleStart(block, e)"
-      @pointerdown="e => onBlockPointerDown(block, e)"
-      @selection-pointer-down="p => onSelectionPointerDown(block, p)"
-      @table-cell-focus="p => onTableCellFocus(block, p)"
-      @table-cell-input="p => onTableCellInput(block, p)"
-      @table-cell-format="p => handleTableFormat(block, p)"
-      @table-cell-tab="p => handleTableTab(block, p)"
-      @table-cell-navigate="p => handleTableNavigate(block, p)"
-      @table-cell-selection-change="cells => onTableCellSelectionChange(block, cells)"
-    />
+    <!-- Top-level blocks, and columns groups: the group's own block is its
+         header bar, its children sit in one column container each. -->
+    <template v-for="row in layoutRows" :key="row.item.block.id">
+      <EditorBlockItem
+        v-if="row.kind === 'block'"
+        :ref="(el) => setItemRef(row.item.block.id, el)"
+        v-bind="itemBindings(row.item.block)"
+        v-on="itemEvents(row.item.block)"
+      />
+      <div v-else class="xpe-columns-group" :data-columns-id="row.item.block.id">
+        <EditorBlockItem
+          :ref="(el) => setItemRef(row.item.block.id, el)"
+          v-bind="itemBindings(row.item.block)"
+          v-on="itemEvents(row.item.block)"
+        />
+        <div
+          class="xpe-columns"
+          :class="`xpe-columns--${columnStack(row.item.block)}`"
+          :style="columnsGroupStyle(row.item.block)"
+        >
+          <div v-for="(column, ci) in row.columns" :key="ci" class="xpe-column" :data-column="ci">
+            <EditorBlockItem
+              v-for="entry in column"
+              :key="entry.block.id"
+              :ref="(el) => setItemRef(entry.block.id, el)"
+              v-bind="itemBindings(entry.block)"
+              v-on="itemEvents(entry.block)"
+            />
+          </div>
+        </div>
+      </div>
+    </template>
 
     <!-- Tail click area -->
     <div v-if="!readonly" class="h-28 cursor-text" @click="onTailClick" />
@@ -4043,6 +4246,34 @@ focusBlock(last.id, 'end')
 </template>
 
 <style scoped>
+/* Columns: side by side; a narrow editor stacks them like the published page. */
+.xpe-columns-group {
+  container-type: inline-size;
+}
+.xpe-columns {
+  display: grid;
+}
+.xpe-column {
+  min-width: 0;
+  padding-block: 2px;
+  border-radius: 6px;
+  outline: 1px dashed transparent;
+  outline-offset: 2px;
+  transition: outline-color 0.15s ease;
+}
+.xpe-columns-group:hover .xpe-column,
+.xpe-columns-group:focus-within .xpe-column {
+  outline-color: var(--xpe-border, #e5e7eb);
+}
+@container (max-width: 520px) {
+  .xpe-columns:not(.xpe-columns--none) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .xpe-columns--reverse {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+}
 .block-editor {
   background: var(--xpe-background, #fff);
   color: var(--xpe-foreground, #1f2937);

@@ -3,7 +3,7 @@ import {
   Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
   ChevronRight, Quote, Lightbulb, Code2, Minus, Image as ImageIcon, Video, Table2,
   Smile, Music, Paperclip, SearchX, SquareMousePointer, Bookmark, Sparkles,
-  AppWindow, ListTree,
+  AppWindow, ListTree, Columns2, Columns3,
 } from 'lucide-vue-next'
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { lockPageScroll, syncThemeVars } from '@xproeditor/core'
@@ -30,6 +30,8 @@ export interface SlashItem {
 function slashItemText(item: SlashItem, dict: EditorDictionary): { label: string; description: string } {
   if (item.action === 'ai') return { label: dict.slash.askAI, description: dict.slash.askAIDescription }
   if (item.action === 'emoji') return { label: dict.slash.emoji, description: dict.slash.emojiDescription }
+  if (item.id === 'columns_2') return { label: dict.columns.two, description: dict.columns.twoDescription }
+  if (item.id === 'columns_3') return { label: dict.columns.three, description: dict.columns.threeDescription }
   return { label: dict.blockTypes[item.type], description: dict.blockDescriptions[item.type] }
 }
 
@@ -58,6 +60,8 @@ const ITEMS: SlashItem[] = [
   { id: 'emoji', type: 'paragraph', label: 'Emoji', description: 'Insert an emoji', keywords: ['emoji', 'emoticon', 'smile'], icon: Smile, group: 'advanced', action: 'emoji' },
   { id: 'code', type: 'code', label: 'Code', description: 'Code block with syntax', keywords: ['code', 'snippet', 'pre'], icon: Code2, group: 'advanced' },
   { id: 'divider', type: 'divider', label: 'Divider', description: 'Horizontal line', keywords: ['divider', 'hr', 'separator', 'line'], icon: Minus, group: 'advanced' },
+  { id: 'columns_2', type: 'columns', label: '2 columns', description: 'Two side-by-side columns of any blocks', keywords: ['columns', 'column', 'layout', 'grid', 'side', 'two', '2'], icon: Columns2, group: 'advanced' },
+  { id: 'columns_3', type: 'columns', label: '3 columns', description: 'Three side-by-side columns of any blocks', keywords: ['columns', 'column', 'layout', 'grid', 'side', 'three', '3'], icon: Columns3, group: 'advanced' },
   { id: 'table', type: 'table', label: 'Table', description: 'Simple table', keywords: ['table', 'grid'], icon: Table2, group: 'advanced' },
   { id: 'button', type: 'button', label: 'Button', description: 'A clickable link styled as a button', keywords: ['button', 'link', 'cta', 'action'], icon: SquareMousePointer, group: 'advanced' },
   { id: 'table_of_contents', type: 'table_of_contents', label: 'Table of contents', description: 'Linked list of the headings', keywords: ['toc', 'contents', 'outline', 'headings', 'index'], icon: ListTree, group: 'advanced' },

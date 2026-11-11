@@ -23,8 +23,14 @@ import {
   tableCellStyle,
   tableWrapperStyle,
   toggleHeadingLevel,
+  columnAlign,
+  columnCount,
+  columnGap,
+  columnStack,
+  columnTemplate,
+  getColumnsGroupLength,
 } from '@xproeditor/core'
-import type { Block, TableCell } from '@xproeditor/core'
+import type { Block, DocHeading, TableCell } from '@xproeditor/core'
 import { IconValueDisplay } from '../ui'
 import { EditorI18nProvider, useEditorDictionary, type EditorI18nProps } from '../i18n'
 import { highlightCode, isHighlighterReady, loadHighlighter } from '../utils/highlight'
@@ -47,6 +53,23 @@ function indentVars(indent = 0): CSSProperties {
   return { ['--xpe-block-indent' as string]: indent }
 }
 
+function columnsStyle(block: Block): CSSProperties {
+  return {
+    gridTemplateColumns: columnTemplate(block),
+    gap: `${columnGap(block)}px`,
+    alignItems: ({ top: 'start', center: 'center', bottom: 'end' } as const)[columnAlign(block)],
+  }
+}
+
+interface DocRendererContentProps extends Omit<DocRendererProps, 'locale' | 'dictionary'> {
+  /**
+   * Internal: a column of a columns group renders as a nested renderer; these
+   * keep heading anchors and the table of contents those of the whole document.
+   */
+  contextAnchors?: Map<string, string>
+  contextHeadings?: DocHeading[]
+}
+
 /** Read-only renderer for a `Block[]` document (blog posts, docs pages, previews). */
 export function DocRenderer({ locale, dictionary, ...props }: DocRendererProps) {
   return (
@@ -56,9 +79,9 @@ export function DocRenderer({ locale, dictionary, ...props }: DocRendererProps) 
   )
 }
 
-function DocRendererContent({ blocks, editorDir }: Omit<DocRendererProps, 'locale' | 'dictionary'>) {
+function DocRendererContent({ blocks, editorDir, contextAnchors, contextHeadings }: DocRendererContentProps) {
   const dict = useEditorDictionary()
-  const headings = useMemo(() => extractHeadings(blocks), [blocks])
+  const headings = useMemo(() => contextHeadings ?? extractHeadings(blocks), [blocks, contextHeadings])
   const [toggleOverrides, setToggleOverrides] = useState<Record<number, boolean>>({})
   const [copiedAnchor, setCopiedAnchor] = useState<string | null>(null)
   const [copiedCode, setCopiedCode] = useState<number | null>(null)
@@ -91,12 +114,43 @@ function DocRendererContent({ blocks, editorDir }: Omit<DocRendererProps, 'local
     return toggleOverrides[idx] ?? block.props.collapsed ?? false
   }
 
+  /**
+   * Columns groups: each `columns` block's children, per column (rendered by a
+   * nested renderer each), and the indexes they occupy, so the flat loop skips them.
+   */
+  const columnGroups = useMemo(() => {
+    const groups = new Map<number, Block[][]>()
+    const consumed = new Set<number>()
+
+    blocks.forEach((block, idx) => {
+      if (block.type !== 'columns' || consumed.has(idx)) return
+      const len = getColumnsGroupLength(blocks, idx)
+      const cols: Block[][] = Array.from({ length: columnCount(block) }, () => [])
+
+      for (let i = idx + 1; i < idx + len; i++) {
+        consumed.add(i)
+        const child = blocks[i]
+        const col = Math.min(cols.length - 1, child.props.column ?? 0)
+        const rest = { ...child.props }
+        delete rest.column
+        cols[col].push({ ...child, props: rest })
+      }
+
+      groups.set(idx, cols)
+    })
+
+    return { groups, consumed }
+  }, [blocks])
+
   const visible = useMemo(() => {
     const out: Array<{ block: Block; idx: number }> = []
     let hideDeeperThan: number | null = null
+    const { consumed } = columnGroups
 
     blocks.forEach((block, idx) => {
       const ind = block.props.indent ?? 0
+
+      if (consumed.has(idx)) return
 
       if (hideDeeperThan !== null) {
         if (ind > hideDeeperThan) return
@@ -110,10 +164,10 @@ function DocRendererContent({ blocks, editorDir }: Omit<DocRendererProps, 'local
     })
 
     return out
-  }, [blocks, toggleOverrides])
+  }, [blocks, columnGroups, toggleOverrides])
 
   const numbering = useMemo(() => computeListNumbering(visible.map((v) => v.block)), [visible])
-  const anchors = useMemo(() => headingAnchorIds(blocks), [blocks])
+  const anchors = useMemo(() => contextAnchors ?? headingAnchorIds(blocks), [blocks, contextAnchors])
 
   function copyAnchor(id: string) {
     const url = `${window.location.origin}${window.location.pathname}#${id}`
@@ -147,6 +201,34 @@ function DocRendererContent({ blocks, editorDir }: Omit<DocRendererProps, 'local
     <div className="doc-blocks" dir="auto">
       {visible.map(({ block, idx }) => {
         const blockDir = resolveBlockDirection(block, editorDir ?? 'ltr')
+
+        // Columns: a grid of nested renderers, stacked on narrow containers
+        if (block.type === 'columns') {
+          return (
+            <div
+              key={idx}
+              className="db-columns-wrap"
+              dir={block.props.dir && block.props.dir !== 'auto' ? block.props.dir : undefined}
+            >
+              <div
+                className={`db-columns db-columns--${columnStack(block)}`}
+                data-columns={columnCount(block)}
+                style={columnsStyle(block)}
+              >
+                {(columnGroups.groups.get(idx) ?? []).map((column, ci) => (
+                  <div key={ci} className="db-column">
+                    <DocRendererContent
+                      blocks={column}
+                      editorDir={editorDir}
+                      contextAnchors={anchors}
+                      contextHeadings={headings}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        }
 
         if (block.type.startsWith('heading')) {
           const Tag = headingTag(block.type)

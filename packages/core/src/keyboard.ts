@@ -5,6 +5,7 @@
  * for Shift/Alt+digit differs per layout (`&`, `¡`, Persian digits, …).
  */
 
+import { getColumnsGroupLength } from './columns'
 import type { Block, BlockType } from './types'
 
 export type BlockKeyboardAction =
@@ -89,11 +90,16 @@ export function getBlockSubtreeLength(blocks: Block[], index: number): number {
     return 0
   }
 
+  if (block.type === 'columns') {
+    return getColumnsGroupLength(blocks, index)
+  }
+
   const base = block.props.indent ?? 0
+  const column = block.props.column
   let len = 1
 
   for (let i = index + 1; i < blocks.length; i++) {
-    if ((blocks[i].props.indent ?? 0) > base) len++
+    if ((blocks[i].props.indent ?? 0) > base && blocks[i].props.column === column) len++
     else break
   }
 
@@ -104,6 +110,9 @@ export function getBlockSubtreeLength(blocks: Block[], index: number): number {
  * Move a block (with its nested children) past its previous / next sibling.
  * Mutates `blocks`; returns false when there is no sibling to swap with
  * (first/last child of its parent).
+ *
+ * Columns: a `columns` group moves as one top-level block and swaps with whole
+ * groups; a block inside a column only swaps with siblings of the same column.
  */
 export function moveBlockSubtree(blocks: Block[], blockId: string, direction: -1 | 1): boolean {
   const index = blocks.findIndex(b => b.id === blockId)
@@ -113,16 +122,23 @@ export function moveBlockSubtree(blocks: Block[], blockId: string, direction: -1
   }
 
   const indent = blocks[index].props.indent ?? 0
+  const column = blocks[index].props.column
   const len = getBlockSubtreeLength(blocks, index)
+  // A sibling: same indent in the same column, or (for a top-level block) a whole group.
+  const sameLevel = (b: Block) =>
+    ((b.props.indent ?? 0) === indent && b.props.column === column && b.type !== 'columns') ||
+    (column === undefined && indent === 0 && b.type === 'columns')
+  const nested = (b: Block) =>
+    column === undefined ? (b.props.indent ?? 0) > indent || b.props.column !== undefined : (b.props.indent ?? 0) > indent && b.props.column === column
 
   if (direction === -1) {
     let prev = index - 1
 
-    while (prev >= 0 && (blocks[prev].props.indent ?? 0) > indent) {
+    while (prev >= 0 && nested(blocks[prev])) {
       prev--
     }
 
-    if (prev < 0 || (blocks[prev].props.indent ?? 0) !== indent) {
+    if (prev < 0 || !sameLevel(blocks[prev])) {
       return false
     }
 
@@ -134,7 +150,7 @@ export function moveBlockSubtree(blocks: Block[], blockId: string, direction: -1
 
   const next = index + len
 
-  if (next >= blocks.length || (blocks[next].props.indent ?? 0) !== indent) {
+  if (next >= blocks.length || !sameLevel(blocks[next])) {
     return false
   }
 

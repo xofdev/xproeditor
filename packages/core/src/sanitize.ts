@@ -210,6 +210,27 @@ function sanitizeProps(raw: unknown): BlockProps {
     }
   }
 
+  // Columns: a child's column index, and the group's layout.
+  for (const key of ['column', 'columnCount', 'columnGap'] as const) {
+    if (props[key] !== undefined) {
+      const n = Math.floor(Number(props[key]))
+      if (Number.isFinite(n) && n >= 0) props[key] = n
+      else delete props[key]
+    }
+  }
+
+  if (props.columnWidths !== undefined) {
+    const widths = Array.isArray(props.columnWidths) ? props.columnWidths.map(Number) : []
+    if (widths.length >= 2 && widths.every((w) => Number.isFinite(w) && w > 0)) props.columnWidths = widths
+    else delete props.columnWidths
+  }
+
+  for (const key of ['columnAlign', 'columnStack'] as const) {
+    if (props[key] !== undefined && typeof props[key] !== 'string') {
+      delete props[key]
+    }
+  }
+
   for (const key of ['checked', 'collapsed', 'wrap', 'lineNumbers', 'openInNewTab'] as const) {
     if (props[key] !== undefined && typeof props[key] !== 'boolean') {
       delete props[key]

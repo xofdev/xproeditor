@@ -29,6 +29,7 @@ export type BlockType =
   | 'bookmark'
   | 'embed'
   | 'table_of_contents'
+  | 'columns'
 
 /** Every block type this version of the editor can render, in slash-menu order. */
 export const BLOCK_TYPES: readonly BlockType[] = [
@@ -56,6 +57,7 @@ export const BLOCK_TYPES: readonly BlockType[] = [
   'bookmark',
   'embed',
   'table_of_contents',
+  'columns',
 ]
 
 export interface InlineMarks {
@@ -176,6 +178,18 @@ export interface BlockProps {
   /** text direction */
   dir?: 'auto' | 'ltr' | 'rtl'
   align?: 'left' | 'center' | 'right'
+  /** any block inside a columns group: its 0-based column (see `columns.ts`) */
+  column?: number
+  /** columns: number of columns (2 or 3) */
+  columnCount?: number
+  /** columns: width of each column in percent */
+  columnWidths?: number[]
+  /** columns: space between columns, px */
+  columnGap?: number
+  /** columns: vertical alignment of the columns' content */
+  columnAlign?: 'top' | 'center' | 'bottom'
+  /** columns: order once stacked on a narrow screen ('none' keeps them side by side) */
+  columnStack?: 'normal' | 'reverse' | 'none'
 }
 
 /** Preset accent colors for button blocks (adapters may show swatches). */
@@ -278,6 +292,14 @@ export function isTextBlock(type: BlockType): boolean {
 
 export function isToggleBlock(type: BlockType): boolean {
   return TOGGLE_BLOCK_TYPES.includes(type)
+}
+
+/**
+ * Blocks that own the blocks after them and move, copy and delete with them:
+ * toggles (their indented children) and `columns` (their group).
+ */
+export function ownsSubtree(type: BlockType): boolean {
+  return type === 'columns' || TOGGLE_BLOCK_TYPES.includes(type)
 }
 
 /** Heading level for `toggle_heading_*`, otherwise null. */

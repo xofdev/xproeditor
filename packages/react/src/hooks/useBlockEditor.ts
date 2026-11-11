@@ -69,9 +69,21 @@ import {
   splitSpansAt,
   tryParseMarkdownToBlocks,
   writeBlocksToClipboardData,
+  ownsSubtree,
+  groupColumns,
+  normalizeColumns,
+  fitInsertedBlocks,
+  createColumnsGroup,
+  setColumnCount,
+  moveBlockToColumn,
+  unwrapColumns,
+  blockColumn,
+  columnsOwnerIndex,
+  getColumnsGroupLength,
 } from '@xproeditor/core'
 import type {
   AICommand,
+  ColumnCount,
   AITransport,
   Block,
   BlockHistory,
@@ -340,6 +352,8 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   function pushHistory(immediate = false) {
     if (readonly) return
 
+    // Keep columns groups valid after any edit (order, empty columns, strays).
+    normalizeColumns(blocksRef.current)
     emitChange()
 
     if (immediate) {
@@ -693,23 +707,34 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   const visibleBlocks = useMemo<Block[]>(() => {
     const out: Block[] = []
     let hideDeeperThan: number | null = null
+    let hideColumn: number | undefined
 
     for (const b of blocksRef.current) {
       const ind = b.props.indent ?? 0
 
       if (hideDeeperThan !== null) {
-        if (ind > hideDeeperThan) continue
+        // A collapsed toggle hides its children only inside its own column.
+        if (ind > hideDeeperThan && b.props.column === hideColumn) continue
         hideDeeperThan = null
       }
 
       out.push(b)
 
-      if (isToggleBlock(b.type) && b.props.collapsed) hideDeeperThan = ind
+      if (isToggleBlock(b.type) && b.props.collapsed) {
+        hideDeeperThan = ind
+        hideColumn = b.props.column
+      }
     }
 
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version])
+
+  /** Top-level blocks and columns groups, for rendering. */
+  const layoutRows = useMemo(
+    () => groupColumns(visibleBlocks.map((block, index) => ({ block, index }))),
+    [visibleBlocks],
+  )
 
   const numbering = useMemo(() => computeListNumbering(visibleBlocks), [visibleBlocks])
 
@@ -846,6 +871,31 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     }
   }
 
+  /**
+   * `/2 columns`, `/3 columns`: a new group with an empty paragraph per column,
+   * focused in the first. An empty line becomes the group; text stays above it.
+   * Inside a column the group goes after the current group (groups do not nest).
+   */
+  function insertColumnsFromSlash(block: Block, spans: InlineSpan[], count: ColumnCount) {
+    const idx = blocksRef.current.indexOf(block)
+    if (idx === -1) return
+    const group = createColumnsGroup(count, { dir: blockDirOptions()?.defaultDir })
+    const owner = columnsOwnerIndex(blocksRef.current, idx)
+
+    block.content = spans
+
+    if (owner !== -1) {
+      blocksRef.current.splice(owner + getColumnsGroupLength(blocksRef.current, owner), 0, ...group)
+    } else if (spansToText(spans).trim() === '') {
+      blocksRef.current.splice(idx, 1, ...group)
+    } else {
+      blocksRef.current.splice(idx + 1, 0, ...group)
+    }
+
+    pushHistory(true)
+    focusBlock(group[1].id, 'start')
+  }
+
   function onSlashSelect(item: SlashItem) {
     const state = slashState
     if (!state) return
@@ -884,6 +934,12 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     const removeEnd = state.index + 1 + state.query.length
     const spans = deleteRangeInSpans(block.content, state.index, removeEnd)
+
+    if (item.type === 'columns') {
+      insertColumnsFromSlash(block, spans, item.id === 'columns_3' ? 3 : 2)
+      return
+    }
+
     const isInsertType = ['divider', 'image', 'video', 'audio', 'file', 'table', 'code', 'bookmark', 'embed', 'table_of_contents'].includes(item.type)
 
     if (!isInsertType) {
@@ -1118,6 +1174,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     const newProps: Block['props'] = {}
     if (block.props.indent) newProps.indent = block.props.indent
     if (block.props.dir && block.props.dir !== 'auto') newProps.dir = block.props.dir
+    if (blockColumn(block) !== null) newProps.column = block.props.column
 
     if (isToggleBlock(block.type)) {
       newProps.indent = (block.props.indent ?? 0) + 1
@@ -1153,6 +1210,23 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     const prev = neighborBlock(block.id, -1)
     if (!prev) return
 
+    // Never merge across a column edge: an empty block there is removed instead
+    // (unless it keeps its column open), anything else stays.
+    if (prev.type === 'columns' || blockColumn(prev) !== blockColumn(block)) {
+      const column = blockColumn(block)
+      const owner = columnsOwnerIndex(blocksRef.current, idx)
+      const sameColumn = blocksRef.current.filter(
+        (b, i) => b !== block && column !== null && blockColumn(b) === column && columnsOwnerIndex(blocksRef.current, i) === owner,
+      )
+      if (spansToText(block.content) === '' && (column === null || sameColumn.length > 0)) {
+        blocksRef.current.splice(idx, 1)
+        pushHistory(true)
+        if (prev.type === 'columns' || !isTextBlock(prev.type)) selectBlock(prev.id)
+        else focusBlock(prev.id, 'end')
+      }
+      return
+    }
+
     if (isTextBlock(prev.type)) {
       const prevLen = spansToText(prev.content).length
       prev.content = normalizeSpans([...prev.content, ...block.content])
@@ -1179,6 +1253,9 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   function handleDeleteEnd(block: Block) {
     const next = neighborBlock(block.id, 1)
     if (!next) return
+
+    // Never pull the next column's (or the group's) content into this block.
+    if (next.type === 'columns' || blockColumn(next) !== blockColumn(block)) return
 
     if (isTextBlock(next.type)) {
       const len = spansToText(block.content).length
@@ -1278,6 +1355,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       const nb = makeBlockLocal(type, { props: { ...media, ...extra } })
       const anchorIdx = afterId ? blocksRef.current.findIndex((b) => b.id === afterId) : -1
       const insertAt = afterId && anchorIdx === -1 ? Math.min(at, blocksRef.current.length) : anchorIdx + 1
+      fitInsertedBlocks(blocksRef.current, insertAt, [nb])
       blocksRef.current.splice(insertAt, 0, nb)
       afterId = nb.id
       inserted = true
@@ -1340,7 +1418,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     if (selectedBlockId) {
       const block = byId(selectedBlockId)
       if (!block) return null
-      if (isToggleBlock(block.type)) {
+      if (ownsSubtree(block.type)) {
         const idx = blocksRef.current.indexOf(block)
         if (idx === -1) return [block]
         const len = getToggleSubtreeLength(blocksRef.current, idx)
@@ -1369,6 +1447,14 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   }
 
   function insertBlocksFromClipboard(pasted: Block[]) {
+    // Pasted blocks take the column they land in; a copied group pastes whole at
+    // the top level and is unwrapped inside a column (groups do not nest).
+    const anchorId = focusedBlockId ?? selectedBlockId
+    const anchorIdx = anchorId
+      ? blocksRef.current.findIndex((b) => b.id === anchorId)
+      : blocksRef.current.length - 1
+    pasted = fitInsertedBlocks(blocksRef.current, anchorIdx + 1, pasted)
+
     if (pasted.length === 0) return
 
     const range = textRangeSelectionRef.current
@@ -1541,15 +1627,20 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     const idx = blocksRef.current.indexOf(block)
     const nb = makeBlockLocal('paragraph', {
-      props: block.props.indent ? { indent: block.props.indent } : {},
+      props: {
+        ...(block.props.indent ? { indent: block.props.indent } : {}),
+        ...(blockColumn(block) !== null ? { column: block.props.column } : {}),
+      },
     })
-    blocksRef.current.splice(idx + 1, 0, nb)
+    // Below a columns group means after the whole group.
+    const at = block.type === 'columns' ? idx + getColumnsGroupLength(blocksRef.current, idx) : idx + 1
+    blocksRef.current.splice(at, 0, nb)
     pushHistory(true)
     focusBlock(nb.id, 'start')
   }
 
   function blocksForToggleAction(block: Block): Block[] {
-    if (!isToggleBlock(block.type)) return [block]
+    if (!ownsSubtree(block.type)) return [block]
     const idx = blocksRef.current.indexOf(block)
     if (idx === -1) return [block]
     return cloneToggleSubtree(blocksRef.current, idx)
@@ -1607,14 +1698,14 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     if (idx === -1) return
 
     const prev = neighborBlock(block.id, -1)
-    const subtreeLen = isToggleBlock(block.type)
+    const subtreeLen = ownsSubtree(block.type)
       ? getToggleSubtreeLength(blocksRef.current, idx)
       : 1
     const afterIdx = idx + subtreeLen
     const next =
       afterIdx < blocksRef.current.length ? blocksRef.current[afterIdx] : null
 
-    if (isToggleBlock(block.type)) removeToggleSubtree(blocksRef.current, idx)
+    if (ownsSubtree(block.type)) removeToggleSubtree(blocksRef.current, idx)
     else blocksRef.current.splice(idx, 1)
 
     ensureNotEmpty()
@@ -1630,8 +1721,45 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
   }
 
   function patchProps(block: Block, patch: Record<string, unknown>) {
+    // A new column count moves blocks between columns, not just a prop.
+    if (block.type === 'columns' && patch.columnCount !== undefined && patch.columnCount !== block.props.columnCount) {
+      const { columnCount: count, ...rest } = patch
+      Object.assign(block.props, rest)
+      setColumnCount(blocksRef.current, block.id, (Number(count) >= 3 ? 3 : 2) as ColumnCount)
+      pushHistory(true)
+      return
+    }
+
     Object.assign(block.props, patch)
     pushHistory(true)
+  }
+
+  /** Block menu: move a block (and its nested children) into another column. */
+  function moveToColumn(block: Block, column: number) {
+    if (readonly) return
+    if (moveBlockToColumn(blocksRef.current, block.id, column)) {
+      pushHistory(true)
+      if (isTextBlock(block.type)) focusBlock(block.id, 'end')
+      else selectBlock(block.id)
+    }
+  }
+
+  /** Columns toolbar: drop the group, keep its blocks in reading order. */
+  function unwrapGroup(block: Block) {
+    if (readonly) return
+    const idx = blocksRef.current.indexOf(block)
+    if (unwrapColumns(blocksRef.current, block.id)) {
+      ensureNotEmpty()
+      pushHistory(true)
+      const first = blocksRef.current[Math.min(idx, blocksRef.current.length - 1)]
+      if (first) selectBlock(first.id)
+    }
+  }
+
+  /** Number of columns of the group a block sits in (0 outside a group). */
+  function groupColumnCount(block: Block): number {
+    const owner = columnsOwnerIndex(blocksRef.current, blocksRef.current.indexOf(block))
+    return owner === -1 ? 0 : (blocksRef.current[owner].props.columnCount ?? 2)
   }
 
   function getTableCellContext(blockId: string) {
@@ -2638,7 +2766,16 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     e.preventDefault()
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
 
-    const target = (e.target as HTMLElement).closest('[data-block-id]')
+    let target = (e.target as HTMLElement).closest('[data-block-id]')
+    let below = false
+
+    // The empty space under a column's last block drops after that block.
+    if (!target) {
+      const items = (e.target as HTMLElement).closest('.xpe-column')?.querySelectorAll(':scope > [data-block-id]')
+      target = items?.length ? items[items.length - 1] : null
+      below = !!target
+    }
+
     if (!target) {
       setDropTarget(null)
       return
@@ -2651,7 +2788,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     }
 
     const rect = target.getBoundingClientRect()
-    const position = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+    const position = below || e.clientY >= rect.top + rect.height / 2 ? 'after' : 'before'
     setDropTarget({ id, position })
   }
 
@@ -2689,9 +2826,13 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     if (fromIdx === -1) return
 
     const fromBlock = blocksRef.current[fromIdx]
-    const moveLen = isToggleBlock(fromBlock.type)
+    const moveLen = ownsSubtree(fromBlock.type)
       ? getToggleSubtreeLength(blocksRef.current, fromIdx)
       : 1
+
+    // Groups do not nest: a columns group cannot be dropped inside a column.
+    const dropOn = byId(target.id)
+    if (fromBlock.type === 'columns' && dropOn && blockColumn(dropOn) !== null) return
 
     // Don't drop a toggle onto one of its own children.
     const targetIdxBefore = blocksRef.current.findIndex((b) => b.id === target.id)
@@ -2713,13 +2854,17 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     if (target.position === 'after') {
       const targetBlock = blocksRef.current[toIdx]
-      const targetSpan = isToggleBlock(targetBlock.type)
+      const targetSpan = ownsSubtree(targetBlock.type)
         ? getToggleSubtreeLength(blocksRef.current, toIdx)
         : 1
       toIdx += targetSpan
     }
 
-    blocksRef.current.splice(toIdx, 0, ...moved)
+    // The moved block joins the column it lands in (or leaves its old one); a drop
+    // under a group's header lands after the whole group, at the top level.
+    const fitAnchor = target.position === 'before' || dropOn?.type === 'columns' ? 'before' : 'after'
+    const fitted = fitInsertedBlocks(blocksRef.current, toIdx, moved, fitAnchor)
+    blocksRef.current.splice(toIdx, 0, ...fitted)
     pushHistory(true)
   }
 
@@ -3347,9 +3492,13 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
       if (idx !== -1) at = position.before ? idx : idx + getBlockSubtreeLength(blocksRef.current, idx)
     }
 
-    blocksRef.current.splice(at, 0, ...clean)
+    // After a whole columns group means after it, at the top level.
+    const anchorBlock = anchorId ? byId(anchorId) : undefined
+    const fitAnchor = position.before || anchorBlock?.type === 'columns' ? 'before' : 'after'
+    const fitted = fitInsertedBlocks(blocksRef.current, at, clean, fitAnchor)
+    blocksRef.current.splice(at, 0, ...fitted)
     pushHistory(true)
-    return clean.map((b) => b.id)
+    return fitted.map((b) => b.id)
   }
 
   /** Patch one block: change its type, replace its content, and/or merge props. */
@@ -3386,7 +3535,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
 
     // A removed toggle takes its (possibly hidden) children with it.
     blocksRef.current.forEach((b, idx) => {
-      if (remove.has(b.id) && isToggleBlock(b.type)) {
+      if (remove.has(b.id) && ownsSubtree(b.type)) {
         const len = getToggleSubtreeLength(blocksRef.current, idx)
         blocksRef.current.slice(idx, idx + len).forEach((child) => remove.add(child.id))
       }
@@ -3428,6 +3577,7 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     rootRef,
     blocks: blocksRef.current,
     visibleBlocks,
+    layoutRows,
     numbering,
     focusedBlockId,
     selectedBlockId,
@@ -3523,6 +3673,9 @@ export function useBlockEditor(options: UseBlockEditorOptions) {
     handleFormat,
     handlePasted,
     patchProps,
+    moveToColumn,
+    unwrapGroup,
+    groupColumnCount,
     addBelow,
     duplicateBlock,
     copyBlock,

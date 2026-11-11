@@ -23,6 +23,8 @@ import {
   SquareMousePointer,
   Trash2,
   Type,
+  Columns2,
+  Rows3,
 } from 'lucide-react'
 import { syncThemeVars, type BlockType } from '@xproeditor/core'
 import { useEditorDictionary } from '../i18n'
@@ -36,6 +38,9 @@ export interface BlockContextMenuProps {
   canTurnInto?: boolean
   aiEnabled?: boolean
   themeSource?: HTMLElement | null
+  /** Inside a columns group: the group's column count and this block's column. */
+  columnCount?: number
+  column?: number | null
   onColor?: (color: string | undefined) => void
   onTurnInto?: (type: BlockType) => void
   onDuplicate: () => void
@@ -44,6 +49,8 @@ export interface BlockContextMenuProps {
   onDelete: () => void
   onInsertBelow: () => void
   onAskAI?: () => void
+  onMoveToColumn?: (column: number) => void
+  onUnwrapColumns?: () => void
   onClose: () => void
 }
 
@@ -96,6 +103,8 @@ export function BlockContextMenu({
   canTurnInto = false,
   aiEnabled = false,
   themeSource,
+  columnCount,
+  column,
   onColor,
   onTurnInto,
   onDuplicate,
@@ -104,6 +113,8 @@ export function BlockContextMenu({
   onDelete,
   onInsertBelow,
   onAskAI,
+  onMoveToColumn,
+  onUnwrapColumns,
   onClose,
 }: BlockContextMenuProps) {
   const [view, setView] = useState<View>('root')
@@ -201,6 +212,36 @@ export function BlockContextMenu({
       },
     ]
 
+    // Columns: move a block between the columns of its group; a group can be unwrapped.
+    const columns: ActionItem[] = []
+    if (columnCount && column !== null && column !== undefined) {
+      for (let target = 0; target < columnCount; target++) {
+        if (target === column) continue
+        columns.push({
+          id: `column-${target}`,
+          label: `${dict.columns.moveToColumn}: ${dict.columns.column.replace('{n}', String(target + 1))}`,
+          icon: Columns2,
+          keywords: [],
+          run: () => {
+            onMoveToColumn?.(target)
+            onClose()
+          },
+        })
+      }
+    }
+    if (blockType === 'columns') {
+      columns.push({
+        id: 'unwrap-columns',
+        label: dict.columns.unwrap,
+        icon: Rows3,
+        keywords: [],
+        run: () => {
+          onUnwrapColumns?.()
+          onClose()
+        },
+      })
+    }
+
     const ai: ActionItem[] =
       aiEnabled && onAskAI
         ? [
@@ -217,13 +258,17 @@ export function BlockContextMenu({
           ]
         : []
 
-    return [transform, manage, insert, ai]
+    return [transform, manage, insert, columns, ai]
       .map((section) => section.filter((item) => matchQuery([item.label, item.id, ...item.keywords], q)))
       .filter((section) => section.length > 0)
   }, [
     aiEnabled,
+    blockType,
     canTurnInto,
     colorPresets,
+    column,
+    columnCount,
+    dict,
     mod,
     onAskAI,
     onClose,
@@ -232,6 +277,8 @@ export function BlockContextMenu({
     onDelete,
     onDuplicate,
     onInsertBelow,
+    onMoveToColumn,
+    onUnwrapColumns,
     q,
     t,
   ])

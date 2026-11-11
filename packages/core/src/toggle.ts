@@ -1,20 +1,26 @@
+import { getColumnsGroupLength } from './columns'
 import { cloneBlock } from './ops'
 import type { Block, BlockType } from './types'
 import { isToggleBlock } from './types'
 
 /**
- * Inclusive length of a toggle and its nested children in the flat block
- * model (every following block with indent > toggle.indent).
+ * Inclusive length of a block that owns the blocks after it, in the flat block
+ * model: a toggle and its nested children (every following block with
+ * indent > toggle.indent, in the same column), or a `columns` block and its
+ * group. Any other block is 1.
  */
 export function getToggleSubtreeLength(blocks: Block[], index: number): number {
   const block = blocks[index]
-  if (!block || !isToggleBlock(block.type)) return 1
+  if (!block) return 1
+  if (block.type === 'columns') return getColumnsGroupLength(blocks, index)
+  if (!isToggleBlock(block.type)) return 1
 
   const base = block.props.indent ?? 0
+  const column = block.props.column
   let len = 1
 
   for (let i = index + 1; i < blocks.length; i++) {
-    if ((blocks[i].props.indent ?? 0) > base) len++
+    if ((blocks[i].props.indent ?? 0) > base && blocks[i].props.column === column) len++
     else break
   }
 
@@ -46,11 +52,14 @@ export function filterVisibleBlocks(
   const out: Array<{ block: Block; index: number }> = []
   let hideDeeperThan: number | null = null
 
+  let hideColumn: number | undefined
+
   blocks.forEach((block, index) => {
     const ind = block.props.indent ?? 0
 
     if (hideDeeperThan !== null) {
-      if (ind > hideDeeperThan) return
+      // A collapsed toggle hides its children only inside its own column.
+      if (ind > hideDeeperThan && block.props.column === hideColumn) return
       hideDeeperThan = null
     }
 
@@ -58,6 +67,7 @@ export function filterVisibleBlocks(
 
     if (isToggleBlock(block.type) && isCollapsed(block, index)) {
       hideDeeperThan = ind
+      hideColumn = block.props.column
     }
   })
 

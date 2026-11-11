@@ -1,3 +1,4 @@
+import { normalizeColumns } from './columns'
 import { parseInlineNodes } from './html'
 import { createBlock, normalizeSpans } from './ops'
 import { resolveEmbed } from './embed'
@@ -793,7 +794,10 @@ return []
 }
 
   if (isBlocksContent(content)) {
-return sanitizeBlocks(content.blocks as Block[])
+    // Columns groups are repaired on load, so a hand-edited or older document renders.
+    const blocks = sanitizeBlocks(content.blocks as Block[])
+    normalizeColumns(blocks)
+    return blocks
 }
 
   if (content.format === 'html' && typeof content.html === 'string') {
