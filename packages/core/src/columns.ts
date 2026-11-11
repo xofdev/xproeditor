@@ -295,13 +295,18 @@ export function fitInsertedBlocks(
   blocks: Block[],
   index: number,
   inserted: Block[],
-  /** 'before': dropped before the block at `index` (take its column); default: after the block above. */
+  /**
+   * 'after' (default): the blocks follow the block above (Enter, paste, a drop on
+   * its lower half) and take its column. 'before': they precede the block at
+   * `index` (a drop on its upper half, or "after this whole group") and take its
+   * column; a top-level block there, or the end of the document, means top level.
+   */
   anchor: 'after' | 'before' = 'after',
 ): Block[] {
   const before = blocks[index - 1]
   const at = blocks[index]
   const target =
-    anchor === 'before' && blockColumn(at) !== null
+    anchor === 'before'
       ? blockColumn(at)
       : isColumnsBlock(before)
         ? 0

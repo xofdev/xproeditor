@@ -3203,8 +3203,11 @@ return
     toIdx += targetSpan
   }
 
-  // The moved block joins the column it lands in (or leaves its old one).
-  const fitted = fitInsertedBlocks(blocks.value, toIdx, moved, target.position === 'before' ? 'before' : 'after')
+  // The moved block joins the column it lands in (or leaves its old one); a drop
+  // under a group's header lands after the whole group, at the top level.
+  const droppedOn = blocks.value.find(b => b.id === target.id)
+  const fitAnchor = target.position === 'before' || droppedOn?.type === 'columns' ? 'before' : 'after'
+  const fitted = fitInsertedBlocks(blocks.value, toIdx, moved, fitAnchor)
   blocks.value.splice(toIdx, 0, ...fitted)
   pushHistory(true)
 }
@@ -3987,7 +3990,10 @@ function insertBlocks(input: Block[], position: { after?: string; before?: strin
     }
   }
 
-  const fitted = fitInsertedBlocks(blocks.value, at, clean, position.before ? 'before' : 'after')
+  // After a whole columns group means after it, at the top level.
+  const anchorBlock = anchorId ? byId(anchorId) : undefined
+  const fitAnchor = position.before || anchorBlock?.type === 'columns' ? 'before' : 'after'
+  const fitted = fitInsertedBlocks(blocks.value, at, clean, fitAnchor)
   blocks.value.splice(at, 0, ...fitted)
   pushHistory(true)
 
