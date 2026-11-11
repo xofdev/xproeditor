@@ -115,6 +115,8 @@ export interface EditorDictionary {
     /** "Column {n}" — `{n}` is replaced with the 1-based number. */
     column: string
     moveToColumn: string
+    /** Placeholder of an empty column — `{n}` is the 1-based number. */
+    emptyColumn: string
   }
   media: {
     upload: string
@@ -463,6 +465,7 @@ export const EN_DICTIONARY: EditorDictionary = {
     unwrap: 'Remove columns, keep content',
     column: 'Column {n}',
     moveToColumn: 'Move to column',
+    emptyColumn: 'Column {n}: type, or press / for any block',
   },
   media: {
     upload: 'Upload',
@@ -811,6 +814,7 @@ export const FA_DICTIONARY: EditorDictionary = {
     unwrap: 'حذف ستون‌ها، حفظ محتوا',
     column: 'ستون {n}',
     moveToColumn: 'انتقال به ستون',
+    emptyColumn: 'ستون {n}: بنویسید، یا / را برای هر بلوکی بزنید',
   },
   media: {
     upload: 'بارگذاری',

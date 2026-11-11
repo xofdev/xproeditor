@@ -100,6 +100,20 @@ export function columnStack(block: Block): ColumnStack {
   return stack === 'reverse' || stack === 'none' ? stack : 'normal'
 }
 
+/**
+ * The props that place a block in the document: indent, direction and column.
+ * Carry them over whenever a block changes type (slash menu, markdown shortcut,
+ * turn into…), or a block in a column falls out of its group.
+ */
+export function placementProps(props: BlockProps): Pick<BlockProps, 'indent' | 'dir' | 'column'> {
+  const out: Pick<BlockProps, 'indent' | 'dir' | 'column'> = {}
+  if (props.indent !== undefined) out.indent = props.indent
+  if (props.dir !== undefined) out.dir = props.dir
+  if (blockColumn({ props } as Block) !== null) out.column = props.column
+
+  return out
+}
+
 /** Inclusive length of a columns group: the `columns` block and its children. */
 export function getColumnsGroupLength(blocks: Block[], index: number): number {
   if (!isColumnsBlock(blocks[index])) {
@@ -114,6 +128,50 @@ export function getColumnsGroupLength(blocks: Block[], index: number): number {
   }
 
   return len
+}
+
+/**
+ * Where ArrowUp / ArrowDown go from the block at `index` of a (visible) list,
+ * following the layout rather than the storage order: inside a column they stay
+ * in that column and leave the group at its edge (down: the first block after the
+ * group; up: the block before it); from above a group, down enters its first
+ * column (never the group's header); from below it, up enters the end of its
+ * first column. Returns -1 when there is nowhere to go.
+ */
+export function columnArrowTarget(list: Block[], index: number, dir: 1 | -1): number {
+  const block = list[index]
+  if (!block) return -1
+  const column = blockColumn(block)
+
+  if (column !== null) {
+    const owner = columnsOwnerIndex(list, index)
+    const end = owner === -1 ? list.length : owner + getColumnsGroupLength(list, owner)
+
+    if (dir === 1) {
+      for (let i = index + 1; i < end; i++) if (blockColumn(list[i]) === column) return i
+      return end < list.length ? end : -1
+    }
+
+    for (let i = index - 1; i > owner; i--) if (blockColumn(list[i]) === column) return i
+    return owner > 0 ? owner - 1 : -1
+  }
+
+  const next = index + dir
+  const target = list[next]
+  if (!target) return -1
+
+  if (dir === 1 && isColumnsBlock(target)) {
+    return blockColumn(list[next + 1]) !== null ? next + 1 : next
+  }
+
+  if (dir === -1 && blockColumn(target) !== null) {
+    const owner = columnsOwnerIndex(list, next)
+    let last = -1
+    for (let i = owner + 1; i <= next; i++) if (blockColumn(list[i]) === 0) last = i
+    return last !== -1 ? last : next
+  }
+
+  return next
 }
 
 /** Index of the `columns` block that owns the block at `index`, or -1. */
