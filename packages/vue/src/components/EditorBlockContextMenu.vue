@@ -22,6 +22,8 @@ import {
   SquareMousePointer,
   Trash2,
   Type,
+  Columns2,
+  Rows3,
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { syncThemeVars, type BlockType } from '@xproeditor/core'
@@ -35,6 +37,9 @@ const props = defineProps<{
   canTurnInto?: boolean
   aiEnabled?: boolean
   themeSource?: HTMLElement | null
+  /** Inside a columns group: the group's column count and this block's column. */
+  columnCount?: number
+  column?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -47,6 +52,8 @@ const emit = defineEmits<{
   insertBelow: []
   askAI: []
   close: []
+  moveToColumn: [column: number]
+  unwrapColumns: []
 }>()
 
 type View = 'root' | 'turn-into' | 'color'
@@ -165,6 +172,28 @@ const sections = computed(() => {
     },
   ]
 
+  // Columns: move a block between the columns of its group; a group can be unwrapped.
+  const columns: ActionItem[] = []
+  if (props.columnCount && props.column !== null && props.column !== undefined) {
+    for (let column = 0; column < props.columnCount; column++) {
+      if (column === props.column) continue
+      columns.push({
+        id: `column-${column}`,
+        label: `${dict.value.columns.moveToColumn}: ${dict.value.columns.column.replace('{n}', String(column + 1))}`,
+        icon: Columns2,
+        run: () => { emit('moveToColumn', column); emit('close') },
+      })
+    }
+  }
+  if (props.blockType === 'columns') {
+    columns.push({
+      id: 'unwrap-columns',
+      label: dict.value.columns.unwrap,
+      icon: Rows3,
+      run: () => { emit('unwrapColumns'); emit('close') },
+    })
+  }
+
   const ai: ActionItem[] = props.aiEnabled
     ? [{
         id: 'ask-ai',
@@ -186,6 +215,7 @@ const sections = computed(() => {
       delete: ['delete', 'remove'],
     }),
     filter(insert, { 'insert-below': ['insert', 'below', 'add'] }),
+    filter(columns, {}),
     filter(ai, { 'ask-ai': ['ai', 'ask', 'gpt'] }),
   ].filter(s => s.length > 0)
 })

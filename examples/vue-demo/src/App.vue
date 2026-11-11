@@ -4,6 +4,7 @@ import {
   DocRenderer,
   ProEditor,
   createBlock,
+  createColumnsGroup,
   type AITransport,
   type Block,
   type DocumentStats,
@@ -113,6 +114,15 @@ function seed(): Block[] {
     createBlock('callout', {
       content: [{ text: 'Callouts, tables, images, videos, bookmarks, and code blocks are all supported.' }],
     }),
+    createBlock('heading_2', { content: [{ text: 'Columns' }] }),
+    ...createColumnsGroup(2, { widths: [40, 60] }).map((block, i) =>
+      i === 1
+        ? createBlock('image', { props: { column: 0, url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800', caption: 'Any block can sit in a column' } })
+        : i === 2
+          ? createBlock('paragraph', { props: { column: 1 }, content: [{ text: 'Type /2 columns or /3 columns to add a group. Use its bar to change the count, widths, gap and alignment; the block menu moves a block to another column.' }] })
+          : block,
+    ),
+    createBlock('bulleted_list_item', { props: { column: 1 }, content: [{ text: 'Lists, videos, tables, callouts: everything works inside a column' }] }),
     createBlock('heading_2', { content: [{ text: 'Code & tables' }] }),
     createBlock('code', {
       props: {

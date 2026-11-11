@@ -13,6 +13,7 @@ import EditorBookmarkBlock from './EditorBookmarkBlock.vue'
 import EditorEmbedBlock from './EditorEmbedBlock.vue'
 import EditorTableOfContentsBlock from './EditorTableOfContentsBlock.vue'
 import EditorButtonBlock from './EditorButtonBlock.vue'
+import EditorColumnsBlock from './EditorColumnsBlock.vue'
 import EditorCodeBlock from './EditorCodeBlock.vue'
 import EditorFileBlock from './EditorFileBlock.vue'
 import EditorImageBlock from './EditorImageBlock.vue'
@@ -53,6 +54,8 @@ const props = withDefaults(defineProps<{
   spellcheck?: boolean
   /** Document headings — only needed by `table_of_contents` blocks. */
   tocHeadings?: DocHeading[]
+  /** Inside a columns group: the group's column count (0 outside). */
+  columnCount?: number
 }>(), {
   spellcheck: true,
 })
@@ -89,6 +92,9 @@ const emit = defineEmits<{
   tableCellSelectionChange: [cells: TableCellCoord[]]
   /** Jump to another block (table of contents links). */
   navigateToBlock: [blockId: string]
+  /** Columns: move this block to another column / remove the group. */
+  moveToColumn: [column: number]
+  unwrapColumns: []
 }>()
 
 const CALLOUT_COLORS = ['#f8fafc', '#fefce8', '#fff7ed', '#fef2f2', '#f0fdf4', '#eff6ff', '#faf5ff']
@@ -485,6 +491,18 @@ defineExpose({
           @cell-selection-change="emit('tableCellSelectionChange', $event)"
         />
 
+        <!-- Columns group header (its columns render below, in BlockEditor) -->
+        <EditorColumnsBlock
+          v-else-if="block.type === 'columns'"
+          class="my-1"
+          :block="block"
+          :readonly="readonly"
+          :selected="selected"
+          @patch="p => emit('patch', p)"
+          @unwrap="emit('unwrapColumns')"
+          @select="emit('select')"
+        />
+
         <!-- Divider -->
         <div
           v-else-if="block.type === 'divider'"
@@ -581,6 +599,8 @@ defineExpose({
       :current-color="block.props.color"
       :can-turn-into="textual"
       :ai-enabled="aiEnabled"
+      :column-count="columnCount"
+      :column="typeof block.props.column === 'number' ? block.props.column : null"
       @color="c => emit('patch', { color: c })"
       @turn-into="t => emit('turnInto', t)"
       @duplicate="emit('duplicate')"
@@ -589,6 +609,8 @@ defineExpose({
       @delete="emit('remove')"
       @insert-below="emit('addBelow')"
       @ask-ai="emit('askAI')"
+      @move-to-column="c => emit('moveToColumn', c)"
+      @unwrap-columns="emit('unwrapColumns')"
       @close="contextMenuPos = null"
     />
   </div>

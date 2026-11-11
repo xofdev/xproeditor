@@ -24,8 +24,14 @@ import {
   tableCellStyle,
   tableWrapperStyle,
   toggleHeadingLevel,
+  columnAlign,
+  columnCount,
+  columnGap,
+  columnStack,
+  columnTemplate,
+  getColumnsGroupLength,
 } from '@xproeditor/core'
-import type { Block, EditorDictionaryOverrides, TableCell } from '@xproeditor/core'
+import type { Block, DocHeading, EditorDictionaryOverrides, TableCell } from '@xproeditor/core'
 import { provideEditorI18n } from '../i18n'
 import { IconValueDisplay } from '../ui'
 
@@ -37,10 +43,16 @@ const props = defineProps<{
   locale?: string
   /** Override any UI string. */
   dictionary?: EditorDictionaryOverrides
+  /**
+   * Internal: a column of a columns group renders as a nested DocRenderer; these
+   * keep heading anchors and the table of contents those of the whole document.
+   */
+  contextAnchors?: Map<string, string>
+  contextHeadings?: DocHeading[]
 }>()
 
 const dict = provideEditorI18n(toRef(props, 'locale'), toRef(props, 'dictionary'))
-const headings = computed(() => extractHeadings(props.blocks))
+const headings = computed(() => props.contextHeadings ?? extractHeadings(props.blocks))
 
 function embedFor(block: Block) {
   const resolved = resolveEmbed(block.props.url)
@@ -78,11 +90,52 @@ interface VisibleEntry {
   idx: number
 }
 
+/**
+ * Columns groups: each `columns` block's children, per column (rendered by a
+ * nested DocRenderer each), and the indexes they occupy, so the flat loop skips them.
+ */
+const columnGroups = computed(() => {
+  const groups = new Map<number, Block[][]>()
+  const consumed = new Set<number>()
+
+  props.blocks.forEach((block, idx) => {
+    if (block.type !== 'columns' || consumed.has(idx)) return
+    const len = getColumnsGroupLength(props.blocks, idx)
+    const cols: Block[][] = Array.from({ length: columnCount(block) }, () => [])
+
+    for (let i = idx + 1; i < idx + len; i++) {
+      consumed.add(i)
+      const child = props.blocks[i]
+      const col = Math.min(cols.length - 1, child.props.column ?? 0)
+      const rest = { ...child.props }
+      delete rest.column
+      cols[col].push({ ...child, props: rest })
+    }
+
+    groups.set(idx, cols)
+  })
+
+  return { groups, consumed }
+})
+
+function columnsStyle(block: Block): Record<string, string> {
+  return {
+    gridTemplateColumns: columnTemplate(block),
+    gap: `${columnGap(block)}px`,
+    alignItems: ({ top: 'start', center: 'center', bottom: 'end' } as const)[columnAlign(block)],
+  }
+}
+
 const visible = computed<VisibleEntry[]>(() => {
   const out: VisibleEntry[] = []
   let hideDeeperThan: number | null = null
+  const { consumed } = columnGroups.value
   props.blocks.forEach((block, idx) => {
     const ind = block.props.indent ?? 0
+
+    if (consumed.has(idx)) {
+return
+}
 
     if (hideDeeperThan !== null) {
       if (ind > hideDeeperThan) {
@@ -103,7 +156,7 @@ hideDeeperThan = ind
 })
 
 const numbering = computed(() => computeListNumbering(visible.value.map(v => v.block)))
-const anchors = computed(() => headingAnchorIds(props.blocks))
+const anchors = computed(() => props.contextAnchors ?? headingAnchorIds(props.blocks))
 
 function headingTag(type: string): string {
   return type === 'heading_1' ? 'h2' : type === 'heading_2' ? 'h3' : 'h4'
@@ -222,10 +275,35 @@ function safeVideoEmbedUrl(block: Block): string {
 <template>
   <div class="doc-blocks" dir="auto">
     <template v-for="{ block, idx } in visible" :key="idx">
+      <!-- Columns: a grid of nested renderers, stacked on narrow containers -->
+      <div
+        v-if="block.type === 'columns'"
+        class="db-columns-wrap"
+        :dir="block.props.dir && block.props.dir !== 'auto' ? block.props.dir : undefined"
+      >
+        <div
+          class="db-columns"
+          :class="`db-columns--${columnStack(block)}`"
+          :data-columns="columnCount(block)"
+          :style="columnsStyle(block)"
+        >
+          <div v-for="(column, ci) in columnGroups.groups.get(idx) ?? []" :key="ci" class="db-column">
+            <DocRenderer
+              :blocks="column"
+              :editor-dir="editorDir"
+              :locale="locale"
+              :dictionary="dictionary"
+              :context-anchors="anchors"
+              :context-headings="headings"
+            />
+          </div>
+        </div>
+      </div>
+
       <!-- Headings -->
       <component
         :is="headingTag(block.type)"
-        v-if="block.type.startsWith('heading')"
+        v-else-if="block.type.startsWith('heading')"
         :id="anchors.get(block.id)"
         class="db-heading group"
         :class="`db-${block.type}`"
@@ -571,6 +649,34 @@ function safeVideoEmbedUrl(block: Block): string {
 </template>
 
 <style scoped>
+/* Columns: a grid of nested renderers. It stacks when its container is narrow
+   (a phone, or a narrow content column), in order, reversed, or not at all. */
+.db-columns-wrap {
+  container-type: inline-size;
+  margin: 1.4em 0;
+}
+.db-columns {
+  display: grid;
+}
+.db-column {
+  min-width: 0;
+}
+.db-column > .doc-blocks > :first-child {
+  margin-top: 0;
+}
+.db-column > .doc-blocks > :last-child {
+  margin-bottom: 0;
+}
+@container (max-width: 560px) {
+  .db-columns:not(.db-columns--none) {
+    grid-template-columns: minmax(0, 1fr) !important;
+    row-gap: 1.25em !important;
+  }
+  .db-columns--reverse {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+}
 .doc-blocks {
   font-size: 1rem;
   line-height: 1.8;
