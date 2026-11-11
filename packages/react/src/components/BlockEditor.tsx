@@ -1,4 +1,5 @@
-import { forwardRef, memo, useCallback, useImperativeHandle, useRef, type MutableRefObject } from 'react'
+import { forwardRef, memo, useCallback, useImperativeHandle, useRef, type CSSProperties, type MutableRefObject } from 'react'
+import { blockColumn, columnAlign, columnGap, columnStack, columnTemplate } from '@xproeditor/core'
 import type { AICommand, AITransport, Block, CollabSession, EditorDocumentApi, InlineSpan } from '@xproeditor/core'
 import { useBlockEditor, type UseBlockEditorOptions } from '../hooks/useBlockEditor'
 import { AIMenu } from './AIMenu'
@@ -152,6 +153,41 @@ const BlockEditorInner = forwardRef<
     getStats: ed.getStats,
   }))
 
+  /** One block row (shared by top-level blocks and column children). */
+  function renderRow(block: Block) {
+    const highlight = ed.textHighlightForBlock(block.id)
+
+    return (
+      <EditorBlockRow
+        key={block.id}
+        edRef={edRef}
+        block={block}
+        signature={blockSignature(block)}
+        number={ed.numbering.get(block.id)}
+        placeholder={ed.placeholderFor(block)}
+        selected={ed.isBlockChromeSelected(block.id)}
+        highlightStart={highlight?.start ?? -1}
+        highlightEnd={highlight?.end ?? -1}
+        dropPosition={ed.dropTarget && ed.dropTarget.id === block.id ? ed.dropTarget.position : null}
+        upload={ed.upload}
+        pickMedia={ed.pickMedia}
+        fetchBookmarkMeta={ed.fetchBookmarkMeta}
+        editorDir={ed.editorDir}
+        readonly={ed.readonly}
+        themeSource={ed.rootRef.current}
+        iconPickerTab={
+          ed.iconPickerRequest && ed.iconPickerRequest.blockId === block.id
+            ? ed.iconPickerRequest.tab
+            : null
+        }
+        aiEnabled={!!ed.ai?.transport}
+        spellCheck={ed.spellCheck}
+        tocHeadings={block.type === 'table_of_contents' ? ed.tocHeadings : undefined}
+        columnCount={blockColumn(block) !== null ? ed.groupColumnCount(block) : 0}
+      />
+    )
+  }
+
   return (
     <div
       ref={ed.rootRef}
@@ -169,38 +205,27 @@ const BlockEditorInner = forwardRef<
     >
       {ed.peers.length > 0 && <PresenceLayer peers={ed.peers} root={ed.rootRef.current} revision={ed.version} />}
 
-      {ed.visibleBlocks.map((block) => {
-        const highlight = ed.textHighlightForBlock(block.id)
-
-        return (
-          <EditorBlockRow
-            key={block.id}
-            edRef={edRef}
-            block={block}
-            signature={blockSignature(block)}
-            number={ed.numbering.get(block.id)}
-            placeholder={ed.placeholderFor(block)}
-            selected={ed.isBlockChromeSelected(block.id)}
-            highlightStart={highlight?.start ?? -1}
-            highlightEnd={highlight?.end ?? -1}
-            dropPosition={ed.dropTarget && ed.dropTarget.id === block.id ? ed.dropTarget.position : null}
-            upload={ed.upload}
-            pickMedia={ed.pickMedia}
-            fetchBookmarkMeta={ed.fetchBookmarkMeta}
-            editorDir={ed.editorDir}
-            readonly={ed.readonly}
-            themeSource={ed.rootRef.current}
-            iconPickerTab={
-              ed.iconPickerRequest && ed.iconPickerRequest.blockId === block.id
-                ? ed.iconPickerRequest.tab
-                : null
-            }
-            aiEnabled={!!ed.ai?.transport}
-            spellCheck={ed.spellCheck}
-            tocHeadings={block.type === 'table_of_contents' ? ed.tocHeadings : undefined}
-          />
-        )
-      })}
+      {/* Top-level blocks, and columns groups: the group's own block is its
+          header bar, its children sit in one column container each. */}
+      {ed.layoutRows.map((row) =>
+        row.kind === 'block' ? (
+          renderRow(row.item.block)
+        ) : (
+          <div key={row.item.block.id} className="xpe-columns-group" data-columns-id={row.item.block.id}>
+            {renderRow(row.item.block)}
+            <div
+              className={`xpe-columns xpe-columns--${columnStack(row.item.block)}`}
+              style={columnsGroupStyle(row.item.block)}
+            >
+              {row.columns.map((column, ci) => (
+                <div key={ci} className="xpe-column" data-column={ci}>
+                  {column.map((entry) => renderRow(entry.block))}
+                </div>
+              ))}
+            </div>
+          </div>
+        ),
+      )}
 
       {!ed.readonly && <div className="h-28 cursor-text" onClick={ed.onTailClick} />}
 
@@ -279,6 +304,14 @@ const BlockEditorInner = forwardRef<
 
 type EditorApi = ReturnType<typeof useBlockEditor>
 
+function columnsGroupStyle(block: Block): CSSProperties {
+  return {
+    gridTemplateColumns: columnTemplate(block),
+    columnGap: `${columnGap(block)}px`,
+    alignItems: ({ top: 'start', center: 'center', bottom: 'end' } as const)[columnAlign(block)],
+  }
+}
+
 const contentSignatures = new WeakMap<InlineSpan[], string>()
 
 /**
@@ -314,6 +347,7 @@ interface EditorBlockRowProps
     | 'aiEnabled'
     | 'spellCheck'
     | 'tocHeadings'
+    | 'columnCount'
   > {
   edRef: MutableRefObject<EditorApi>
   block: Block
@@ -380,6 +414,8 @@ const EditorBlockRow = memo(function EditorBlockRow({
       onTableCellNavigate={(p) => ed().handleTableNavigate(block, p)}
       onTableCellSelectionChange={(cells) => ed().onTableCellSelectionChange(block, cells)}
       onNavigateToBlock={(id) => ed().navigateToBlock(id)}
+      onMoveToColumn={(column) => ed().moveToColumn(block, column)}
+      onUnwrapColumns={() => ed().unwrapGroup(block)}
     />
   )
 })

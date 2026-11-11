@@ -251,6 +251,36 @@
   color: var(--xpe-muted-foreground, #9ca3af);
 }
 
+/* ── BlockEditor columns groups ────────────────────────────────────────── */
+/* Columns: side by side; a narrow editor stacks them like the published page. */
+.xpe-columns-group {
+  container-type: inline-size;
+}
+.xpe-columns {
+  display: grid;
+}
+.xpe-column {
+  min-width: 0;
+  padding-block: 2px;
+  border-radius: 6px;
+  outline: 1px dashed transparent;
+  outline-offset: 2px;
+  transition: outline-color 0.15s ease;
+}
+.xpe-columns-group:hover .xpe-column,
+.xpe-columns-group:focus-within .xpe-column {
+  outline-color: var(--xpe-border, #e5e7eb);
+}
+@container (max-width: 520px) {
+  .xpe-columns:not(.xpe-columns--none) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .xpe-columns--reverse {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+}
+
 /* ── ui/Button ─────────────────────────────────────────────────────────── */
 .xpe-btn {
   display: inline-flex;

@@ -10,6 +10,7 @@ import { BookmarkBlock } from './BookmarkBlock'
 import { EmbedBlock } from './EmbedBlock'
 import { TableOfContentsBlock } from './TableOfContentsBlock'
 import { ButtonBlock } from './ButtonBlock'
+import { ColumnsBlock } from './ColumnsBlock'
 import { FileBlock } from './FileBlock'
 import { ImageBlock } from './ImageBlock'
 import { SelectionHighlight } from './SelectionHighlight'
@@ -51,6 +52,8 @@ export interface BlockItemProps {
   spellCheck?: boolean
   /** Document headings — only needed by `table_of_contents` blocks. */
   tocHeadings?: DocHeading[]
+  /** Inside a columns group: the group's column count (0 outside). */
+  columnCount?: number
   /** Jump to another block (table of contents links). */
   onNavigateToBlock?: (blockId: string) => void
   onInput: (spans: InlineSpan[], caret: number | null) => void
@@ -96,6 +99,9 @@ export interface BlockItemProps {
     direction: 'up' | 'down' | 'left' | 'right'
   }) => void
   onTableCellSelectionChange: (cells: TableCellCoord[]) => void
+  /** Columns: move this block to another column / remove the group. */
+  onMoveToColumn?: (column: number) => void
+  onUnwrapColumns?: () => void
 }
 
 export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
@@ -117,6 +123,7 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
       aiEnabled,
       spellCheck = true,
       tocHeadings,
+      columnCount,
       onNavigateToBlock,
       onInput,
       onEnter,
@@ -147,6 +154,8 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
       onTableCellTab,
       onTableCellNavigate,
       onTableCellSelectionChange,
+      onMoveToColumn,
+      onUnwrapColumns,
     } = props
 
     const dict = useEditorDictionary()
@@ -513,6 +522,17 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
                 onCellNavigate={onTableCellNavigate}
                 onCellSelectionChange={onTableCellSelectionChange}
               />
+            ) : block.type === 'columns' ? (
+              // Columns group header (its columns render below, in BlockEditor)
+              <ColumnsBlock
+                className="my-1"
+                block={block}
+                readonly={readonly}
+                selected={selected}
+                onPatch={onPatch}
+                onUnwrap={() => onUnwrapColumns?.()}
+                onSelect={onSelect}
+              />
             ) : block.type === 'divider' ? (
               <div className="py-2.5 cursor-pointer" onClick={onSelect}>
                 <hr className={`border-[var(--xpe-border)] rounded${selected ? ' !border-[var(--xpe-ring)]' : ''}`} />
@@ -583,6 +603,8 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
             currentColor={block.props.color}
             canTurnInto={textual}
             aiEnabled={aiEnabled}
+            columnCount={columnCount}
+            column={typeof block.props.column === 'number' ? block.props.column : null}
             onColor={(color) => onPatch({ color })}
             onTurnInto={onTurnInto}
             onDuplicate={onDuplicate}
@@ -591,6 +613,8 @@ export const BlockItem = forwardRef<BlockItemHandle, BlockItemProps>(
             onDelete={onRemove}
             onInsertBelow={onAddBelow}
             onAskAI={onAskAI}
+            onMoveToColumn={onMoveToColumn}
+            onUnwrapColumns={onUnwrapColumns}
             onClose={() => setContextMenuPos(null)}
           />
         )}

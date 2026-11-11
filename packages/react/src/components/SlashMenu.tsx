@@ -34,6 +34,8 @@ import {
   Sparkles,
   AppWindow,
   ListTree,
+  Columns2,
+  Columns3,
 } from 'lucide-react'
 import type { EditorDictionary } from '@xproeditor/core'
 import { useEditorDictionary } from '../i18n'
@@ -43,6 +45,8 @@ import type { SlashItem } from '../types'
 function slashItemText(item: SlashItem, dict: EditorDictionary): { label: string; description: string } {
   if (item.action === 'ai') return { label: dict.slash.askAI, description: dict.slash.askAIDescription }
   if (item.action === 'emoji') return { label: dict.slash.emoji, description: dict.slash.emojiDescription }
+  if (item.id === 'columns_2') return { label: dict.columns.two, description: dict.columns.twoDescription }
+  if (item.id === 'columns_3') return { label: dict.columns.three, description: dict.columns.threeDescription }
   return { label: dict.blockTypes[item.type], description: dict.blockDescriptions[item.type] }
 }
 
@@ -256,6 +260,24 @@ const ITEMS: SlashItem[] = [
     description: 'Horizontal line',
     keywords: ['divider', 'hr', 'separator', 'line'],
     icon: Minus,
+    group: 'advanced',
+  },
+  {
+    id: 'columns_2',
+    type: 'columns',
+    label: '2 columns',
+    description: 'Two side-by-side columns of any blocks',
+    keywords: ['columns', 'column', 'layout', 'grid', 'side', 'two', '2'],
+    icon: Columns2,
+    group: 'advanced',
+  },
+  {
+    id: 'columns_3',
+    type: 'columns',
+    label: '3 columns',
+    description: 'Three side-by-side columns of any blocks',
+    keywords: ['columns', 'column', 'layout', 'grid', 'side', 'three', '3'],
+    icon: Columns3,
     group: 'advanced',
   },
   {
