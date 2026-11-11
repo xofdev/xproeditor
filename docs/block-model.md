@@ -94,8 +94,44 @@ interface BlockProps {
   image?: string             // bookmark: Open Graph / preview image
   dir?: 'auto' | 'ltr' | 'rtl'
   align?: 'left' | 'center' | 'right'
+  column?: number            // any block inside a columns group: its column (0-based)
+  columnCount?: number       // columns: 2 or 3
+  columnWidths?: number[]    // columns: width of each column in percent
+  columnGap?: number         // columns: space between columns, px
+  columnAlign?: 'top' | 'center' | 'bottom' // columns: vertical alignment
+  columnStack?: 'normal' | 'reverse' | 'none' // columns: order once stacked (or keep side by side)
 }
 ```
+
+## Columns
+
+Columns stay in the flat model. A `columns` block opens a group of 2 or 3
+columns and holds its layout; the blocks right after it that carry a numeric
+`props.column` are its children, in reading order (all of column 0, then
+column 1, then column 2). The group ends at the first block without `column`.
+Any block type can sit in a column, and a column keeps its own `indent`
+nesting. Groups do not nest.
+
+```ts
+[
+  { type: 'columns', props: { columnCount: 2, columnWidths: [40, 60] } },
+  { type: 'image', props: { column: 0, url: '…' } },
+  { type: 'heading_2', props: { column: 1 }, content: [{ text: 'Beside the image' }] },
+  { type: 'paragraph', props: { column: 1 }, content: [{ text: '…' }] },
+  { type: 'paragraph', content: [{ text: 'Full width again' }] },
+]
+```
+
+Helpers in `@xproeditor/core`: `createColumnsGroup`, `groupColumnBlocks` /
+`groupColumns` (for renderers), `normalizeColumns` (keeps a group valid: clamped
+indexes, reading order, no empty column, blocks inserted mid-group adopted,
+stray `column` props dropped; run on load and after every edit),
+`fitInsertedBlocks` (paste/drop/insert), `setColumnCount`, `moveBlockToColumn`,
+`unwrapColumns`, `wrapInColumns`, and the layout readers `columnWidths`,
+`columnTemplate`, `columnGap`, `columnAlign`, `columnStack`. A group moves,
+copies and deletes as one block (`ownsSubtree`). HTML export renders a CSS grid;
+Markdown and plain text flatten the columns in reading order. Older versions
+render a `columns` block as an empty paragraph and its children in reading order.
 
 ## Embeds and table of contents
 
