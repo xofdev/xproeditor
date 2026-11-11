@@ -92,6 +92,30 @@ export interface EditorDictionary {
     expandToggle: string
     collapseToggle: string
   }
+  columns: {
+    /** Slash menu: "2 columns" / "3 columns" and their descriptions. */
+    two: string
+    three: string
+    twoDescription: string
+    threeDescription: string
+    /** Toolbar of a columns group. */
+    settings: string
+    count: string
+    widths: string
+    gap: string
+    align: string
+    alignTop: string
+    alignCenter: string
+    alignBottom: string
+    stack: string
+    stackNormal: string
+    stackReverse: string
+    stackNone: string
+    unwrap: string
+    /** "Column {n}" — `{n}` is replaced with the 1-based number. */
+    column: string
+    moveToColumn: string
+  }
   media: {
     upload: string
     library: string
@@ -310,6 +334,7 @@ export const EN_DICTIONARY: EditorDictionary = {
     bookmark: 'Web bookmark',
     embed: 'Embed',
     table_of_contents: 'Table of contents',
+    columns: 'Columns',
   },
   blockDescriptions: {
     paragraph: 'Plain paragraph',
@@ -336,6 +361,7 @@ export const EN_DICTIONARY: EditorDictionary = {
     bookmark: 'Visual bookmark from a link',
     embed: 'YouTube, Figma, CodePen, Loom, Maps…',
     table_of_contents: 'Linked list of the headings',
+    columns: 'Side-by-side columns of any blocks',
   },
   slash: {
     groups: {
@@ -416,6 +442,27 @@ export const EN_DICTIONARY: EditorDictionary = {
     toggleToDo: 'Toggle to-do',
     expandToggle: 'Expand toggle',
     collapseToggle: 'Collapse toggle',
+  },
+  columns: {
+    two: '2 columns',
+    three: '3 columns',
+    twoDescription: 'Two side-by-side columns of any blocks',
+    threeDescription: 'Three side-by-side columns of any blocks',
+    settings: 'Columns',
+    count: 'Columns',
+    widths: 'Widths',
+    gap: 'Gap',
+    align: 'Align',
+    alignTop: 'Top',
+    alignCenter: 'Middle',
+    alignBottom: 'Bottom',
+    stack: 'On small screens',
+    stackNormal: 'Stack in order',
+    stackReverse: 'Stack, last column first',
+    stackNone: 'Keep side by side',
+    unwrap: 'Remove columns, keep content',
+    column: 'Column {n}',
+    moveToColumn: 'Move to column',
   },
   media: {
     upload: 'Upload',
@@ -635,6 +682,7 @@ export const FA_DICTIONARY: EditorDictionary = {
     bookmark: 'نشانک وب',
     embed: 'جاسازی',
     table_of_contents: 'فهرست مطالب',
+    columns: 'ستون‌ها',
   },
   blockDescriptions: {
     paragraph: 'پاراگراف ساده',
@@ -661,6 +709,7 @@ export const FA_DICTIONARY: EditorDictionary = {
     bookmark: 'نشانک تصویری از یک پیوند',
     embed: 'یوتیوب، فیگما، کدپن، لوم، نقشه…',
     table_of_contents: 'فهرست پیونددار سرتیترها',
+    columns: 'ستون‌های کنار هم از هر نوع بلوک',
   },
   slash: {
     groups: {
@@ -741,6 +790,27 @@ export const FA_DICTIONARY: EditorDictionary = {
     toggleToDo: 'تغییر وضعیت کار',
     expandToggle: 'باز کردن',
     collapseToggle: 'بستن',
+  },
+  columns: {
+    two: '۲ ستون',
+    three: '۳ ستون',
+    twoDescription: 'دو ستون کنار هم از هر نوع بلوک',
+    threeDescription: 'سه ستون کنار هم از هر نوع بلوک',
+    settings: 'ستون‌ها',
+    count: 'تعداد ستون',
+    widths: 'عرض‌ها',
+    gap: 'فاصله',
+    align: 'تراز عمودی',
+    alignTop: 'بالا',
+    alignCenter: 'وسط',
+    alignBottom: 'پایین',
+    stack: 'در صفحه‌های کوچک',
+    stackNormal: 'زیر هم به ترتیب',
+    stackReverse: 'زیر هم، ستون آخر اول',
+    stackNone: 'کنار هم بماند',
+    unwrap: 'حذف ستون‌ها، حفظ محتوا',
+    column: 'ستون {n}',
+    moveToColumn: 'انتقال به ستون',
   },
   media: {
     upload: 'بارگذاری',

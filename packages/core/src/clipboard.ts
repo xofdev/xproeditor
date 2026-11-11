@@ -1,3 +1,4 @@
+import { columnAlign, columnCount, columnGap, columnStack, columnTemplate, getColumnsGroupLength } from './columns'
 import { embedFrameHeight, resolveEmbed } from './embed'
 import { escapeHtml, spansToHtml } from './html'
 import { cloneBlock } from './ops'
@@ -404,6 +405,30 @@ function renderListGroup(blocks: Block[], start: number, indent: number): { html
   return { html: `<ul>${html}</ul>`, next: i }
 }
 
+/**
+ * A columns group as a CSS grid that stacks on narrow screens (the inline grid is
+ * the layout; `data-xpe-columns` lets a stylesheet add its own breakpoint).
+ */
+function columnsToHtml(head: Block, children: Block[], ctx: HtmlExportContext): string {
+  const count = columnCount(head)
+  const cells = Array.from({ length: count }, (_, column) =>
+    children.filter((b) => (b.props.column ?? 0) === column).map((b) => {
+      const copy = { ...b, props: { ...b.props } }
+      delete copy.props.column
+      return copy
+    }),
+  )
+  const style = [
+    'display:grid',
+    `grid-template-columns:${columnTemplate(head)}`,
+    `gap:${columnGap(head)}px`,
+    `align-items:${({ top: 'start', center: 'center', bottom: 'end' } as const)[columnAlign(head)]}`,
+  ].join(';')
+  const inner = cells.map((col) => `<div data-xpe-column>${blocksToHtmlWithContext(col, ctx)}</div>`).join('')
+
+  return `<div data-xpe-columns="${count}" data-xpe-stack="${columnStack(head)}"${dirAttr(head)} style="${style}">${inner}</div>`
+}
+
 function blocksToHtmlWithContext(blocks: Block[], ctx: HtmlExportContext): string {
   const parts: string[] = []
   let i = 0
@@ -415,6 +440,13 @@ function blocksToHtmlWithContext(blocks: Block[], ctx: HtmlExportContext): strin
       const group = renderListGroup(blocks, i, b.props.indent ?? 0)
       parts.push(group.html)
       i = group.next
+      continue
+    }
+
+    if (b.type === 'columns') {
+      const len = getColumnsGroupLength(blocks, i)
+      parts.push(columnsToHtml(b, blocks.slice(i + 1, i + len), ctx))
+      i += len
       continue
     }
 

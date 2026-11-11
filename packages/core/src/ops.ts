@@ -42,6 +42,10 @@ export function createBlock(
     props.dir = options.defaultDir
   }
 
+  if (type === 'columns' && props.columnCount === undefined) {
+    props.columnCount = 2
+  }
+
   if (type === 'code' && props.language === undefined) {
 props.language = 'plaintext'
 }
