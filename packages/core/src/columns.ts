@@ -291,9 +291,21 @@ export function normalizeColumns(blocks: Block[]): boolean {
  * dropped, except on the children of a group being inserted whole. Returns the
  * blocks to insert (a nested `columns` block is removed from the list).
  */
-export function fitInsertedBlocks(blocks: Block[], index: number, inserted: Block[]): Block[] {
+export function fitInsertedBlocks(
+  blocks: Block[],
+  index: number,
+  inserted: Block[],
+  /** 'before': dropped before the block at `index` (take its column); default: after the block above. */
+  anchor: 'after' | 'before' = 'after',
+): Block[] {
   const before = blocks[index - 1]
-  const target = isColumnsBlock(before) ? 0 : blockColumn(before)
+  const at = blocks[index]
+  const target =
+    anchor === 'before' && blockColumn(at) !== null
+      ? blockColumn(at)
+      : isColumnsBlock(before)
+        ? 0
+        : blockColumn(before)
   const out: Block[] = []
   let inGroup = false
 

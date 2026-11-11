@@ -124,10 +124,17 @@ id = `${id}-${count}`
  */
 export function computeListNumbering(blocks: Block[]): Map<string, number> {
   const map = new Map<string, number>()
-  const counters: Record<number, number> = {}
+  let counters: Record<number, number> = {}
+  let column: number | undefined
 
   for (const b of blocks) {
     const ind = b.props.indent ?? 0
+
+    // A list never continues into another column (or out of a columns group).
+    if (b.props.column !== column || b.type === 'columns') {
+      counters = {}
+      column = b.props.column
+    }
 
     if (b.type === 'numbered_list_item') {
       counters[ind] = (counters[ind] ?? 0) + 1
