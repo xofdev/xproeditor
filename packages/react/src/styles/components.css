@@ -1265,6 +1265,36 @@
   width: 100%;
 }
 
+/* ── DocRenderer columns ───────────────────────────────────────────────── */
+/* Columns: a grid of nested renderers. It stacks when its container is narrow
+   (a phone, or a narrow content column), in order, reversed, or not at all. */
+.db-columns-wrap {
+  container-type: inline-size;
+  margin: 1.4em 0;
+}
+.db-columns {
+  display: grid;
+}
+.db-column {
+  min-width: 0;
+}
+.db-column > .doc-blocks > :first-child {
+  margin-top: 0;
+}
+.db-column > .doc-blocks > :last-child {
+  margin-bottom: 0;
+}
+@container (max-width: 560px) {
+  .db-columns:not(.db-columns--none) {
+    grid-template-columns: minmax(0, 1fr) !important;
+    row-gap: 1.25em !important;
+  }
+  .db-columns--reverse {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+}
+
 /* ── Button block settings popover ─────────────────────────────────────── */
 .xpe-btn-settings-trigger {
   display: flex;
